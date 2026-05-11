@@ -1,14 +1,14 @@
 use std::path::PathBuf;
 use crate::discovery::parser::{FileParser};
-use crate::models::config_model::ConfigModel;
 use crate::models::directory_model::DirectoryModel;
 use crate::models::descriptor_model::DescriptorModel;
+use crate::models::options_model::OptionsModel;
 
 mod parser;
 
-pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<ConfigModel>>) -> anyhow::Result<DirectoryModel> {
+pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> anyhow::Result<DirectoryModel> {
     let mut tests: Vec<DescriptorModel> = Vec::new();
-    let mut configs: Vec<ConfigModel> = inherited_configs.unwrap_or_default();
+    let mut options: Vec<OptionsModel> = inherited_configs.unwrap_or_default();
     let mut subdirectories: Vec<DirectoryModel> = Vec::new();
 
     let entries = std::fs::read_dir(&dir)?
@@ -20,7 +20,7 @@ pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<ConfigModel>>) -> an
         let file_name = file_name.unwrap().to_str().unwrap();
 
         if path.is_dir() {
-            let sub_dir = discover(path, Some(configs.clone()))?;
+            let sub_dir = discover(path, Some(options.clone()))?;
             subdirectories.push(sub_dir);
         } else if path.is_file() {
             if let Some(parser) = parser::create_parser(&path){
@@ -29,7 +29,7 @@ pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<ConfigModel>>) -> an
                     tests.push(test);
                 } else if file_name.ends_with(".config") {
                     let config = parser.parse_config(path)?;
-                    configs.push(config);
+                    options.push(config);
                 }
             }
         }
@@ -37,7 +37,7 @@ pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<ConfigModel>>) -> an
 
     Ok(DirectoryModel {
         files: tests,
-        configs,
+        options,
         children: subdirectories,
         dir,
     })

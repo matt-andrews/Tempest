@@ -1,8 +1,8 @@
 use std::fs;
 use std::path::PathBuf;
-use crate::models::config_model::ConfigModel;
 use crate::models::descriptor_model::DescriptorModel;
 use crate::discovery::parser::FileParser;
+use crate::models::options_model::OptionsModel;
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser{
@@ -12,9 +12,9 @@ impl FileParser for YamlFileParser{
         Ok(config)
     }
 
-    fn parse_config(&self, path: PathBuf) -> anyhow::Result<ConfigModel> {
+    fn parse_config(&self, path: PathBuf) -> anyhow::Result<OptionsModel> {
         let contents = fs::read_to_string(path)?;
-        let config: ConfigModel = serde_yml::from_str(&contents)?;
+        let config: OptionsModel = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 }

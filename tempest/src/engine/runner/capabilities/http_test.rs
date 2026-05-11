@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 use crate::engine::runner::capabilities::RunnerCapability;
 use crate::models::descriptor_model::DescriptorModel;
+use crate::models::options_model::OptionsModel;
 use crate::models::run_result::{HttpResult, RunResult, TempestStatusCode};
 
 pub struct HttpTestCapability{
@@ -17,7 +18,12 @@ impl HttpTestCapability{
 }
 #[async_trait]
 impl RunnerCapability for HttpTestCapability {
-    async fn run(&self, descriptor: &DescriptorModel, _: &RunResult) -> RunResult {
+    async fn run(
+        &self,
+        descriptor: &DescriptorModel,
+        context: &RunResult,
+        options: &OptionsModel
+    ) -> RunResult {
         if let Some(test) = &descriptor.test{
             let verb = test.verb.clone().unwrap_or("GET".to_string()).to_uppercase();
             let url = &test.route;

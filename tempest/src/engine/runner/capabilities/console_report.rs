@@ -3,6 +3,7 @@ use crate::models::descriptor_model::DescriptorModel;
 use crate::models::run_result::{Assertion, RunResult, TempestStatusCode};
 use colored::{ColoredString, Colorize};
 use crate::engine::runner::capabilities::RunnerCapability;
+use crate::models::options_model::OptionsModel;
 
 pub struct ConsoleReportCapability;
 
@@ -46,7 +47,12 @@ impl ConsoleReportCapability {
 }
 #[async_trait]
 impl RunnerCapability for ConsoleReportCapability {
-    async fn run(&self, descriptor: &DescriptorModel, context: &RunResult) -> RunResult {
+    async fn run(
+        &self,
+        descriptor: &DescriptorModel,
+        context: &RunResult,
+        options: &OptionsModel
+    ) -> RunResult {
         let name = descriptor.name.clone().unwrap_or_default();
 
         if descriptor.test.is_none() {

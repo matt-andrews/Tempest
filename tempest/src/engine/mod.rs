@@ -1,39 +1,41 @@
 pub mod runner;
 pub mod expr_parser;
 
-use async_recursion::async_recursion;
 use colored::Colorize;
 use crate::engine::runner::capabilities::{create_capabilities, RunnerCapability};
 use crate::models::directory_model::DirectoryModel;
+use crate::models::options_model::OptionsModel;
 use crate::models::run_result::RunResult;
 
 pub async fn execute(discovered: DirectoryModel) -> anyhow::Result<()>{
     let capabilities = create_capabilities().await;
     println!("\n\n{}", "Starting tests...".green());
-    execute_recurse(&discovered, &capabilities).await
+    execute_impl(&discovered, &capabilities).await
 }
 
-#[async_recursion]
-async fn execute_recurse(
+async fn execute_impl(
     discovered: &DirectoryModel,
-    capabilities: &Vec<Box<dyn RunnerCapability>>
+    capabilities: &[Box<dyn RunnerCapability>],
 ) -> anyhow::Result<()> {
+    for directory in discovered.walk() {
 
-    //run through every descriptor + child descriptors all the way down
-    for descriptor in discovered.files.iter().flat_map(|m| m.descendants()){
-        let mut context: RunResult = RunResult::default();
-        for rule in capabilities.iter() {
-            let result = rule.run(descriptor, &context).await;
-            if result.stop {
-                break;
+        let base_options = directory.options.iter()
+            .cloned()
+            .reduce(|acc, next| acc.merge(next))
+            .unwrap_or_default();
+
+        for descriptor in directory.files.iter().flat_map(|m| m.descendants()) {
+            let mut context = RunResult::default();
+
+            let mut options = descriptor.options.clone().unwrap_or_default();
+            options = base_options.clone().merge(options);
+
+            for capability in capabilities {
+                let result = capability.run(descriptor, &context, &options).await;
+                if result.stop { break; }
+                context = result;
             }
-            context = result;
         }
-    }
-
-    //run through all child directories
-    for child in &discovered.children{
-        _ = execute_recurse(&child, capabilities).await;
     }
 
     Ok(())

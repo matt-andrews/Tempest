@@ -1,6 +1,6 @@
 use std::collections::VecDeque;
 use serde::{Deserialize, Serialize};
-use crate::models::option_model::OptionModel;
+use crate::models::options_model::{OptionsModel};
 use crate::models::test_model::TestModel;
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -12,7 +12,7 @@ pub struct DescriptorModel {
     pub test: Option<TestModel>,
     pub describe: Option<Vec<DescriptorModel>>,
 
-    pub options: Option<OptionModel>
+    pub options: Option<OptionsModel>
 }
 
 pub struct DescriptorModelIter<'a> {
