@@ -1,0 +1,18 @@
+
+name: "test b spec"
+describe:
+  - name: "test 1"
+    description: "a simple test"
+    test:
+      route: "http://localhost:18080/test/hello?status=200"
+      verb: "GET"
+      assert:
+        - "headers[\"content-type\"] == \"application/json\""
+
+  - name: "test 2"
+    description: "another simple test"
+    test:
+      route: "http://localhost:18080/test/hello?status=404"
+      verb: "GET"
+      assert:
+        - "json[0] == \"status=404\""

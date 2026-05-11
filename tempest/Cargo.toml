@@ -14,3 +14,11 @@ tracing = "0.1.44"
 serde = { version = "1", features = ["derive"] }
 serde_yaml = "0.9"
 walkdir = "2.5"
+colored = "3.1.1"
+enum_dispatch = "0.3.13"
+serde_yml = "0.0.12"
+reqwest = { version = "0.13.3", features = ["json"] }
+async-trait = "0.1.89"
+serde_json = "1.0.149"
+async-recursion = "1.1.1"
+cel-interpreter = "0.10.0"
