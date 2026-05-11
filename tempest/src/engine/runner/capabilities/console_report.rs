@@ -1,8 +1,8 @@
 use async_trait::async_trait;
-use crate::engine::runner::RunnerCapability;
 use crate::models::descriptor_model::DescriptorModel;
-use crate::models::run_result::{Assertion, RunResult};
+use crate::models::run_result::{Assertion, RunResult, TempestStatusCode};
 use colored::{ColoredString, Colorize};
+use crate::engine::runner::capabilities::RunnerCapability;
 
 pub struct ConsoleReportCapability;
 
@@ -27,12 +27,12 @@ impl ConsoleReportCapability {
             passed && assert.passed
         })
     }
-    fn color_status(status: u16) -> ColoredString{
-        match status {
-            200..=299 => status.to_string().green(),
-            300..=399 => status.to_string().yellow(),
-            400..=499 => status.to_string().red(),
-            _ => status.to_string().normal(),
+    fn color_status(status: &TempestStatusCode) -> ColoredString{
+        match status.code {
+            200..=299 => status.to_display().green(),
+            300..=399 => status.to_display().yellow(),
+            400..=499 => status.to_display().red(),
+            _ => status.to_display().normal(),
         }
     }
     fn color_duration(duration: &core::time::Duration) -> ColoredString{
@@ -46,38 +46,31 @@ impl ConsoleReportCapability {
 }
 #[async_trait]
 impl RunnerCapability for ConsoleReportCapability {
-    async fn run(&self, descriptor: &DescriptorModel, context: Option<RunResult>) -> RunResult {
+    async fn run(&self, descriptor: &DescriptorModel, context: &RunResult) -> RunResult {
         let name = descriptor.name.clone().unwrap_or_default();
 
         if descriptor.test.is_none() {
             println!("\n{}:", name.bright_blue());
-            return context.unwrap_or_default();
+            return context.clone();
         }
 
-        let Some(ctx) = &context else {
-            Self::fail();
-            return RunResult::default();
-        };
-        let Some(http_result) = ctx.success.then(|| ctx.http_result.as_ref()).flatten() else {
-            Self::fail();
-            return RunResult::default();
-        };
+        let http_result = &context.http_result;
 
-        let status = Self::color_status(http_result.status.as_u16());
+        let status = Self::color_status(&http_result.status);
         let duration = Self::color_duration(&http_result.duration);
         println!(" - {}  {}  {}", name.bright_purple(), status, duration);
 
-        let passed = Self::render_assertions(ctx.assertions.as_deref().unwrap_or_default());
+        let passed = Self::render_assertions(&context.assertions);
         if passed {
             Self::pass();
         } else {
             Self::fail();
-            match serde_json::to_string_pretty(ctx) {
+            /*match serde_json::to_string_pretty(&context) {
                 Ok(json) => println!("{json}"),
                 Err(e)   => println!("(serialization error: {e})"),
-            }
+            }*/
         }
 
-        context.unwrap_or_default()
+        context.clone()
     }
 }

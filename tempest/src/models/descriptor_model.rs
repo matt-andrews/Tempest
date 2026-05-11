@@ -30,7 +30,7 @@ impl<'a> Iterator for DescriptorModelIter<'a> {
 }
 
 impl DescriptorModel {
-    pub(crate) fn descendants(&self) -> DescriptorModelIter {
+    pub(crate) fn descendants(&self) -> DescriptorModelIter<'_> {
         DescriptorModelIter { queue: VecDeque::from([self]) }
     }
 }

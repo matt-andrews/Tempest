@@ -8,6 +8,26 @@ use crate::models::run_result::{Assertion, HttpResult};
 use std::sync::Arc;
 
 pub struct CelParser;
+impl ExpressionParser for CelParser{
+    fn assert(&self, assertions: Vec<String>, data: &HttpResult) -> Vec<Assertion> {
+        assertions
+            .iter()
+            .map(|expr| {
+                let result = Self::evaluate_assertion(expr, data)
+                    .map_err(|e| e.to_string());
+                let error = match &result{
+                    Ok(_) => String::new(),
+                    Err(e) => e.clone()
+                };
+                Assertion{
+                    expr: expr.clone(),
+                    error,
+                    passed: result.unwrap_or(false),
+                }
+            })
+            .collect()
+    }
+}
 impl CelParser{
     fn json_to_cel(val: &JsonValue) -> Value {
         match val {
@@ -39,7 +59,7 @@ impl CelParser{
 
         let mut ctx = Context::default();
 
-        ctx.add_variable("status", Value::UInt(response.status.as_u16() as u64))?;
+        ctx.add_variable("status", Value::UInt(response.status.code as u64))?;
 
         if let Some(json) = &response.json{
             ctx.add_variable("json", Self::json_to_cel(json))?;
@@ -69,25 +89,5 @@ impl CelParser{
             })
             .collect::<HashMap<Key, Value>>();
         Value::Map(cel_map.into())
-    }
-}
-impl ExpressionParser for CelParser{
-    fn assert(&self, assertions: Vec<String>, data: &HttpResult) -> Vec<Assertion> {
-        assertions
-            .iter()
-            .map(|expr| {
-                let result = Self::evaluate_assertion(expr, data)
-                    .map_err(|e| e.to_string());
-                let error = match &result{
-                    Ok(_) => String::new(),
-                    Err(e) => e.clone()
-                };
-                Assertion{
-                    expr: expr.clone(),
-                    error,
-                    passed: result.unwrap_or(false),
-                }
-            })
-            .collect()
     }
 }
