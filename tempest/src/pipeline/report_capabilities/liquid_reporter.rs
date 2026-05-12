@@ -8,7 +8,7 @@ use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::report_capabilities::ReportCapability;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
-    use crate::pipeline::report_capabilities::liquid_filters::*;
+    use crate::utils::liquid_filters::*;
     liquid::ParserBuilder::with_stdlib()
         .filter(RedFilter)
         .filter(GreenFilter)
@@ -45,25 +45,24 @@ impl ReportCapability for LiquidReporter {
             return;
         }
 
-        let globals = build_globals(descriptor, test_result.as_ref(), &assertions);
 
         for template in active {
             if descriptor.test.is_none() {
-                match PARSER.parse(&template.section.clone().unwrap_or_default()) {
-                    Ok(tmpl) => match tmpl.render(&globals) {
-                        Ok(output) => print!("{output}"),
-                        Err(e) => print_error(template, format!("liquid parse error: {e}")),
-                    },
-                    Err(e) => print_error(template, format!("liquid parse error: {e}")),
-                }
+                print(
+                    descriptor,
+                    &test_result,
+                    template,
+                    &assertions,
+                    template.section.clone().unwrap_or_default()
+                );
             }else {
-                match PARSER.parse(&template.test.clone().unwrap_or_default()) {
-                    Ok(tmpl) => match tmpl.render(&globals) {
-                        Ok(output) => print!("{output}"),
-                        Err(e) => print_error(template, format!("liquid parse error: {e}")),
-                    },
-                    Err(e) => print_error(template, format!("liquid parse error: {e}")),
-                }
+                print(
+                    descriptor,
+                    &test_result,
+                    template,
+                    &assertions,
+                    template.test.clone().unwrap_or_default()
+                );
             }
         }
     }
@@ -78,6 +77,23 @@ fn print_error(template: &ReportTemplateModel, msg: String){
             Err(e) => eprintln!("{e}"),
         },
         Err(e) => eprintln!("{e}"),
+    };
+}
+
+fn print(
+    descriptor: &DescriptorModel,
+    test_result: &Option<TestResult>,
+    template: &ReportTemplateModel,
+    assertions: &Vec<Assertion>,
+    template_str: String) {
+    let globals = build_globals(descriptor, test_result.as_ref(), &assertions);
+
+    match PARSER.parse(&template_str) {
+        Ok(tmpl) => match tmpl.render(&globals) {
+            Ok(output) => print!("{output}"),
+            Err(e) => print_error(template, format!("liquid parse error: {e}")),
+        },
+        Err(e) => print_error(template, format!("liquid parse error: {e}")),
     };
 }
 
