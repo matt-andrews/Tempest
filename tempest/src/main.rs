@@ -28,8 +28,8 @@ async fn main() -> anyhow::Result<()> {
     match args.command{
         Commands::Test{path} => {
             let options = OptionsModel::default();
-            let discover = discovery::discover(path, None)?;
-            pipeline::execute(discover, options).await?;
+            let discovery = discovery::discover(path, None)?;
+            pipeline::execute(discovery, options).await?;
         }
     }
 

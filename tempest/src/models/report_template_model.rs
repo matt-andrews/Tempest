@@ -1,4 +1,7 @@
+use serde::{Deserialize, Serialize};
 
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct ReportTemplateModel{
-    pub test: String,
+    pub test: Option<String>,
+    pub section: Option<String>,
 }

@@ -13,7 +13,7 @@ impl OptionsModel {
         Self{
             base_uri: None,
             debug: Some(false),
-            reports: Some(Vec::new()),
+            reports: None,
         }
     }
     pub fn merge(self, other: OptionsModel) -> OptionsModel {

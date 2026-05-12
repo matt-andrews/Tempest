@@ -1,4 +1,4 @@
-use colored::{ColoredString, Colorize};
+/*use colored::{ColoredString, Colorize};
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::test_result::{Assertion, TempestStatusCode, TestResult};
@@ -78,4 +78,4 @@ impl ReportCapability for ConsoleReporter {
             }
         }
     }
-}
+}*/
