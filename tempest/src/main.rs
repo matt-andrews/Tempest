@@ -1,6 +1,7 @@
 mod models;
 pub mod discovery;
 pub mod pipeline;
+mod utils;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};

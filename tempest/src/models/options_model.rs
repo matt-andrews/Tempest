@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct OptionsModel {
-    #[serde(rename = "baseUri")]
+    #[serde(rename = "base_uri")]
     pub base_uri: Option<String>,
     pub debug: Option<bool>,
 }

@@ -11,6 +11,8 @@ describe:
 
   - name: "test 2"
     description: "another simple test"
+    options:
+      debug: true
     test:
       route: "/test/hello?status=404"
       verb: "GET"

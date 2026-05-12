@@ -1,11 +1,14 @@
+use crate::utils::header_map_converter::header_map_serde;
 use std::time::Duration;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap};
 use reqwest::StatusCode;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default)]
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct TestResult{
     pub status: TempestStatusCode,
+    #[serde(with = "header_map_serde")]
     pub headers: HeaderMap,
     pub body: String,
     pub json: Option<serde_json::Value>,
