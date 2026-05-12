@@ -1,5 +1,6 @@
 mod console_reporter;
 mod liquid_reporter;
+pub mod liquid_filters;
 
 use std::collections::HashMap;
 use enum_dispatch::enum_dispatch;

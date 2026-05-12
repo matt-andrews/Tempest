@@ -1,0 +1,3 @@
+test: console.test.liquid
+section: console.section.liquid
+error: console.error.liquid

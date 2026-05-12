@@ -4,4 +4,5 @@ use serde::{Deserialize, Serialize};
 pub struct ReportTemplateModel{
     pub test: Option<String>,
     pub section: Option<String>,
+    pub error: Option<String>,
 }

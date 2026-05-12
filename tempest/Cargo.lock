@@ -1813,6 +1813,7 @@ dependencies = [
  "dotenvy",
  "enum_dispatch",
  "liquid",
+ "liquid-core",
  "reqwest",
  "serde",
  "serde_json",

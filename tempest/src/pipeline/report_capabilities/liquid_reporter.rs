@@ -8,7 +8,17 @@ use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::report_capabilities::ReportCapability;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
+    use crate::pipeline::report_capabilities::liquid_filters::*;
     liquid::ParserBuilder::with_stdlib()
+        .filter(RedFilter)
+        .filter(GreenFilter)
+        .filter(YellowFilter)
+        .filter(BrightRedFilter)
+        .filter(BrightGreenFilter)
+        .filter(BrightBlueFilter)
+        .filter(BrightPurpleFilter)
+        .filter(ColorStatusFilter)
+        .filter(ColorDurationFilter)
         .build()
         .expect("failed to build Liquid parser")
 });
@@ -37,27 +47,38 @@ impl ReportCapability for LiquidReporter {
 
         let globals = build_globals(descriptor, test_result.as_ref(), &assertions);
 
-        println!();
         for template in active {
             if descriptor.test.is_none() {
                 match PARSER.parse(&template.section.clone().unwrap_or_default()) {
                     Ok(tmpl) => match tmpl.render(&globals) {
                         Ok(output) => print!("{output}"),
-                        Err(e) => eprintln!("liquid render error: {e}"),
+                        Err(e) => print_error(template, format!("liquid parse error: {e}")),
                     },
-                    Err(e) => eprintln!("liquid parse error: {e}"),
+                    Err(e) => print_error(template, format!("liquid parse error: {e}")),
                 }
             }else {
                 match PARSER.parse(&template.test.clone().unwrap_or_default()) {
                     Ok(tmpl) => match tmpl.render(&globals) {
                         Ok(output) => print!("{output}"),
-                        Err(e) => eprintln!("liquid render error: {e}"),
+                        Err(e) => print_error(template, format!("liquid parse error: {e}")),
                     },
-                    Err(e) => eprintln!("liquid parse error: {e}"),
+                    Err(e) => print_error(template, format!("liquid parse error: {e}")),
                 }
             }
         }
     }
+}
+
+
+fn print_error(template: &ReportTemplateModel, msg: String){
+    let obj = liquid::object!({"liquid_error_message" : msg.clone()});
+    match PARSER.parse(&template.error.clone().unwrap_or_default()){
+        Ok(tmpl) => match tmpl.render(&obj) {
+            Ok(output) => print!("{output}"),
+            Err(e) => eprintln!("{e}"),
+        },
+        Err(e) => eprintln!("{e}"),
+    };
 }
 
 fn build_globals(
@@ -84,7 +105,7 @@ fn build_globals(
             "status":         result.status.code as i64,
             "status_message": result.status.message.clone(),
             "body":           result.body.clone(),
-            "duration":    result.duration.as_secs_f64() * 1000.0,
+            "duration_ms":    result.duration.as_secs_f64() * 1000.0,
         })
     } else {
         liquid::object!({

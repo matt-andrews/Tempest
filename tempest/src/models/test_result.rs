@@ -35,7 +35,7 @@ impl TempestStatusCode{
     pub fn from_status(status: StatusCode) -> TempestStatusCode{
         TempestStatusCode{
             code: status.as_u16(),
-            message: status.to_string(),
+            message: status.canonical_reason().unwrap_or_default().to_string(),
         }
     }
     pub fn from_message(msg: String) -> TempestStatusCode{

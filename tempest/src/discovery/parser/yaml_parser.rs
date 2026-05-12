@@ -20,8 +20,30 @@ impl FileParser for YamlFileParser{
     }
 
     fn parse_report_template(&self, path: PathBuf) -> anyhow::Result<ReportTemplateModel> {
-        let contents = fs::read_to_string(path)?;
-        let config: ReportTemplateModel = serde_yml::from_str(&contents)?;
-        Ok(config)
+        let contents = fs::read_to_string(path.clone())?;
+        let mut template: ReportTemplateModel = serde_yml::from_str(&contents)?;
+
+        let parent = path.parent().map(PathBuf::from).unwrap_or_default();
+
+        template.test    = Self::resolve_liquid_ref(template.test, &parent);
+        template.section = Self::resolve_liquid_ref(template.section, &parent);
+        template.error = Self::resolve_liquid_ref(template.error, &parent);
+
+        Ok(template)
+    }
+}
+
+impl YamlFileParser {
+    fn resolve_liquid_ref(value: Option<String>, base_dir: &PathBuf) -> Option<String> {
+        value.map(|v| {
+            let trimmed = v.trim();
+            if trimmed.ends_with(".liquid") {
+                let file_path = base_dir.join(trimmed);
+                std::fs::read_to_string(&file_path)
+                    .unwrap_or_else(|e| format!("<!-- could not load {trimmed}: {e} -->"))
+            } else {
+                v
+            }
+        })
     }
 }
