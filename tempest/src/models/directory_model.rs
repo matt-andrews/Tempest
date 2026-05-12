@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DirectoryModel{
     pub files: Vec<DescriptorModel>,
     pub options: Vec<OptionsModel>,

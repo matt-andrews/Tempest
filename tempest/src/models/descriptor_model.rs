@@ -48,7 +48,7 @@ mod tests {
     use crate::models::options_model::OptionsModel;
 
     fn options(base_uri: &str) -> OptionsModel {
-        OptionsModel { base_uri: Some(base_uri.to_string()), debug: None }
+        OptionsModel { base_uri: Some(base_uri.to_string()), debug: None, reports: None }
     }
 
     fn group(name: &str, opts: Option<OptionsModel>, children: Vec<DescriptorModel>) -> DescriptorModel {
@@ -130,7 +130,7 @@ mod tests {
     fn deep_nesting_accumulates_all_ancestor_options() {
         // root (debug: true) -> a (base_uri: "http://a") -> b (no opts) -> leaf
         // leaf's parent_options should carry both debug AND base_uri from higher ancestors
-        let root = group("root", Some(OptionsModel { base_uri: None, debug: Some(true) }), vec![
+        let root = group("root", Some(OptionsModel { base_uri: None, debug: Some(true), reports: None }), vec![
             group("a", Some(options("http://a")), vec![
                 group("b", None, vec![
                     leaf("deep", None),

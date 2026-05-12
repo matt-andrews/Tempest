@@ -46,6 +46,6 @@ impl TempestStatusCode{
     }
 
     pub fn to_display(&self) -> String{
-        format!("{} {}", self.code, self.message)
+        format!("{}", self.message)
     }
 }

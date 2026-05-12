@@ -2,6 +2,8 @@ pub mod test_capabilities;
 pub mod assert_capabilities;
 mod report_capabilities;
 
+use std::fs;
+use std::path::{Path, PathBuf};
 use crate::pipeline::test_capabilities::{get_test_capability, TestCapability};
 use crate::models::directory_model::DirectoryModel;
 use crate::models::options_model::OptionsModel;
@@ -11,6 +13,8 @@ use crate::pipeline::report_capabilities::get_report_capability;
 use crate::pipeline::report_capabilities::ReportCapability;
 
 pub async fn execute(discovered: DirectoryModel, default_options: OptionsModel) -> anyhow::Result<()>{
+    let report_templates: Vec<String> = get_templates(discovered.clone().dir);
+
     for directory in discovered.walk() {
         let base_options = default_options
             .clone()
@@ -45,4 +49,22 @@ pub async fn execute(discovered: DirectoryModel, default_options: OptionsModel) 
     }
 
     Ok(())
+}
+
+fn get_templates(dir: PathBuf) -> Vec<String>{
+    let mut result: Vec<String> = Vec::new();
+
+    if let Ok(top_dir) = std::fs::read_dir(&dir){
+        let entries = top_dir.filter_map(|e| e.ok());
+        for entry in entries{
+            let path = entry.path();
+            let ext = path.extension().unwrap_or_default();
+            if path.is_file() && ext == "template"{
+                let contents = fs::read_to_string(path).unwrap_or_default();
+                result.push(contents);
+            }
+        }
+    }
+
+    result
 }

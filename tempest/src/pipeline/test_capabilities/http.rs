@@ -1,3 +1,4 @@
+use std::sync::LazyLock;
 use std::time::Instant;
 use async_trait::async_trait;
 use reqwest::header::HeaderMap;
@@ -7,8 +8,14 @@ use crate::models::options_model::OptionsModel;
 use crate::models::test_model::TestModel;
 use crate::models::test_result::{TempestStatusCode, TestResult};
 
+static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .user_agent(concat!("Tempest/", env!("CARGO_PKG_VERSION")))
+        .build()
+        .expect("failed to build HTTP client")
+});
+
 pub struct HttpTestCapability{
-    client: reqwest::Client,
     route: String,
     descriptor: DescriptorModel,
     options: OptionsModel,
@@ -16,16 +23,7 @@ pub struct HttpTestCapability{
 }
 impl HttpTestCapability{
     pub fn new(route: String, descriptor: DescriptorModel, options: OptionsModel, test: TestModel) -> Self{
-        Self{
-            client: reqwest::Client::builder()
-                .user_agent(concat!("Tempest/", env!("CARGO_PKG_VERSION")))
-                .build()
-                .expect("failed to build HTTP client"),
-            route,
-            descriptor,
-            options,
-            test,
-        }
+        Self{ route, descriptor, options, test }
     }
 }
 #[async_trait]
@@ -36,12 +34,12 @@ impl TestCapability for HttpTestCapability {
         let body = self.test.body.clone().unwrap_or_default();
 
         let builder = match verb.as_str() {
-            "GET" => Some(self.client.get(&self.route)),
-            "POST" => Some(self.client.post(&self.route).body(body)),
-            "PUT" => Some(self.client.put(&self.route).body(body)),
-            "PATCH" => Some(self.client.patch(&self.route).body(body)),
-            "DELETE" => Some(self.client.delete(&self.route)),
-            "HEAD" => Some(self.client.head(&self.route)),
+            "GET" => Some(CLIENT.get(&self.route)),
+            "POST" => Some(CLIENT.post(&self.route).body(body)),
+            "PUT" => Some(CLIENT.put(&self.route).body(body)),
+            "PATCH" => Some(CLIENT.patch(&self.route).body(body)),
+            "DELETE" => Some(CLIENT.delete(&self.route)),
+            "HEAD" => Some(CLIENT.head(&self.route)),
             _ => None
         };
 

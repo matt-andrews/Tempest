@@ -1,4 +1,5 @@
 mod console_reporter;
+mod liquid_reporter;
 
 use enum_dispatch::enum_dispatch;
 use crate::models::descriptor_model::DescriptorModel;
