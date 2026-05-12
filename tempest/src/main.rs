@@ -4,6 +4,7 @@ pub mod engine;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
+use crate::models::options_model::OptionsModel;
 
 #[derive(Parser)]
 struct Cli {
@@ -25,8 +26,9 @@ async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
     match args.command{
         Commands::Test{path} => {
+            let options = OptionsModel::default();
             let discover = discovery::discover(path, None)?;
-            engine::execute(discover).await?;
+            engine::execute(discover, options).await?;
         }
     }
 

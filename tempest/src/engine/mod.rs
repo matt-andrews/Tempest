@@ -7,22 +7,18 @@ use crate::models::directory_model::DirectoryModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::run_result::RunResult;
 
-pub async fn execute(discovered: DirectoryModel) -> anyhow::Result<()>{
-    let capabilities = create_capabilities().await;
+pub async fn execute(discovered: DirectoryModel, default_options: OptionsModel) -> anyhow::Result<()>{
+    let capabilities = &create_capabilities().await;
     println!("\n\n{}", "Starting tests...".green());
-    execute_impl(&discovered, &capabilities).await
-}
 
-async fn execute_impl(
-    discovered: &DirectoryModel,
-    capabilities: &[Box<dyn RunnerCapability>],
-) -> anyhow::Result<()> {
     for directory in discovered.walk() {
-
-        let base_options = directory.options.iter()
-            .cloned()
-            .reduce(|acc, next| acc.merge(next))
-            .unwrap_or_default();
+        let base_options = default_options
+            .clone()
+            .merge(directory.options.iter()
+                .cloned()
+                .reduce(|acc, next| acc.merge(next))
+                .unwrap_or_default()
+            );
 
         for descriptor in directory.files.iter().flat_map(|m| m.descendants()) {
             let mut context = RunResult::default();

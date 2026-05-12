@@ -26,7 +26,10 @@ impl RunnerCapability for HttpTestCapability {
     ) -> RunResult {
         if let Some(test) = &descriptor.test{
             let verb = test.verb.clone().unwrap_or("GET".to_string()).to_uppercase();
-            let url = &test.route;
+            let mut url = test.route.clone();
+            if let Some(base_uri) = &options.base_uri{
+                url = format!("{}/{}", base_uri.trim_end_matches('/'), url.trim_start_matches('/'));
+            }
             let body = test.body.clone().unwrap_or_default();
 
             let builder = match verb.as_str() {

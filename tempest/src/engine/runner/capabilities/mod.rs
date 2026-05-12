@@ -11,11 +11,10 @@ pub mod console_report;
 pub mod assert;
 
 #[async_trait]
-pub trait RunnerCapability: Send + Sync{
-    async fn run(
+pub trait TestCapability: Send + Sync{
+    async fn test(
         &self,
         descriptor: &DescriptorModel,
-        context: &RunResult,
         options: &OptionsModel
     ) -> RunResult;
 }
@@ -23,7 +22,5 @@ pub trait RunnerCapability: Send + Sync{
 pub async fn create_capabilities() -> Vec<Box<dyn RunnerCapability>>{
     vec![
         Box::new(HttpTestCapability::new()),
-        Box::new(AssertCapability),
-        Box::new(ConsoleReportCapability),
     ]
 }
