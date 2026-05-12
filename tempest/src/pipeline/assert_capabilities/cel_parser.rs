@@ -3,32 +3,34 @@ use cel_interpreter::{Context, Program, Value};
 use cel_interpreter::objects::Key;
 use reqwest::header::HeaderMap;
 use serde_json::{Value as JsonValue};
-use crate::engine::expr_parser::ExpressionParser;
-use crate::models::run_result::{Assertion, HttpResult};
 use std::sync::Arc;
+use crate::engine::assert_capabilities::AssertCapability;
+use crate::models::test_result::{Assertion, TestResult};
 
-pub struct CelParser;
-impl ExpressionParser for CelParser{
-    fn assert(&self, assertions: Vec<String>, data: &HttpResult) -> Vec<Assertion> {
-        assertions
-            .iter()
-            .map(|expr| {
-                let result = Self::evaluate_assertion(expr, data)
-                    .map_err(|e| e.to_string());
-                let error = match &result{
-                    Ok(_) => String::new(),
-                    Err(e) => e.clone()
-                };
-                Assertion{
-                    expr: expr.clone(),
-                    error,
-                    passed: result.unwrap_or(false),
-                }
-            })
-            .collect()
+pub struct CelParser{
+    assertion: String
+}
+impl AssertCapability for CelParser{
+    fn assert(&self, data: &TestResult) -> Assertion {
+        let result = Self::evaluate_assertion(&self.assertion, data)
+            .map_err(|e| e.to_string());
+        let error = match &result{
+            Ok(_) => String::new(),
+            Err(e) => e.clone()
+        };
+        Assertion{
+            expr: self.assertion.clone(),
+            error,
+            passed: result.unwrap_or(false),
+        }
     }
 }
 impl CelParser{
+    pub fn new(assertion: String) -> Self{
+        Self{
+            assertion
+        }
+    }
     fn json_to_cel(val: &JsonValue) -> Value {
         match val {
             JsonValue::Null => Value::Null,
@@ -54,7 +56,7 @@ impl CelParser{
         }
     }
 
-    fn evaluate_assertion(expr: &str, response: &HttpResult) -> anyhow::Result<bool> {
+    fn evaluate_assertion(expr: &str, response: &TestResult) -> anyhow::Result<bool> {
         let program = Program::compile(expr).expect("Could not compile expression");
 
         let mut ctx = Context::default();
