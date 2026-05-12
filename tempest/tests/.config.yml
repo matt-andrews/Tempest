@@ -1,1 +1,3 @@
 debug: false
+reports:
+  - "console.template.yml"

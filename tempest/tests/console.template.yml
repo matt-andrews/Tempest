@@ -1,0 +1,8 @@
+
+name: "Console Template"
+test: |
+  {{name}} {{status}} {{duration}}
+  {% for assert in assertions %}
+    {% if assert.passed %}✅{%else%}❌{%endif%} {{ assert.expr }}
+  {% endfor %}
+  {% if passed %}PASSED{%else%}FAILED{%endif%}
