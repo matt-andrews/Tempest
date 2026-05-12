@@ -1,7 +1,7 @@
 use std::time::Instant;
 use async_trait::async_trait;
 use reqwest::header::HeaderMap;
-use crate::engine::test_capabilities::{TestCapability};
+use crate::pipeline::test_capabilities::{TestCapability};
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::test_model::TestModel;

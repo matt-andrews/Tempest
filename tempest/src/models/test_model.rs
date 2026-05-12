@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct TestModel{
     pub route: String,
-    
+
     pub verb: Option<String>,
     pub body: Option<String>,
     pub assert: Option<Vec<String>>,

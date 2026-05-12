@@ -4,7 +4,7 @@ use cel_interpreter::objects::Key;
 use reqwest::header::HeaderMap;
 use serde_json::{Value as JsonValue};
 use std::sync::Arc;
-use crate::engine::assert_capabilities::AssertCapability;
+use crate::pipeline::assert_capabilities::AssertCapability;
 use crate::models::test_result::{Assertion, TestResult};
 
 pub struct CelParser{

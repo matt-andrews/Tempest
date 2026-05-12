@@ -1,6 +1,6 @@
 mod models;
 pub mod discovery;
-pub mod engine;
+pub mod pipeline;
 
 use std::path::PathBuf;
 use clap::{Parser, Subcommand};
@@ -28,7 +28,7 @@ async fn main() -> anyhow::Result<()> {
         Commands::Test{path} => {
             let options = OptionsModel::default();
             let discover = discovery::discover(path, None)?;
-            engine::execute(discover, options).await?;
+            pipeline::execute(discover, options).await?;
         }
     }
 

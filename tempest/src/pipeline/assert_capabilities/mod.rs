@@ -1,5 +1,5 @@
 use enum_dispatch::enum_dispatch;
-use crate::engine::assert_capabilities::cel_parser::CelParser;
+use crate::pipeline::assert_capabilities::cel_parser::CelParser;
 use crate::models::test_result::{Assertion, TestResult};
 
 pub mod cel_parser;

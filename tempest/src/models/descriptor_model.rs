@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::models::options_model::{OptionsModel};
 use crate::models::test_model::TestModel;
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DescriptorModel {
     pub name: Option<String>,
     pub description: Option<String>,
