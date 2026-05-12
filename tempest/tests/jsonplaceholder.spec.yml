@@ -1,0 +1,188 @@
+name: "REST API Patterns"
+description: "Full CRUD lifecycle tests against JSONPlaceholder — a free fake REST API"
+options:
+  base_uri: "https://jsonplaceholder.typicode.com"
+
+describe:
+  - name: "Posts"
+    describe:
+      - name: "List all posts"
+        description: "Returns 100 posts — a classic paginated collection endpoint"
+        test:
+          route: "/posts"
+          assert:
+            - "status == 200"
+            - "body.contains(\"userId\")"
+            - "body.contains(\"title\")"
+
+      - name: "Get post by ID"
+        test:
+          route: "/posts/1"
+          assert:
+            - "status == 200"
+            - "json[\"id\"] == 1"
+            - "json[\"userId\"] == 1"
+            - "json[\"title\"] != \"\""
+
+      - name: "Non-existent post returns 404"
+        test:
+          route: "/posts/99999"
+          assert:
+            - "status == 404"
+
+      - name: "Create a post"
+        description: "JSONPlaceholder fakes the write — responds 201 with the new resource"
+        test:
+          route: "/posts"
+          verb: "POST"
+          body: '{"title": "Tempest Test Post", "body": "Posted via Tempest HTTP test runner", "userId": 42}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 201"
+            - "body.contains(\"Tempest Test Post\")"
+            - "body.contains(\"id\")"
+
+      - name: "Full update (PUT)"
+        test:
+          route: "/posts/1"
+          verb: "PUT"
+          body: '{"id": 1, "title": "Updated by Tempest", "body": "Replaced content", "userId": 1}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 200"
+            - "body.contains(\"Updated by Tempest\")"
+
+      - name: "Partial update (PATCH)"
+        test:
+          route: "/posts/1"
+          verb: "PATCH"
+          body: '{"title": "Patched Title"}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 200"
+            - "body.contains(\"Patched Title\")"
+
+      - name: "Delete a post"
+        test:
+          route: "/posts/1"
+          verb: "DELETE"
+          assert:
+            - "status == 200"
+
+  - name: "Comments"
+    describe:
+      - name: "Get comments via nested resource route"
+        description: "REST convention: /posts/{id}/comments returns all comments for a post"
+        test:
+          route: "/posts/1/comments"
+          assert:
+            - "status == 200"
+            - "body.contains(\"postId\")"
+            - "body.contains(\"email\")"
+
+      - name: "Filter comments by postId query param"
+        description: "Same data, different URL style — both are valid REST patterns"
+        test:
+          route: "/comments?postId=1"
+          assert:
+            - "status == 200"
+            - "body.contains(\"postId\")"
+
+  - name: "Users"
+    describe:
+      - name: "List users"
+        test:
+          route: "/users"
+          assert:
+            - "status == 200"
+            - "body.contains(\"username\")"
+            - "body.contains(\"address\")"
+
+      - name: "Get Leanne Graham"
+        description: "User #1 is a fixed fixture — useful for deterministic assertions"
+        options:
+          debug: true
+        test:
+          route: "/users/1"
+          assert:
+            - "status == 200"
+            - "json[\"name\"] != \"\""
+            - "json[\"email\"] != \"\""
+            - "body.contains(\"Leanne Graham\")"
+            - "body.contains(\"Sincere@april.biz\")"
+
+      - name: "Get all posts by a user"
+        test:
+          route: "/users/1/posts"
+          assert:
+            - "status == 200"
+            - "body.contains(\"userId\")"
+
+      - name: "Get all todos by a user"
+        test:
+          route: "/users/1/todos"
+          assert:
+            - "status == 200"
+            - "body.contains(\"completed\")"
+
+  - name: "Todos"
+    describe:
+      - name: "List all todos"
+        test:
+          route: "/todos"
+          assert:
+            - "status == 200"
+            - "body.contains(\"completed\")"
+            - "body.contains(\"title\")"
+
+      - name: "Get a specific todo"
+        test:
+          route: "/todos/1"
+          assert:
+            - "status == 200"
+            - "json[\"userId\"] == 1"
+            - "json[\"id\"] == 1"
+
+      - name: "Filter completed todos"
+        description: "Query params in the route string — the query field is an alternative"
+        test:
+          route: "/todos?completed=true"
+          assert:
+            - "status == 200"
+            - "body.contains(\"completed\")"
+
+      - name: "Filter incomplete todos"
+        test:
+          route: "/todos?completed=false"
+          assert:
+            - "status == 200"
+
+  - name: "Albums and Photos"
+    describe:
+      - name: "List albums"
+        test:
+          route: "/albums"
+          assert:
+            - "status == 200"
+            - "body.contains(\"title\")"
+
+      - name: "Get photos in an album"
+        test:
+          route: "/albums/1/photos"
+          assert:
+            - "status == 200"
+            - "body.contains(\"thumbnailUrl\")"
+            - "body.contains(\"url\")"
+
+      - name: "Get a specific photo"
+        description: "Each photo has a title, URL, and thumbnail URL"
+        test:
+          route: "/photos/1"
+          assert:
+            - "status == 200"
+            - "json[\"albumId\"] == 1"
+            - "json[\"id\"] == 1"
+            - "body.contains(\"thumbnailUrl\")"

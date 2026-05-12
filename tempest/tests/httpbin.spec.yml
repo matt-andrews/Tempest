@@ -1,0 +1,206 @@
+name: "HTTP Mechanics"
+description: "Explore HTTP request and response behaviors using httpbin.org"
+options:
+  base_uri: "https://httpbin.org"
+
+describe:
+  - name: "Status Codes"
+    description: "httpbin reflects any status code you request at /status/{code}"
+    describe:
+      - name: "2xx Success"
+        describe:
+          - name: "200 OK"
+            test:
+              route: "/status/200"
+              assert:
+                - "status == 200"
+
+          - name: "201 Created"
+            test:
+              route: "/status/201"
+              assert:
+                - "status == 201"
+
+          - name: "204 No Content"
+            test:
+              route: "/status/204"
+              assert:
+                - "status == 204"
+
+      - name: "3xx Redirection"
+        describe:
+          - name: "301 Moved Permanently"
+            test:
+              route: "/status/301"
+              assert:
+                - "status == 301"
+
+          - name: "304 Not Modified"
+            test:
+              route: "/status/304"
+              assert:
+                - "status == 304"
+
+      - name: "4xx Client Errors"
+        describe:
+          - name: "400 Bad Request"
+            test:
+              route: "/status/400"
+              assert:
+                - "status == 400"
+
+          - name: "401 Unauthorized"
+            test:
+              route: "/status/401"
+              assert:
+                - "status == 401"
+
+          - name: "404 Not Found"
+            test:
+              route: "/status/404"
+              assert:
+                - "status == 404"
+
+          - name: "429 Too Many Requests"
+            test:
+              route: "/status/429"
+              assert:
+                - "status == 429"
+
+      - name: "5xx Server Errors"
+        describe:
+          - name: "500 Internal Server Error"
+            test:
+              route: "/status/500"
+              assert:
+                - "status == 500"
+
+          - name: "503 Service Unavailable"
+            test:
+              route: "/status/503"
+              assert:
+                - "status == 503"
+
+  - name: "HTTP Verbs"
+    description: "httpbin has dedicated endpoints for each verb that echo request details"
+    describe:
+      - name: "GET"
+        test:
+          route: "/get"
+          assert:
+            - "status == 200"
+            - "body.contains(\"url\")"
+
+      - name: "POST with JSON body"
+        test:
+          route: "/post"
+          verb: "POST"
+          body: '{"name": "Tempest", "type": "http-test-runner", "version": 1}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 200"
+            - "body.contains(\"Tempest\")"
+            - "body.contains(\"http-test-runner\")"
+
+      - name: "PUT with JSON body"
+        test:
+          route: "/put"
+          verb: "PUT"
+          body: '{"action": "replace", "data": "new value"}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 200"
+            - "body.contains(\"replace\")"
+
+      - name: "PATCH with JSON body"
+        test:
+          route: "/patch"
+          verb: "PATCH"
+          body: '{"action": "update", "field": "title"}'
+          headers:
+            Content-Type: "application/json"
+          assert:
+            - "status == 200"
+            - "body.contains(\"update\")"
+
+      - name: "DELETE"
+        test:
+          route: "/delete"
+          verb: "DELETE"
+          assert:
+            - "status == 200"
+
+  - name: "Request Headers"
+    description: "httpbin echoes your request headers back inside the response JSON"
+    describe:
+      - name: "Custom header is echoed"
+        test:
+          route: "/get"
+          headers:
+            X-Tempest-Test: "hello-from-tempest"
+          assert:
+            - "status == 200"
+            - "body.contains(\"hello-from-tempest\")"
+
+      - name: "Multiple custom headers"
+        test:
+          route: "/get"
+          headers:
+            X-Request-Id: "abc-123"
+            X-Client-Name: "Tempest"
+          assert:
+            - "status == 200"
+            - "body.contains(\"abc-123\")"
+            - "body.contains(\"Tempest\")"
+
+      - name: "Accept header is respected"
+        test:
+          route: "/get"
+          headers:
+            Accept: "application/json"
+          assert:
+            - "status == 200"
+            - "headers[\"content-type\"] == \"application/json\""
+
+  - name: "Response Inspection"
+    description: "Inspect what httpbin sends back"
+    describe:
+      - name: "UUID endpoint generates a unique identifier"
+        test:
+          route: "/uuid"
+          assert:
+            - "status == 200"
+            - "body.contains(\"uuid\")"
+
+      - name: "IP address endpoint returns origin"
+        test:
+          route: "/ip"
+          assert:
+            - "status == 200"
+            - "body.contains(\"origin\")"
+
+      - name: "User-agent endpoint echoes the client"
+        test:
+          route: "/user-agent"
+          assert:
+            - "status == 200"
+            - "body.contains(\"user-agent\")"
+
+      - name: "Delay endpoint (simulates a slow API)"
+        description: "Useful for testing timeout behavior; debug shows full response"
+        options:
+          debug: true
+        test:
+          route: "/delay/1"
+          assert:
+            - "status == 200"
+
+      - name: "Base64 decode roundtrip"
+        description: "httpbin can decode base64 — 'SFRUUEJJTg==' decodes to 'HTTPBIN'"
+        test:
+          route: "/base64/SFRUUEJJTg=="
+          assert:
+            - "status == 200"
+            - "body == \"HTTPBIN\""

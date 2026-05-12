@@ -17,7 +17,10 @@ pub struct HttpTestCapability{
 impl HttpTestCapability{
     pub fn new(route: String, descriptor: DescriptorModel, options: OptionsModel, test: TestModel) -> Self{
         Self{
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .user_agent(concat!("Tempest/", env!("CARGO_PKG_VERSION")))
+                .build()
+                .expect("failed to build HTTP client"),
             route,
             descriptor,
             options,

@@ -11,7 +11,9 @@ pub struct TestResult{
     #[serde(with = "header_map_serde")]
     pub headers: HeaderMap,
     pub body: String,
+    #[serde(skip)]
     pub json: Option<serde_json::Value>,
+    #[serde(skip)]
     pub bytes: Vec<u8>,
     pub duration: Duration,
 }

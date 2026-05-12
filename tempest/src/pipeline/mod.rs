@@ -20,10 +20,11 @@ pub async fn execute(discovered: DirectoryModel, default_options: OptionsModel) 
                 .unwrap_or_default()
             );
 
-        for descriptor in directory.files.iter().flat_map(|m| m.descendants()) {
+        for (descriptor, ancestor_options) in directory.files.iter().flat_map(|m| m.descendants()) {
 
-            let mut options = descriptor.options.clone().unwrap_or_default();
-            options = base_options.clone().merge(options);
+            let options = base_options.clone()
+                .merge(ancestor_options)
+                .merge(descriptor.options.clone().unwrap_or_default());
 
             let mut assert_result: Vec<Assertion> = Vec::new();
             let mut test_result: Option<TestResult> = None;
