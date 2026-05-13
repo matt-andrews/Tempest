@@ -1,15 +1,15 @@
-use std::collections::VecDeque;
-use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct DirectoryModel{
+pub struct DirectoryModel {
     pub files: Vec<DescriptorModel>,
     pub options: Vec<OptionsModel>,
     pub children: Vec<DirectoryModel>,
-    pub dir: PathBuf
+    pub dir: PathBuf,
 }
 
 pub struct DirectoryModelIter<'a> {
@@ -28,7 +28,9 @@ impl<'a> Iterator for DirectoryModelIter<'a> {
 
 impl DirectoryModel {
     pub fn walk(&self) -> DirectoryModelIter<'_> {
-        DirectoryModelIter { queue: VecDeque::from([self]) }
+        DirectoryModelIter {
+            queue: VecDeque::from([self]),
+        }
     }
     pub fn test_count(&self) -> usize {
         let from_files: usize = self.files.iter().map(|f| f.test_count()).sum();
@@ -44,7 +46,12 @@ mod tests {
     use crate::models::test_model::TestModel;
 
     fn empty_dir(path: &str) -> DirectoryModel {
-        DirectoryModel { files: vec![], options: vec![], children: vec![], dir: PathBuf::from(path) }
+        DirectoryModel {
+            files: vec![],
+            options: vec![],
+            children: vec![],
+            dir: PathBuf::from(path),
+        }
     }
 
     fn descriptor_with_test() -> DescriptorModel {
@@ -71,17 +78,30 @@ mod tests {
         // root -> [child1, child2], child1 -> [grandchild]
         // BFS order: root, child1, child2, grandchild
         let grandchild = empty_dir("grandchild");
-        let child1 = DirectoryModel { files: vec![], options: vec![], children: vec![grandchild], dir: PathBuf::from("child1") };
+        let child1 = DirectoryModel {
+            files: vec![],
+            options: vec![],
+            children: vec![grandchild],
+            dir: PathBuf::from("child1"),
+        };
         let child2 = empty_dir("child2");
-        let root = DirectoryModel { files: vec![], options: vec![], children: vec![child1, child2], dir: PathBuf::from("root") };
+        let root = DirectoryModel {
+            files: vec![],
+            options: vec![],
+            children: vec![child1, child2],
+            dir: PathBuf::from("root"),
+        };
 
         let paths: Vec<&PathBuf> = root.walk().map(|d| &d.dir).collect();
-        assert_eq!(paths, vec![
-            &PathBuf::from("root"),
-            &PathBuf::from("child1"),
-            &PathBuf::from("child2"),
-            &PathBuf::from("grandchild"),
-        ]);
+        assert_eq!(
+            paths,
+            vec![
+                &PathBuf::from("root"),
+                &PathBuf::from("child1"),
+                &PathBuf::from("child2"),
+                &PathBuf::from("grandchild"),
+            ]
+        );
     }
 
     #[test]

@@ -1,16 +1,16 @@
 mod liquid_reporter;
 
-use std::collections::HashMap;
-use enum_dispatch::enum_dispatch;
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::report_capabilities::liquid_reporter::LiquidReporter;
+use enum_dispatch::enum_dispatch;
+use std::collections::HashMap;
 
 #[enum_dispatch]
-pub trait ReportCapability{
+pub trait ReportCapability {
     fn report(
         &self,
         descriptor: &DescriptorModel,
@@ -34,10 +34,10 @@ pub trait ReportCapability{
 }
 
 #[enum_dispatch(ReportCapability)]
-pub enum ReportCapabilityProvider{
-    LiquidReporter
+pub enum ReportCapabilityProvider {
+    LiquidReporter,
 }
 
-pub fn get_report_capability() -> ReportCapabilityProvider{
+pub fn get_report_capability() -> ReportCapabilityProvider {
     LiquidReporter.into()
 }

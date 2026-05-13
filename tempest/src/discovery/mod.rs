@@ -1,11 +1,11 @@
-use std::collections::HashMap;
-use std::path::PathBuf;
-use include_dir::{include_dir, Dir};
 use crate::discovery::parser::FileParser;
-use crate::models::directory_model::DirectoryModel;
 use crate::models::descriptor_model::DescriptorModel;
+use crate::models::directory_model::DirectoryModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
+use include_dir::{Dir, include_dir};
+use std::collections::HashMap;
+use std::path::PathBuf;
 
 mod parser;
 
@@ -22,13 +22,22 @@ fn discover_internal_templates() -> anyhow::Result<HashMap<String, ReportTemplat
     Ok(templates)
 }
 
-fn collect_embedded_templates(dir: &Dir, templates: &mut HashMap<String, ReportTemplateModel>) -> anyhow::Result<()> {
+fn collect_embedded_templates(
+    dir: &Dir,
+    templates: &mut HashMap<String, ReportTemplateModel>,
+) -> anyhow::Result<()> {
     for file in dir.files() {
         let path = file.path();
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
-        if !stem.ends_with(".template") { continue }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if !stem.ends_with(".template") {
+            continue;
+        }
 
-        let Some(parser) = parser::create_parser(&path.to_path_buf()) else { continue };
+        let Some(parser) = parser::create_parser(&path.to_path_buf()) else {
+            continue;
+        };
         let template = parser.parse_embedded_report_template(file, dir)?;
 
         let key = stem.trim_end_matches(".template").to_lowercase();
@@ -42,7 +51,10 @@ fn collect_embedded_templates(dir: &Dir, templates: &mut HashMap<String, ReportT
     Ok(())
 }
 
-pub fn discover(dir: &PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> anyhow::Result<DiscoveryResult> {
+pub fn discover(
+    dir: &PathBuf,
+    inherited_configs: Option<Vec<OptionsModel>>,
+) -> anyhow::Result<DiscoveryResult> {
     let (dirs, files): (Vec<_>, Vec<_>) = std::fs::read_dir(&dir)?
         .filter_map(|e| e.ok())
         .partition(|e| e.path().is_dir());
@@ -57,8 +69,12 @@ pub fn discover(dir: &PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> 
 
     for entry in files {
         let path = &entry.path();
-        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
-        let Some(parser) = parser::create_parser(&path) else { continue };
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(parser) = parser::create_parser(&path) else {
+            continue;
+        };
 
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
@@ -79,7 +95,12 @@ pub fn discover(dir: &PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> 
     }
 
     Ok(DiscoveryResult {
-        directory: DirectoryModel { files: tests, options, children, dir: dir.to_path_buf() },
+        directory: DirectoryModel {
+            files: tests,
+            options,
+            children,
+            dir: dir.to_path_buf(),
+        },
         templates,
     })
 }
@@ -88,8 +109,8 @@ pub fn discover(dir: &PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> 
 mod tests {
     use super::*;
     use crate::models::options_model::OptionsModel;
-    use tempfile::tempdir;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn discover_empty_directory_has_no_files_options_or_children() {
@@ -113,7 +134,8 @@ mod tests {
         fs::write(
             dir.path().join("api.spec.yml"),
             "name: API Test\ntest:\n  route: /api/health\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
         assert_eq!(result.directory.files.len(), 1);
@@ -136,7 +158,8 @@ mod tests {
         fs::write(
             dir.path().join("test.config.yml"),
             "base_uri: http://localhost:9090\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
         assert_eq!(result.directory.options.len(), 1);
@@ -152,7 +175,8 @@ mod tests {
         fs::write(
             dir.path().join("custom.template.yml"),
             "test_template: inline content\n",
-        ).unwrap();
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
         assert!(result.templates.contains_key("custom"));
@@ -165,10 +189,17 @@ mod tests {
     #[test]
     fn discover_template_key_is_lowercased_stem_without_template_suffix() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("MyReport.template.yml"), "test_template: x\n").unwrap();
+        fs::write(
+            dir.path().join("MyReport.template.yml"),
+            "test_template: x\n",
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
-        assert!(result.templates.contains_key("myreport"), "key should be lowercased");
+        assert!(
+            result.templates.contains_key("myreport"),
+            "key should be lowercased"
+        );
     }
 
     #[test]
@@ -200,7 +231,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let sub = dir.path().join("subdir");
         fs::create_dir(&sub).unwrap();
-        fs::write(sub.join("test.spec.yml"), "name: SubTest\ntest:\n  route: /sub\n").unwrap();
+        fs::write(
+            sub.join("test.spec.yml"),
+            "name: SubTest\ntest:\n  route: /sub\n",
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
         assert_eq!(result.directory.children.len(), 1);
@@ -232,7 +267,11 @@ mod tests {
         let dir = tempdir().unwrap();
         let sub = dir.path().join("sub");
         fs::create_dir(&sub).unwrap();
-        fs::write(dir.path().join("root.config.yml"), "base_uri: http://parent\n").unwrap();
+        fs::write(
+            dir.path().join("root.config.yml"),
+            "base_uri: http://parent\n",
+        )
+        .unwrap();
         fs::write(sub.join("test.spec.yml"), "test:\n  route: /test\n").unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
@@ -263,10 +302,17 @@ mod tests {
         let dir = tempdir().unwrap();
         let sub = dir.path().join("sub");
         fs::create_dir(&sub).unwrap();
-        fs::write(sub.join("child.template.yml"), "test_template: from child\n").unwrap();
+        fs::write(
+            sub.join("child.template.yml"),
+            "test_template: from child\n",
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
-        assert!(result.templates.contains_key("child"), "child templates should bubble up");
+        assert!(
+            result.templates.contains_key("child"),
+            "child templates should bubble up"
+        );
     }
 
     #[test]
@@ -289,7 +335,11 @@ mod tests {
     fn discover_user_template_does_not_overwrite_builtin_unless_same_key() {
         let dir = tempdir().unwrap();
         // A user template with key "myreport" does not affect "console"
-        fs::write(dir.path().join("myreport.template.yml"), "test_template: custom\n").unwrap();
+        fs::write(
+            dir.path().join("myreport.template.yml"),
+            "test_template: custom\n",
+        )
+        .unwrap();
 
         let result = discover(&dir.path().to_path_buf(), None).unwrap();
         assert!(result.templates.contains_key("console"));

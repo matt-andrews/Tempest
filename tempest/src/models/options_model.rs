@@ -9,8 +9,8 @@ pub struct OptionsModel {
 }
 
 impl OptionsModel {
-    pub fn default() -> Self{
-        Self{
+    pub fn default() -> Self {
+        Self {
             base_uri: None,
             debug: Some(false),
             reports: None,
@@ -62,7 +62,11 @@ mod tests {
             debug: Some(true),
             reports: Some(vec!["r.html".to_string()]),
         };
-        let other = OptionsModel { base_uri: None, debug: None, reports: None };
+        let other = OptionsModel {
+            base_uri: None,
+            debug: None,
+            reports: None,
+        };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
         assert_eq!(merged.debug, Some(true));
@@ -71,8 +75,16 @@ mod tests {
 
     #[test]
     fn merge_both_none_yields_none() {
-        let base = OptionsModel { base_uri: None, debug: None, reports: None };
-        let other = OptionsModel { base_uri: None, debug: None, reports: None };
+        let base = OptionsModel {
+            base_uri: None,
+            debug: None,
+            reports: None,
+        };
+        let other = OptionsModel {
+            base_uri: None,
+            debug: None,
+            reports: None,
+        };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);
         assert_eq!(merged.debug, None);

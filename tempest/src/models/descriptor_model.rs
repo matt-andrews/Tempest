@@ -1,7 +1,7 @@
-use std::collections::VecDeque;
-use serde::{Deserialize, Serialize};
-use crate::models::options_model::{OptionsModel};
+use crate::models::options_model::OptionsModel;
 use crate::models::test_model::TestModel;
+use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct DescriptorModel {
@@ -12,7 +12,7 @@ pub struct DescriptorModel {
     pub test: Option<TestModel>,
     pub describe: Option<Vec<DescriptorModel>>,
 
-    pub options: Option<OptionsModel>
+    pub options: Option<OptionsModel>,
 }
 
 pub struct DescriptorModelIter<'a> {
@@ -28,7 +28,9 @@ impl<'a> Iterator for DescriptorModelIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (node, parent_options) = self.stack.pop_front()?;
-        let node_options = parent_options.clone().merge(node.options.clone().unwrap_or_default());
+        let node_options = parent_options
+            .clone()
+            .merge(node.options.clone().unwrap_or_default());
         for child in node.describe.as_deref().unwrap_or_default().iter().rev() {
             self.stack.push_front((child, node_options.clone()));
         }
@@ -38,7 +40,9 @@ impl<'a> Iterator for DescriptorModelIter<'a> {
 
 impl DescriptorModel {
     pub(crate) fn descendants(&self) -> DescriptorModelIter<'_> {
-        DescriptorModelIter { stack: VecDeque::from([(self, OptionsModel::default())]) }
+        DescriptorModelIter {
+            stack: VecDeque::from([(self, OptionsModel::default())]),
+        }
     }
     pub fn test_count(&self) -> usize {
         let own = if self.test.is_some() { 1 } else { 0 };
@@ -53,15 +57,37 @@ mod tests {
     use crate::models::options_model::OptionsModel;
 
     fn options(base_uri: &str) -> OptionsModel {
-        OptionsModel { base_uri: Some(base_uri.to_string()), debug: None, reports: None }
+        OptionsModel {
+            base_uri: Some(base_uri.to_string()),
+            debug: None,
+            reports: None,
+        }
     }
 
-    fn group(name: &str, opts: Option<OptionsModel>, children: Vec<DescriptorModel>) -> DescriptorModel {
-        DescriptorModel { name: Some(name.to_string()), description: None, tags: None, test: None, describe: Some(children), options: opts }
+    fn group(
+        name: &str,
+        opts: Option<OptionsModel>,
+        children: Vec<DescriptorModel>,
+    ) -> DescriptorModel {
+        DescriptorModel {
+            name: Some(name.to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(children),
+            options: opts,
+        }
     }
 
     fn leaf(name: &str, opts: Option<OptionsModel>) -> DescriptorModel {
-        DescriptorModel { name: Some(name.to_string()), description: None, tags: None, test: None, describe: None, options: opts }
+        DescriptorModel {
+            name: Some(name.to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: None,
+            options: opts,
+        }
     }
 
     fn collected(root: &DescriptorModel) -> Vec<(String, Option<String>)> {
@@ -72,24 +98,33 @@ mod tests {
 
     #[test]
     fn options_on_root_flow_down_to_direct_child() {
-        let root = group("root", Some(options("http://root")), vec![
-            leaf("child", None),
-        ]);
+        let root = group(
+            "root",
+            Some(options("http://root")),
+            vec![leaf("child", None)],
+        );
 
         let results = collected(&root);
         // root itself gets no parent options
         assert_eq!(results[0], ("root".to_string(), None));
         // child receives root's options as its parent context
-        assert_eq!(results[1], ("child".to_string(), Some("http://root".to_string())));
+        assert_eq!(
+            results[1],
+            ("child".to_string(), Some("http://root".to_string()))
+        );
     }
 
     #[test]
     fn child_options_override_root_for_grandchildren() {
-        let root = group("root", Some(options("http://root")), vec![
-            group("child", Some(options("http://child")), vec![
-                leaf("grandchild", None),
-            ]),
-        ]);
+        let root = group(
+            "root",
+            Some(options("http://root")),
+            vec![group(
+                "child",
+                Some(options("http://child")),
+                vec![leaf("grandchild", None)],
+            )],
+        );
 
         let results = collected(&root);
         let grandchild = results.iter().find(|(n, _)| n == "grandchild").unwrap();
@@ -106,15 +141,25 @@ mod tests {
         //         great-grandchild (options: "http://b")  <- sibling of the node below
         //         great-grandchild-sibling               <- should see "http://a", NOT "http://b"
         //       grandchild-b                             <- should see nothing (no ancestor options)
-        let root = group("root", None, vec![
-            group("child", None, vec![
-                group("grandchild-a", Some(options("http://a")), vec![
-                    leaf("ggc-b", Some(options("http://b"))),
-                    leaf("ggc-sibling", None),
-                ]),
-                leaf("grandchild-b", None),
-            ]),
-        ]);
+        let root = group(
+            "root",
+            None,
+            vec![group(
+                "child",
+                None,
+                vec![
+                    group(
+                        "grandchild-a",
+                        Some(options("http://a")),
+                        vec![
+                            leaf("ggc-b", Some(options("http://b"))),
+                            leaf("ggc-sibling", None),
+                        ],
+                    ),
+                    leaf("grandchild-b", None),
+                ],
+            )],
+        );
 
         let results = collected(&root);
 
@@ -135,16 +180,29 @@ mod tests {
     fn deep_nesting_accumulates_all_ancestor_options() {
         // root (debug: true) -> a (base_uri: "http://a") -> b (no opts) -> leaf
         // leaf's parent_options should carry both debug AND base_uri from higher ancestors
-        let root = group("root", Some(OptionsModel { base_uri: None, debug: Some(true), reports: None }), vec![
-            group("a", Some(options("http://a")), vec![
-                group("b", None, vec![
-                    leaf("deep", None),
-                ]),
-            ]),
-        ]);
+        let root = group(
+            "root",
+            Some(OptionsModel {
+                base_uri: None,
+                debug: Some(true),
+                reports: None,
+            }),
+            vec![group(
+                "a",
+                Some(options("http://a")),
+                vec![group("b", None, vec![leaf("deep", None)])],
+            )],
+        );
 
-        let results: Vec<(String, Option<String>, Option<bool>)> = root.descendants()
-            .map(|(d, opts)| (d.name.clone().unwrap_or_default(), opts.base_uri, opts.debug))
+        let results: Vec<(String, Option<String>, Option<bool>)> = root
+            .descendants()
+            .map(|(d, opts)| {
+                (
+                    d.name.clone().unwrap_or_default(),
+                    opts.base_uri,
+                    opts.debug,
+                )
+            })
             .collect();
 
         let deep = results.iter().find(|(n, _, _)| n == "deep").unwrap();
@@ -154,30 +212,39 @@ mod tests {
 
     #[test]
     fn traversal_is_depth_first_not_breadth_first() {
-        let root = group("root", None, vec![
-            group("section1", None, vec![
-                leaf("test1", None),
-                leaf("test2", None),
-            ]),
-            group("section2", None, vec![
-                leaf("test3", None),
-            ]),
-        ]);
+        let root = group(
+            "root",
+            None,
+            vec![
+                group(
+                    "section1",
+                    None,
+                    vec![leaf("test1", None), leaf("test2", None)],
+                ),
+                group("section2", None, vec![leaf("test3", None)]),
+            ],
+        );
 
-        let names: Vec<String> = root.descendants()
+        let names: Vec<String> = root
+            .descendants()
             .map(|(d, _)| d.name.clone().unwrap_or_default())
             .collect();
 
-        assert_eq!(names, vec!["root", "section1", "test1", "test2", "section2", "test3"]);
+        assert_eq!(
+            names,
+            vec!["root", "section1", "test1", "test2", "section2", "test3"]
+        );
     }
 
     #[test]
     fn node_own_options_are_not_included_in_yielded_parent_options() {
         // The pipeline merges ancestor_options THEN descriptor.options — so the iterator
         // must yield the parent's accumulated state, not include the current node's own options.
-        let root = group("root", Some(options("http://root")), vec![
-            leaf("child", Some(options("http://child"))),
-        ]);
+        let root = group(
+            "root",
+            Some(options("http://root")),
+            vec![leaf("child", Some(options("http://child")))],
+        );
 
         let results = collected(&root);
         let child = results.iter().find(|(n, _)| n == "child").unwrap();

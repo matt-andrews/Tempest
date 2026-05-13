@@ -1,14 +1,14 @@
-use std::fs;
-use std::path::PathBuf;
-use include_dir::{Dir, File};
-use crate::models::descriptor_model::DescriptorModel;
+use crate::discovery::BUILTIN_REPORTERS;
 use crate::discovery::parser::FileParser;
-use crate::discovery::{BUILTIN_REPORTERS};
+use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
+use include_dir::{Dir, File};
+use std::fs;
+use std::path::PathBuf;
 
 pub struct YamlFileParser;
-impl FileParser for YamlFileParser{
+impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &PathBuf) -> anyhow::Result<DescriptorModel> {
         let contents = fs::read_to_string(path)?;
         let config: DescriptorModel = serde_yml::from_str(&contents)?;
@@ -27,7 +27,7 @@ impl FileParser for YamlFileParser{
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
 
-        template.test_template    = Self::resolve_liquid_ref(template.test_template, &parent);
+        template.test_template = Self::resolve_liquid_ref(template.test_template, &parent);
         template.section_template = Self::resolve_liquid_ref(template.section_template, &parent);
         template.error_template = Self::resolve_liquid_ref(template.error_template, &parent);
         template.title_template = Self::resolve_liquid_ref(template.title_template, &parent);
@@ -36,7 +36,11 @@ impl FileParser for YamlFileParser{
         Ok(template)
     }
 
-    fn parse_embedded_report_template(&self, file: &File, dir: &Dir) -> anyhow::Result<ReportTemplateModel>{
+    fn parse_embedded_report_template(
+        &self,
+        file: &File,
+        dir: &Dir,
+    ) -> anyhow::Result<ReportTemplateModel> {
         let contents = file.contents_utf8().unwrap_or_default();
         let mut template = serde_yml::from_str::<ReportTemplateModel>(contents)?;
 
@@ -51,7 +55,6 @@ impl FileParser for YamlFileParser{
 }
 
 impl YamlFileParser {
-
     fn resolve_liquid_ref(value: Option<String>, base_dir: &PathBuf) -> Option<String> {
         value.map(|v| {
             let trimmed = v.trim();
@@ -83,10 +86,10 @@ impl YamlFileParser {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::discovery::parser::FileParser;
     use crate::discovery::BUILTIN_REPORTERS;
-    use tempfile::tempdir;
+    use crate::discovery::parser::FileParser;
     use std::fs;
+    use tempfile::tempdir;
 
     #[test]
     fn parse_descriptor_minimal_spec_with_route() {
@@ -132,7 +135,8 @@ mod tests {
     fn parse_descriptor_preserves_options_block() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.spec.yml");
-        let yaml = "test:\n  route: /api\noptions:\n  base_uri: http://localhost:8080\n  debug: true\n";
+        let yaml =
+            "test:\n  route: /api\noptions:\n  base_uri: http://localhost:8080\n  debug: true\n";
         fs::write(&path, yaml).unwrap();
 
         let result = YamlFileParser.parse_descriptor(&path).unwrap();
@@ -285,7 +289,10 @@ mod tests {
 
         let result = YamlFileParser.parse_report_template(&path).unwrap();
         let tpl = result.test_template.unwrap();
-        assert!(tpl.contains("could not load"), "should embed an error comment");
+        assert!(
+            tpl.contains("could not load"),
+            "should embed an error comment"
+        );
         assert!(tpl.contains("missing.liquid"));
     }
 
@@ -310,7 +317,10 @@ mod tests {
         fs::write(&path, "test_template: just some inline content\n").unwrap();
 
         let result = YamlFileParser.parse_report_template(&path).unwrap();
-        assert_eq!(result.test_template.as_deref(), Some("just some inline content"));
+        assert_eq!(
+            result.test_template.as_deref(),
+            Some("just some inline content")
+        );
     }
 
     #[test]
@@ -381,7 +391,9 @@ mod tests {
             ("title_template", &result.title_template),
             ("summary_template", &result.summary_template),
         ] {
-            let content = field.as_deref().unwrap_or_else(|| panic!("{name} should be Some"));
+            let content = field
+                .as_deref()
+                .unwrap_or_else(|| panic!("{name} should be Some"));
             assert!(
                 !content.ends_with(".liquid"),
                 "{name} should be resolved content, not a filename"

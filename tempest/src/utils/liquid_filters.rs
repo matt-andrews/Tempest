@@ -1,7 +1,7 @@
 use colored::Colorize;
-use liquid_core::{Filter, FilterReflection, ParseFilter, Runtime, ValueView};
 use liquid_core::model::{ScalarCow, Value};
 use liquid_core::parser::{FilterArguments, ParameterReflection};
+use liquid_core::{Filter, FilterReflection, ParseFilter, Runtime, ValueView};
 
 macro_rules! color_filter {
     ($parser:ident, $filter:ident, $name:literal, $method:ident) => {
@@ -18,19 +18,33 @@ macro_rules! color_filter {
         }
 
         impl FilterReflection for $parser {
-            fn name(&self) -> &'static str { $name }
-            fn description(&self) -> &'static str { concat!("ANSI ", $name, " color") }
-            fn positional_parameters(&self) -> &'static [ParameterReflection] { &[] }
-            fn keyword_parameters(&self) -> &'static [ParameterReflection] { &[] }
+            fn name(&self) -> &'static str {
+                $name
+            }
+            fn description(&self) -> &'static str {
+                concat!("ANSI ", $name, " color")
+            }
+            fn positional_parameters(&self) -> &'static [ParameterReflection] {
+                &[]
+            }
+            fn keyword_parameters(&self) -> &'static [ParameterReflection] {
+                &[]
+            }
         }
         impl ParseFilter for $parser {
             fn parse(&self, _: FilterArguments) -> liquid_core::Result<Box<dyn Filter>> {
                 Ok(Box::new($filter))
             }
-            fn reflection(&self) -> &dyn FilterReflection { self }
+            fn reflection(&self) -> &dyn FilterReflection {
+                self
+            }
         }
         impl Filter for $filter {
-            fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
+            fn evaluate(
+                &self,
+                input: &dyn ValueView,
+                _: &dyn Runtime,
+            ) -> liquid_core::Result<Value> {
                 let s = input.to_kstr().into_string();
                 Ok(Value::Scalar(ScalarCow::from(s.$method().to_string())))
             }
@@ -38,13 +52,33 @@ macro_rules! color_filter {
     };
 }
 
-color_filter!(RedFilter,          RedFilterImpl,          "red",           red);
-color_filter!(GreenFilter,        GreenFilterImpl,        "green",         green);
-color_filter!(YellowFilter,       YellowFilterImpl,       "yellow",        yellow);
-color_filter!(BrightRedFilter,    BrightRedFilterImpl,    "bright_red",    bright_red);
-color_filter!(BrightGreenFilter,  BrightGreenFilterImpl,  "bright_green",  bright_green);
-color_filter!(BrightBlueFilter,   BrightBlueFilterImpl,   "bright_blue",   bright_blue);
-color_filter!(BrightPurpleFilter, BrightPurpleFilterImpl, "bright_purple", bright_purple);
+color_filter!(RedFilter, RedFilterImpl, "red", red);
+color_filter!(GreenFilter, GreenFilterImpl, "green", green);
+color_filter!(YellowFilter, YellowFilterImpl, "yellow", yellow);
+color_filter!(
+    BrightRedFilter,
+    BrightRedFilterImpl,
+    "bright_red",
+    bright_red
+);
+color_filter!(
+    BrightGreenFilter,
+    BrightGreenFilterImpl,
+    "bright_green",
+    bright_green
+);
+color_filter!(
+    BrightBlueFilter,
+    BrightBlueFilterImpl,
+    "bright_blue",
+    bright_blue
+);
+color_filter!(
+    BrightPurpleFilter,
+    BrightPurpleFilterImpl,
+    "bright_purple",
+    bright_purple
+);
 
 // -- Semantic filters ---------------------------------------------------------
 
@@ -62,16 +96,26 @@ impl std::fmt::Display for ColorStatusFilterImpl {
     }
 }
 impl FilterReflection for ColorStatusFilter {
-    fn name(&self) -> &'static str { "color_status" }
-    fn description(&self) -> &'static str { "Green (2xx), yellow (3xx), red (4xx+)" }
-    fn positional_parameters(&self) -> &'static [ParameterReflection] { &[] }
-    fn keyword_parameters(&self) -> &'static [ParameterReflection] { &[] }
+    fn name(&self) -> &'static str {
+        "color_status"
+    }
+    fn description(&self) -> &'static str {
+        "Green (2xx), yellow (3xx), red (4xx+)"
+    }
+    fn positional_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
+    fn keyword_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
 }
 impl ParseFilter for ColorStatusFilter {
     fn parse(&self, _: FilterArguments) -> liquid_core::Result<Box<dyn Filter>> {
         Ok(Box::new(ColorStatusFilterImpl))
     }
-    fn reflection(&self) -> &dyn FilterReflection { self }
+    fn reflection(&self) -> &dyn FilterReflection {
+        self
+    }
 }
 impl Filter for ColorStatusFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
@@ -80,7 +124,7 @@ impl Filter for ColorStatusFilterImpl {
         let colored = match code {
             200..=299 => s.green(),
             300..=399 => s.yellow(),
-            _         => s.red(),
+            _ => s.red(),
         };
         Ok(Value::Scalar(ScalarCow::from(colored.to_string())))
     }
@@ -100,25 +144,35 @@ impl std::fmt::Display for ColorDurationFilterImpl {
     }
 }
 impl FilterReflection for ColorDurationFilter {
-    fn name(&self) -> &'static str { "color_duration" }
-    fn description(&self) -> &'static str { "Green (≤50ms), yellow (51–200ms), red (>200ms)" }
-    fn positional_parameters(&self) -> &'static [ParameterReflection] { &[] }
-    fn keyword_parameters(&self) -> &'static [ParameterReflection] { &[] }
+    fn name(&self) -> &'static str {
+        "color_duration"
+    }
+    fn description(&self) -> &'static str {
+        "Green (≤50ms), yellow (51–200ms), red (>200ms)"
+    }
+    fn positional_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
+    fn keyword_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
 }
 impl ParseFilter for ColorDurationFilter {
     fn parse(&self, _: FilterArguments) -> liquid_core::Result<Box<dyn Filter>> {
         Ok(Box::new(ColorDurationFilterImpl))
     }
-    fn reflection(&self) -> &dyn FilterReflection { self }
+    fn reflection(&self) -> &dyn FilterReflection {
+        self
+    }
 }
 impl Filter for ColorDurationFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
         let ms = input.as_scalar().and_then(|s| s.to_float()).unwrap_or(0.0);
         let s = input.to_kstr().into_string();
         let colored = match ms as u64 {
-            0..=50   => s.green(),
+            0..=50 => s.green(),
             51..=200 => s.yellow(),
-            _        => s.red(),
+            _ => s.red(),
         };
         Ok(Value::Scalar(ScalarCow::from(colored.to_string())))
     }

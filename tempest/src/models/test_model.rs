@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
-pub struct TestModel{
+pub struct TestModel {
     pub route: String,
 
     pub verb: Option<String>,

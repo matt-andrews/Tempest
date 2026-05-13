@@ -1,11 +1,11 @@
-mod models;
 pub mod discovery;
+mod models;
 pub mod pipeline;
 mod utils;
 
-use std::path::PathBuf;
-use clap::{Parser, Subcommand};
 use crate::models::options_model::OptionsModel;
+use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 struct Cli {
@@ -14,10 +14,10 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
-    Test{
+    Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
-    }
+    },
 }
 
 #[tokio::main]
@@ -25,10 +25,10 @@ async fn main() -> anyhow::Result<()> {
     dotenvy::dotenv().ok();
 
     let args = Cli::parse();
-    match args.command{
-        Commands::Test{path} => {
+    match args.command {
+        Commands::Test { path } => {
             let mut options = OptionsModel::default();
-            if options.reports.is_none(){
+            if options.reports.is_none() {
                 let mut reports = Vec::new();
                 reports.push("console".to_string());
                 options.reports = Some(reports);
@@ -38,7 +38,6 @@ async fn main() -> anyhow::Result<()> {
             pipeline::execute(discovery, &options).await?;
         }
     }
-    
+
     Ok(())
 }
-

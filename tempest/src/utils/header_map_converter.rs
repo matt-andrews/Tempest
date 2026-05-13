@@ -1,7 +1,7 @@
 pub mod header_map_serde {
-    use std::collections::HashMap;
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::collections::HashMap;
     use std::str::FromStr;
 
     pub fn serialize<S: Serializer>(headers: &HeaderMap, s: S) -> Result<S::Ok, S::Error> {

@@ -1,7 +1,5 @@
-
 #[derive(Clone)]
-pub enum SummaryResult{
+pub enum SummaryResult {
     Passed,
-    Flakey,
-    Failed
+    Failed,
 }
