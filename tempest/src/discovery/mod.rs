@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
+use include_dir::{include_dir, Dir};
 use crate::discovery::parser::FileParser;
 use crate::models::directory_model::DirectoryModel;
 use crate::models::descriptor_model::DescriptorModel;
@@ -8,9 +9,37 @@ use crate::models::report_template_model::ReportTemplateModel;
 
 mod parser;
 
+static BUILTIN_REPORTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/builtin_reporters");
+
 pub struct DiscoveryResult {
     pub directory: DirectoryModel,
     pub templates: HashMap<String, ReportTemplateModel>,
+}
+
+fn discover_internal_templates() -> anyhow::Result<HashMap<String, ReportTemplateModel>> {
+    let mut templates = HashMap::new();
+    collect_embedded_templates(&BUILTIN_REPORTERS, &mut templates)?;
+    Ok(templates)
+}
+
+fn collect_embedded_templates(dir: &Dir, templates: &mut HashMap<String, ReportTemplateModel>) -> anyhow::Result<()> {
+    for file in dir.files() {
+        let path = file.path();
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
+        if !stem.ends_with(".template") { continue }
+
+
+        let Some(parser) = parser::create_parser(&path.to_path_buf()) else { continue };
+        let template = parser.parse_report_template(path.to_path_buf())?;
+        let key = stem.trim_end_matches(".template").to_lowercase();
+        templates.insert(key, template);
+    }
+
+    for sub_dir in dir.dirs() {
+        collect_embedded_templates(sub_dir, templates)?;
+    }
+
+    Ok(())
 }
 
 pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> anyhow::Result<DiscoveryResult> {
@@ -20,7 +49,11 @@ pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> a
 
     let mut options: Vec<OptionsModel> = inherited_configs.unwrap_or_default();
     let mut tests: Vec<DescriptorModel> = Vec::new();
-    let mut templates: HashMap<String, ReportTemplateModel> = HashMap::new();
+    let mut templates: HashMap<String, ReportTemplateModel> = discover_internal_templates()
+        .unwrap_or_else(|e| {
+            eprintln!("{e}");
+            HashMap::new()
+        });
 
     for entry in files {
         let path = entry.path();
