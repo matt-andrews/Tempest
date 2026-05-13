@@ -4,6 +4,7 @@ use liquid::model::Value;
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::report_capabilities::ReportCapability;
 
@@ -62,8 +63,32 @@ impl ReportCapability for LiquidReporter {
         }
     }
 
-    fn summary(&self) {
-        todo!()
+    fn summary(
+        &self,
+        options: OptionsModel,
+        templates: &HashMap<String, ReportTemplateModel>,
+        results: Vec<SummaryResult>,
+    ) {
+        let active = build_template_iterator(options, templates);
+
+        if active.is_empty() {
+            return;
+        }
+
+        let passed = results.clone().iter().filter(|f| matches!(f, SummaryResult::Passed)).count();
+        let failed = results.clone().iter().filter(|f| matches!(f, SummaryResult::Failed)).count();
+        let flakey = 0;
+
+        for template in active{
+            let summary = template.summary_template.clone().unwrap_or_default();
+            let obj = liquid::object!({
+                "passed": passed,
+                "failed": failed,
+                "flakey": flakey,
+            });
+            print_match(template, summary, &obj);
+        }
+
     }
 
     fn title(

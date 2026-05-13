@@ -5,6 +5,7 @@ use enum_dispatch::enum_dispatch;
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::report_capabilities::liquid_reporter::LiquidReporter;
 
@@ -18,7 +19,12 @@ pub trait ReportCapability{
         options: OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>
     );
-    fn summary(&self);
+    fn summary(
+        &self,
+        options: OptionsModel,
+        templates: &HashMap<String, ReportTemplateModel>,
+        results: Vec<SummaryResult>,
+    );
     fn title(
         &self,
         options: OptionsModel,

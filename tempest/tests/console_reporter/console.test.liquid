@@ -1,5 +1,5 @@
 
- - {{ name | bright_purple }} | {{ status | color_status }}{{ status_message }} | {{ duration_ms | round: 2 | color_duration }}ms
+ - {{ name | bright_purple }} | {{ status | color_status }} {{ status_message }} | {{ duration_ms | round: 2 | color_duration }}ms
 {%- for assert in assertions %}
      {% if assert.passed %}✅ {{ assert.expr | green }}{% else %}❌ {{ assert.expr | red }}{% if assert.error != blank %} — {{ assert.error | red }}{% endif %}{% endif %}
 {%- endfor %}

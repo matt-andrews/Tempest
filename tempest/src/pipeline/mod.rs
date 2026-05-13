@@ -5,6 +5,8 @@ mod report_capabilities;
 use crate::discovery::DiscoveryResult;
 use crate::pipeline::test_capabilities::{get_test_capability, TestCapability};
 use crate::models::options_model::OptionsModel;
+use crate::models::summary_result::SummaryResult;
+use crate::models::summary_result::SummaryResult::Failed;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assert_capabilities::{get_assert_capability, AssertCapability};
 use crate::pipeline::report_capabilities::get_report_capability;
@@ -21,7 +23,9 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
             .reduce(|acc, next| acc.merge(next))
             .unwrap_or_default());
 
-    report_provider.title(top_level_options, &discovery_result.templates, discovered.test_count());
+    report_provider.title(top_level_options.clone(), &discovery_result.templates, discovered.test_count());
+
+    let mut summary: Vec<SummaryResult> = Vec::new();
 
     for directory in discovered.walk() {
         let base_options = default_options
@@ -50,10 +54,16 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
                     assert_result.push(result.clone());
                 }
             }
+            summary.push(match assert_result.iter().any(|a| !a.passed){
+                true => SummaryResult::Failed,
+                false => SummaryResult::Passed
+            });
 
             report_provider.report(&descriptor, test_result, assert_result, options, &discovery_result.templates);
         }
     }
+
+    report_provider.summary(top_level_options, &discovery_result.templates, summary);
 
     Ok(())
 }
