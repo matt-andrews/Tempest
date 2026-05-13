@@ -28,3 +28,4 @@ include_dir = "0.7"
 
 [dev-dependencies]
 tempfile = "3"
+mockito = "1"

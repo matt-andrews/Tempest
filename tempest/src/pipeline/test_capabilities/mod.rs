@@ -1,7 +1,6 @@
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;
 use crate::pipeline::test_capabilities::http::HttpTestCapability;
-use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
 use crate::models::test_model::TestModel;
 use crate::models::test_result::TestResult;
@@ -20,7 +19,6 @@ pub enum TestCapabilityProvider{
 }
 
 pub fn get_test_capability(
-    descriptor: &DescriptorModel,
     test: &TestModel,
     options: &OptionsModel,
 ) -> TestCapabilityProvider{
@@ -29,5 +27,5 @@ pub fn get_test_capability(
         url = format!("{}/{}", base_uri.trim_end_matches('/'), url.trim_start_matches('/'));
     }
 
-    HttpTestCapability::new(url, descriptor.clone(), options.clone(), test.clone()).into()
+    HttpTestCapability::new(&url, options, test).into()
 }

@@ -6,15 +6,14 @@ use crate::discovery::DiscoveryResult;
 use crate::pipeline::test_capabilities::{get_test_capability, TestCapability};
 use crate::models::options_model::OptionsModel;
 use crate::models::summary_result::SummaryResult;
-use crate::models::summary_result::SummaryResult::Failed;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assert_capabilities::{get_assert_capability, AssertCapability};
 use crate::pipeline::report_capabilities::get_report_capability;
 use crate::pipeline::report_capabilities::ReportCapability;
 
-pub async fn execute(discovery_result: DiscoveryResult, default_options: OptionsModel) -> anyhow::Result<()>{
+pub async fn execute(discovery_result: &DiscoveryResult, default_options: &OptionsModel) -> anyhow::Result<()>{
     let report_provider = get_report_capability();
-    let discovered = discovery_result.directory;
+    let discovered = &discovery_result.directory;
 
     let top_level_options = default_options
         .clone()
@@ -23,7 +22,7 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
             .reduce(|acc, next| acc.merge(next))
             .unwrap_or_default());
 
-    report_provider.title(top_level_options.clone(), &discovery_result.templates, discovered.test_count());
+    report_provider.title(&top_level_options, &discovery_result.templates, discovered.test_count());
 
     let mut summary: Vec<SummaryResult> = Vec::new();
 
@@ -46,10 +45,10 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
             let mut test_result: Option<TestResult> = None;
 
             if let Some(test) = &descriptor.test{
-                let test_capability = get_test_capability(descriptor, &test, &options);
+                let test_capability = get_test_capability(&test, &options);
                 test_result = Some(test_capability.test().await);
                 for assert in test.assert.clone().unwrap_or_default(){
-                    let assert_capability = get_assert_capability(assert);
+                    let assert_capability = get_assert_capability(&assert);
                     let result = assert_capability.assert(&test_result.as_ref().unwrap());
                     assert_result.push(result.clone());
                 }
@@ -59,11 +58,11 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
                 false => SummaryResult::Passed
             });
 
-            report_provider.report(&descriptor, test_result, assert_result, options, &discovery_result.templates);
+            report_provider.report(&descriptor, test_result.as_ref(), &assert_result, &options, &discovery_result.templates);
         }
     }
 
-    report_provider.summary(top_level_options, &discovery_result.templates, summary);
+    report_provider.summary(&top_level_options, &discovery_result.templates, &summary);
 
     Ok(())
 }

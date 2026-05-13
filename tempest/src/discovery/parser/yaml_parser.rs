@@ -9,19 +9,19 @@ use crate::models::report_template_model::ReportTemplateModel;
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser{
-    fn parse_descriptor(&self, path: PathBuf) -> anyhow::Result<DescriptorModel> {
+    fn parse_descriptor(&self, path: &PathBuf) -> anyhow::Result<DescriptorModel> {
         let contents = fs::read_to_string(path)?;
         let config: DescriptorModel = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_config(&self, path: PathBuf) -> anyhow::Result<OptionsModel> {
+    fn parse_config(&self, path: &PathBuf) -> anyhow::Result<OptionsModel> {
         let contents = fs::read_to_string(path)?;
         let config: OptionsModel = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_report_template(&self, path: PathBuf) -> anyhow::Result<ReportTemplateModel> {
+    fn parse_report_template(&self, path: &PathBuf) -> anyhow::Result<ReportTemplateModel> {
         let contents = fs::read_to_string(path.clone())?;
         let mut template: ReportTemplateModel = serde_yml::from_str(&contents)?;
 
@@ -40,10 +40,10 @@ impl FileParser for YamlFileParser{
         let contents = file.contents_utf8().unwrap_or_default();
         let mut template = serde_yml::from_str::<ReportTemplateModel>(contents)?;
 
-        template.test_template    = Self::resolve_embedded_liquid(template.test_template,    dir);
+        template.test_template = Self::resolve_embedded_liquid(template.test_template, dir);
         template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);
-        template.error_template   = Self::resolve_embedded_liquid(template.error_template,   dir);
-        template.title_template   = Self::resolve_embedded_liquid(template.title_template,   dir);
+        template.error_template = Self::resolve_embedded_liquid(template.error_template, dir);
+        template.title_template = Self::resolve_embedded_liquid(template.title_template, dir);
         template.summary_template = Self::resolve_embedded_liquid(template.summary_template, dir);
 
         Ok(template)
@@ -88,15 +88,13 @@ mod tests {
     use tempfile::tempdir;
     use std::fs;
 
-    // --- parse_descriptor ---
-
     #[test]
     fn parse_descriptor_minimal_spec_with_route() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.spec.yml");
         fs::write(&path, "test:\n  route: /api/health\n").unwrap();
 
-        let result = YamlFileParser.parse_descriptor(path).unwrap();
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
         assert_eq!(result.test.unwrap().route, "/api/health");
     }
 
@@ -107,7 +105,7 @@ mod tests {
         let yaml = "name: Auth Suite\ndescription: Auth tests\ntags:\n  - auth\n  - api\ntest:\n  route: /api/login\n  verb: POST\n";
         fs::write(&path, yaml).unwrap();
 
-        let result = YamlFileParser.parse_descriptor(path).unwrap();
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
         assert_eq!(result.name.as_deref(), Some("Auth Suite"));
         assert_eq!(result.description.as_deref(), Some("Auth tests"));
         assert_eq!(result.tags.as_ref().unwrap(), &vec!["auth", "api"]);
@@ -123,7 +121,7 @@ mod tests {
         let yaml = "name: Suite\ndescribe:\n  - name: Child A\n    test:\n      route: /a\n  - name: Child B\n    test:\n      route: /b\n";
         fs::write(&path, yaml).unwrap();
 
-        let result = YamlFileParser.parse_descriptor(path).unwrap();
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
         let children = result.describe.unwrap();
         assert_eq!(children.len(), 2);
         assert_eq!(children[0].name.as_deref(), Some("Child A"));
@@ -137,7 +135,7 @@ mod tests {
         let yaml = "test:\n  route: /api\noptions:\n  base_uri: http://localhost:8080\n  debug: true\n";
         fs::write(&path, yaml).unwrap();
 
-        let result = YamlFileParser.parse_descriptor(path).unwrap();
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
         let opts = result.options.unwrap();
         assert_eq!(opts.base_uri.as_deref(), Some("http://localhost:8080"));
         assert_eq!(opts.debug, Some(true));
@@ -149,12 +147,12 @@ mod tests {
         let path = dir.path().join("bad.spec.yml");
         fs::write(&path, ":: not valid yaml ::").unwrap();
 
-        assert!(YamlFileParser.parse_descriptor(path).is_err());
+        assert!(YamlFileParser.parse_descriptor(&path).is_err());
     }
 
     #[test]
     fn parse_descriptor_returns_error_for_missing_file() {
-        let result = YamlFileParser.parse_descriptor(PathBuf::from("/nonexistent/path/test.yml"));
+        let result = YamlFileParser.parse_descriptor(&PathBuf::from("/nonexistent/path/test.yml"));
         assert!(result.is_err());
     }
 
@@ -164,13 +162,11 @@ mod tests {
         let path = dir.path().join("empty.spec.yml");
         fs::write(&path, "{}\n").unwrap();
 
-        let result = YamlFileParser.parse_descriptor(path).unwrap();
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
         assert!(result.name.is_none());
         assert!(result.test.is_none());
         assert!(result.describe.is_none());
     }
-
-    // --- parse_config ---
 
     #[test]
     fn parse_config_parses_base_uri_and_debug() {
@@ -178,7 +174,7 @@ mod tests {
         let path = dir.path().join("test.config.yml");
         fs::write(&path, "base_uri: http://localhost:3000\ndebug: true\n").unwrap();
 
-        let result = YamlFileParser.parse_config(path).unwrap();
+        let result = YamlFileParser.parse_config(&path).unwrap();
         assert_eq!(result.base_uri.as_deref(), Some("http://localhost:3000"));
         assert_eq!(result.debug, Some(true));
     }
@@ -189,7 +185,7 @@ mod tests {
         let path = dir.path().join("test.config.yml");
         fs::write(&path, "reports:\n  - console\n  - html\n").unwrap();
 
-        let result = YamlFileParser.parse_config(path).unwrap();
+        let result = YamlFileParser.parse_config(&path).unwrap();
         assert_eq!(result.reports.as_ref().unwrap(), &vec!["console", "html"]);
     }
 
@@ -199,7 +195,7 @@ mod tests {
         let path = dir.path().join("test.config.yml");
         fs::write(&path, "base_uri: http://example.com\n").unwrap();
 
-        let result = YamlFileParser.parse_config(path).unwrap();
+        let result = YamlFileParser.parse_config(&path).unwrap();
         assert_eq!(result.base_uri.as_deref(), Some("http://example.com"));
         assert!(result.debug.is_none());
         assert!(result.reports.is_none());
@@ -211,7 +207,7 @@ mod tests {
         let path = dir.path().join("empty.config.yml");
         fs::write(&path, "{}\n").unwrap();
 
-        let result = YamlFileParser.parse_config(path).unwrap();
+        let result = YamlFileParser.parse_config(&path).unwrap();
         assert!(result.base_uri.is_none());
         assert!(result.debug.is_none());
         assert!(result.reports.is_none());
@@ -223,16 +219,14 @@ mod tests {
         let path = dir.path().join("bad.config.yml");
         fs::write(&path, ": bad: yaml: here").unwrap();
 
-        assert!(YamlFileParser.parse_config(path).is_err());
+        assert!(YamlFileParser.parse_config(&path).is_err());
     }
 
     #[test]
     fn parse_config_returns_error_for_missing_file() {
-        let result = YamlFileParser.parse_config(PathBuf::from("/no/such/file.yml"));
+        let result = YamlFileParser.parse_config(&PathBuf::from("/no/such/file.yml"));
         assert!(result.is_err());
     }
-
-    // --- parse_report_template ---
 
     #[test]
     fn parse_report_template_inline_strings_unchanged() {
@@ -241,7 +235,7 @@ mod tests {
         let yaml = "test_template: \"{{ test.name }}\"\nsection_template: \"## {{ section }}\"\nerror_template: ERROR\ntitle_template: \"# Title\"\nsummary_template: Done\n";
         fs::write(&path, yaml).unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         assert_eq!(result.test_template.as_deref(), Some("{{ test.name }}"));
         assert_eq!(result.section_template.as_deref(), Some("## {{ section }}"));
         assert_eq!(result.error_template.as_deref(), Some("ERROR"));
@@ -258,7 +252,7 @@ mod tests {
         let path = dir.path().join("my.template.yml");
         fs::write(&path, "test_template: test.liquid\n").unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         assert_eq!(result.test_template.as_deref(), Some(liquid_content));
     }
 
@@ -275,7 +269,7 @@ mod tests {
         let path = dir.path().join("all.template.yml");
         fs::write(&path, yaml).unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         assert_eq!(result.test_template.as_deref(), Some("test content"));
         assert_eq!(result.section_template.as_deref(), Some("section content"));
         assert_eq!(result.error_template.as_deref(), Some("error content"));
@@ -289,7 +283,7 @@ mod tests {
         let path = dir.path().join("my.template.yml");
         fs::write(&path, "test_template: missing.liquid\n").unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         let tpl = result.test_template.unwrap();
         assert!(tpl.contains("could not load"), "should embed an error comment");
         assert!(tpl.contains("missing.liquid"));
@@ -301,7 +295,7 @@ mod tests {
         let path = dir.path().join("minimal.template.yml");
         fs::write(&path, "{}\n").unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         assert!(result.test_template.is_none());
         assert!(result.section_template.is_none());
         assert!(result.error_template.is_none());
@@ -315,7 +309,7 @@ mod tests {
         let path = dir.path().join("my.template.yml");
         fs::write(&path, "test_template: just some inline content\n").unwrap();
 
-        let result = YamlFileParser.parse_report_template(path).unwrap();
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
         assert_eq!(result.test_template.as_deref(), Some("just some inline content"));
     }
 
@@ -325,10 +319,8 @@ mod tests {
         let path = dir.path().join("bad.template.yml");
         fs::write(&path, ": invalid :").unwrap();
 
-        assert!(YamlFileParser.parse_report_template(path).is_err());
+        assert!(YamlFileParser.parse_report_template(&path).is_err());
     }
-
-    // --- parse_embedded_report_template ---
 
     #[test]
     fn parse_embedded_report_template_resolves_console_liquid_refs() {

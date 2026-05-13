@@ -30,9 +30,9 @@ impl ReportCapability for LiquidReporter {
     fn report(
         &self,
         descriptor: &DescriptorModel,
-        test_result: Option<TestResult>,
-        assertions: Vec<Assertion>,
-        options: OptionsModel,
+        test_result: Option<&TestResult>,
+        assertions: &[Assertion],
+        options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
     ) {
         let active = build_template_iterator(options, templates);
@@ -46,18 +46,18 @@ impl ReportCapability for LiquidReporter {
             if descriptor.test.is_none() {
                 print(
                     descriptor,
-                    &test_result,
+                    test_result,
                     template,
-                    &assertions,
-                    template.section_template.clone().unwrap_or_default()
+                    assertions,
+                    &template.section_template.clone().unwrap_or_default()
                 );
             }else {
                 print(
                     descriptor,
-                    &test_result,
+                    test_result,
                     template,
-                    &assertions,
-                    template.test_template.clone().unwrap_or_default()
+                    assertions,
+                    &template.test_template.clone().unwrap_or_default()
                 );
             }
         }
@@ -65,9 +65,9 @@ impl ReportCapability for LiquidReporter {
 
     fn summary(
         &self,
-        options: OptionsModel,
+        options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
-        results: Vec<SummaryResult>,
+        results: &[SummaryResult],
     ) {
         let active = build_template_iterator(options, templates);
 
@@ -75,8 +75,8 @@ impl ReportCapability for LiquidReporter {
             return;
         }
 
-        let passed = results.clone().iter().filter(|f| matches!(f, SummaryResult::Passed)).count();
-        let failed = results.clone().iter().filter(|f| matches!(f, SummaryResult::Failed)).count();
+        let passed = results.iter().filter(|f| matches!(f, SummaryResult::Passed)).count();
+        let failed = results.iter().filter(|f| matches!(f, SummaryResult::Failed)).count();
         let flakey = 0;
 
         for template in active{
@@ -86,14 +86,14 @@ impl ReportCapability for LiquidReporter {
                 "failed": failed,
                 "flakey": flakey,
             });
-            print_match(template, summary, &obj);
+            print_match(template, &summary, &obj);
         }
 
     }
 
     fn title(
         &self,
-        options: OptionsModel,
+        options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
         test_count: usize,
     ) {
@@ -108,45 +108,45 @@ impl ReportCapability for LiquidReporter {
             let obj = liquid::object!({
                 "test_count": test_count
             });
-            print_match(template, title, &obj);
+            print_match(template, &title, &obj);
         }
     }
 }
 
-fn build_template_iterator(
-    options: OptionsModel,
-    templates: &HashMap<String, ReportTemplateModel>
-) -> Vec<&ReportTemplateModel>{
-    let report_names = options.reports.unwrap_or_default();
+fn build_template_iterator<'a>(
+    options: &OptionsModel,
+    templates: &'a HashMap<String, ReportTemplateModel>
+) -> Vec<&'a ReportTemplateModel> {
+    let report_names = options.reports.as_deref().unwrap_or_default();
     templates
-        .iter()
-        .filter(|(key, _)| report_names.contains(key))
+        .iter()  // yields (&String, &ReportTemplateModel)
+        .filter(|(key, _)| report_names.contains(&key.as_str().to_string()))
         .map(|(_, v)| v)
         .collect()
 }
 
 fn print(
     descriptor: &DescriptorModel,
-    test_result: &Option<TestResult>,
+    test_result: Option<&TestResult>,
     template: &ReportTemplateModel,
-    assertions: &Vec<Assertion>,
-    template_str: String) {
-    let globals = build_globals(descriptor, test_result.as_ref(), &assertions);
+    assertions: &[Assertion],
+    template_str: &str) {
+    let globals = build_globals(descriptor, test_result, &assertions);
     print_match(template, template_str, &globals);
 }
 
-fn print_match(template: &ReportTemplateModel, template_str: String, obj: &liquid::Object){
+fn print_match(template: &ReportTemplateModel, template_str: &str, obj: &liquid::Object){
     match PARSER.parse(&template_str) {
         Ok(tmpl) => match tmpl.render(&obj) {
             Ok(output) => print!("{output}"),
-            Err(e) => print_error(template, format!("liquid parse error: {e}")),
+            Err(e) => print_error(template, &format!("liquid parse error: {e}")),
         },
-        Err(e) => print_error(template, format!("liquid parse error: {e}")),
+        Err(e) => print_error(template, &format!("liquid parse error: {e}")),
     };
 }
 
-fn print_error(template: &ReportTemplateModel, msg: String){
-    let obj = liquid::object!({"liquid_error_message" : msg.clone()});
+fn print_error(template: &ReportTemplateModel, msg: &str){
+    let obj = liquid::object!({"liquid_error_message" : msg});
     match PARSER.parse(&template.error_template.clone().unwrap_or_default()){
         Ok(tmpl) => match tmpl.render(&obj) {
             Ok(output) => print!("{output}"),

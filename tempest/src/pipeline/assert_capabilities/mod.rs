@@ -14,6 +14,6 @@ pub enum AssertCapabilityProvider{
     CelParser
 }
 
-pub fn get_assert_capability(assertion: String) -> AssertCapabilityProvider {
+pub fn get_assert_capability(assertion: &str) -> AssertCapabilityProvider {
     CelParser::new(assertion).into()
 }

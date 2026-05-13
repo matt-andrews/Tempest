@@ -14,20 +14,20 @@ pub trait ReportCapability{
     fn report(
         &self,
         descriptor: &DescriptorModel,
-        test_result: Option<TestResult>,
-        assertions: Vec<Assertion>,
-        options: OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>
+        test_result: Option<&TestResult>,
+        assertions: &[Assertion],
+        options: &OptionsModel,
+        templates: &HashMap<String, ReportTemplateModel>,
     );
     fn summary(
         &self,
-        options: OptionsModel,
+        options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
-        results: Vec<SummaryResult>,
+        results: &[SummaryResult],
     );
     fn title(
         &self,
-        options: OptionsModel,
+        options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
         test_count: usize,
     );

@@ -154,8 +154,6 @@ mod tests {
 
     #[test]
     fn traversal_is_depth_first_not_breadth_first() {
-        // BFS would yield: root, section1, section2, test1, test2, test3
-        // DFS must yield:  root, section1, test1, test2, section2, test3
         let root = group("root", None, vec![
             group("section1", None, vec![
                 leaf("test1", None),

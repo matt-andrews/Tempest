@@ -34,8 +34,8 @@ async fn main() -> anyhow::Result<()> {
                 options.reports = Some(reports);
             }
 
-            let discovery = discovery::discover(path, None)?;
-            pipeline::execute(discovery, options).await?;
+            let discovery = &discovery::discover(&path, None)?;
+            pipeline::execute(discovery, &options).await?;
         }
     }
     

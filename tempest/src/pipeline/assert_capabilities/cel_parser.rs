@@ -26,9 +26,9 @@ impl AssertCapability for CelParser{
     }
 }
 impl CelParser{
-    pub fn new(assertion: String) -> Self{
+    pub fn new(assertion: &str) -> Self{
         Self{
-            assertion
+            assertion: assertion.to_string()
         }
     }
     fn json_to_cel(val: &JsonValue) -> Value {
