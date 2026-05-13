@@ -49,3 +49,35 @@ impl TempestStatusCode{
         format!("{}", self.message)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn from_status_captures_code_and_canonical_reason() {
+        let s = TempestStatusCode::from_status(StatusCode::OK);
+        assert_eq!(s.code, 200);
+        assert_eq!(s.message, "OK");
+    }
+
+    #[test]
+    fn from_status_404_not_found() {
+        let s = TempestStatusCode::from_status(StatusCode::NOT_FOUND);
+        assert_eq!(s.code, 404);
+        assert_eq!(s.message, "Not Found");
+    }
+
+    #[test]
+    fn from_message_always_uses_504() {
+        let s = TempestStatusCode::from_message("connection refused".to_string());
+        assert_eq!(s.code, 504);
+        assert_eq!(s.message, "connection refused");
+    }
+
+    #[test]
+    fn to_display_returns_message_string() {
+        let s = TempestStatusCode { code: 200, message: "OK".to_string() };
+        assert_eq!(s.to_display(), "OK");
+    }
+}

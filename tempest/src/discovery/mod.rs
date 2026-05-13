@@ -83,3 +83,255 @@ pub fn discover(dir: PathBuf, inherited_configs: Option<Vec<OptionsModel>>) -> a
         templates,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::options_model::OptionsModel;
+    use tempfile::tempdir;
+    use std::fs;
+
+    // --- discover ---
+
+    #[test]
+    fn discover_empty_directory_has_no_files_options_or_children() {
+        let dir = tempdir().unwrap();
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.directory.files.is_empty());
+        assert!(result.directory.options.is_empty());
+        assert!(result.directory.children.is_empty());
+    }
+
+    #[test]
+    fn discover_result_dir_matches_input_path() {
+        let dir = tempdir().unwrap();
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert_eq!(result.directory.dir, dir.path().to_path_buf());
+    }
+
+    #[test]
+    fn discover_finds_spec_file_and_parses_descriptor() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("api.spec.yml"),
+            "name: API Test\ntest:\n  route: /api/health\n",
+        ).unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert_eq!(result.directory.files.len(), 1);
+        assert_eq!(result.directory.files[0].name.as_deref(), Some("API Test"));
+    }
+
+    #[test]
+    fn discover_finds_multiple_spec_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
+        fs::write(dir.path().join("b.spec.yml"), "test:\n  route: /b\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert_eq!(result.directory.files.len(), 2);
+    }
+
+    #[test]
+    fn discover_finds_config_file_and_parses_options() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("test.config.yml"),
+            "base_uri: http://localhost:9090\n",
+        ).unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert_eq!(result.directory.options.len(), 1);
+        assert_eq!(
+            result.directory.options[0].base_uri.as_deref(),
+            Some("http://localhost:9090")
+        );
+    }
+
+    #[test]
+    fn discover_finds_template_file_and_inserts_into_templates_map() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("custom.template.yml"),
+            "test_template: inline content\n",
+        ).unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.templates.contains_key("custom"));
+        assert_eq!(
+            result.templates["custom"].test_template.as_deref(),
+            Some("inline content")
+        );
+    }
+
+    #[test]
+    fn discover_template_key_is_lowercased_stem_without_template_suffix() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("MyReport.template.yml"), "test_template: x\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.templates.contains_key("myreport"), "key should be lowercased");
+    }
+
+    #[test]
+    fn discover_ignores_non_yaml_files() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("readme.txt"), "hello").unwrap();
+        fs::write(dir.path().join("data.json"), "{}").unwrap();
+        fs::write(dir.path().join("config.toml"), "[section]").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.directory.files.is_empty());
+        assert!(result.directory.options.is_empty());
+    }
+
+    #[test]
+    fn discover_ignores_yaml_files_without_recognized_suffix() {
+        let dir = tempdir().unwrap();
+        // "data.yml" has stem "data" — no .spec/.config/.template suffix, so ignored
+        fs::write(dir.path().join("data.yml"), "key: value\n").unwrap();
+        fs::write(dir.path().join("setup.yaml"), "key: value\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.directory.files.is_empty());
+        assert!(result.directory.options.is_empty());
+    }
+
+    #[test]
+    fn discover_recurses_into_subdirectory() {
+        let dir = tempdir().unwrap();
+        let sub = dir.path().join("subdir");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("test.spec.yml"), "name: SubTest\ntest:\n  route: /sub\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert_eq!(result.directory.children.len(), 1);
+        assert_eq!(result.directory.children[0].files.len(), 1);
+        assert_eq!(
+            result.directory.children[0].files[0].name.as_deref(),
+            Some("SubTest")
+        );
+    }
+
+    #[test]
+    fn discover_recurses_into_deeply_nested_directories() {
+        let dir = tempdir().unwrap();
+        let deep = dir.path().join("a").join("b").join("c");
+        fs::create_dir_all(&deep).unwrap();
+        fs::write(deep.join("deep.spec.yml"), "test:\n  route: /deep\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        // result -> child "a" -> child "b" -> child "c" with spec
+        let a = &result.directory.children[0];
+        let b = &a.children[0];
+        let c = &b.children[0];
+        assert_eq!(c.files.len(), 1);
+        assert_eq!(c.files[0].test.as_ref().unwrap().route, "/deep");
+    }
+
+    #[test]
+    fn discover_inherits_parent_options_into_child_directory() {
+        let dir = tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(dir.path().join("root.config.yml"), "base_uri: http://parent\n").unwrap();
+        fs::write(sub.join("test.spec.yml"), "test:\n  route: /test\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        let child = &result.directory.children[0];
+        assert_eq!(child.options.len(), 1);
+        assert_eq!(child.options[0].base_uri.as_deref(), Some("http://parent"));
+    }
+
+    #[test]
+    fn discover_uses_provided_inherited_configs_as_starting_options() {
+        let dir = tempdir().unwrap();
+        let inherited = OptionsModel {
+            base_uri: Some("http://inherited".to_string()),
+            debug: None,
+            reports: None,
+        };
+
+        let result = discover(dir.path().to_path_buf(), Some(vec![inherited])).unwrap();
+        assert_eq!(result.directory.options.len(), 1);
+        assert_eq!(
+            result.directory.options[0].base_uri.as_deref(),
+            Some("http://inherited")
+        );
+    }
+
+    #[test]
+    fn discover_child_templates_are_merged_into_parent_result() {
+        let dir = tempdir().unwrap();
+        let sub = dir.path().join("sub");
+        fs::create_dir(&sub).unwrap();
+        fs::write(sub.join("child.template.yml"), "test_template: from child\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.templates.contains_key("child"), "child templates should bubble up");
+    }
+
+    #[test]
+    fn discover_returns_error_for_nonexistent_directory() {
+        let result = discover(PathBuf::from("/no/such/directory/exists"), None);
+        assert!(result.is_err());
+    }
+
+    // --- discover_internal_templates ---
+
+    #[test]
+    fn discover_internal_templates_includes_console_reporter() {
+        let templates = discover_internal_templates().unwrap();
+        assert!(
+            templates.contains_key("console"),
+            "built-in console reporter should be present"
+        );
+    }
+
+    #[test]
+    fn discover_internal_templates_console_has_all_fields_resolved() {
+        let templates = discover_internal_templates().unwrap();
+        let console = templates.get("console").unwrap();
+
+        for (name, field) in [
+            ("test_template", &console.test_template),
+            ("section_template", &console.section_template),
+            ("error_template", &console.error_template),
+            ("title_template", &console.title_template),
+            ("summary_template", &console.summary_template),
+        ] {
+            let content = field
+                .as_deref()
+                .unwrap_or_else(|| panic!("console {name} should be Some"));
+            assert!(
+                !content.ends_with(".liquid"),
+                "console {name} should be resolved content, not a filename"
+            );
+            assert!(
+                !content.contains("could not load"),
+                "console {name} liquid should resolve successfully"
+            );
+        }
+    }
+
+    #[test]
+    fn discover_always_includes_builtin_templates_even_in_empty_dir() {
+        let dir = tempdir().unwrap();
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(
+            result.templates.contains_key("console"),
+            "built-in templates should always be present"
+        );
+    }
+
+    #[test]
+    fn discover_user_template_does_not_overwrite_builtin_unless_same_key() {
+        let dir = tempdir().unwrap();
+        // A user template with key "myreport" does not affect "console"
+        fs::write(dir.path().join("myreport.template.yml"), "test_template: custom\n").unwrap();
+
+        let result = discover(dir.path().to_path_buf(), None).unwrap();
+        assert!(result.templates.contains_key("console"));
+        assert!(result.templates.contains_key("myreport"));
+    }
+}
