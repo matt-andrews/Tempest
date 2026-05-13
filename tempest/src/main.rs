@@ -27,7 +27,13 @@ async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
     match args.command{
         Commands::Test{path} => {
-            let options = OptionsModel::default();
+            let mut options = OptionsModel::default();
+            if options.reports.is_none(){
+                let mut reports = Vec::new();
+                reports.push("console".to_string());
+                options.reports = Some(reports);
+            }
+
             let discovery = discovery::discover(path, None)?;
             pipeline::execute(discovery, options).await?;
         }

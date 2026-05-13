@@ -1,7 +1,9 @@
 use std::fs;
 use std::path::PathBuf;
+use include_dir::{include_dir, Dir, File};
 use crate::models::descriptor_model::DescriptorModel;
 use crate::discovery::parser::FileParser;
+use crate::discovery::{BUILTIN_REPORTERS};
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
 
@@ -33,9 +35,23 @@ impl FileParser for YamlFileParser{
 
         Ok(template)
     }
+
+    fn parse_embedded_report_template(&self, file: &File, dir: &Dir) -> anyhow::Result<ReportTemplateModel>{
+        let contents = file.contents_utf8().unwrap_or_default();
+        let mut template = serde_yml::from_str::<ReportTemplateModel>(contents)?;
+
+        template.test_template    = Self::resolve_embedded_liquid(template.test_template,    dir);
+        template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);
+        template.error_template   = Self::resolve_embedded_liquid(template.error_template,   dir);
+        template.title_template   = Self::resolve_embedded_liquid(template.title_template,   dir);
+        template.summary_template = Self::resolve_embedded_liquid(template.summary_template, dir);
+
+        Ok(template)
+    }
 }
 
 impl YamlFileParser {
+
     fn resolve_liquid_ref(value: Option<String>, base_dir: &PathBuf) -> Option<String> {
         value.map(|v| {
             let trimmed = v.trim();
@@ -46,6 +62,20 @@ impl YamlFileParser {
             } else {
                 v
             }
+        })
+    }
+    fn resolve_embedded_liquid(value: Option<String>, dir: &Dir) -> Option<String> {
+        value.map(|v| {
+            let trimmed = v.trim();
+            if !trimmed.ends_with(".liquid") {
+                return v;
+            }
+            let liquid_path = dir.path().join(trimmed);
+            BUILTIN_REPORTERS
+                .get_file(&liquid_path)
+                .and_then(|f| f.contents_utf8())
+                .map(|s| s.to_string())
+                .unwrap_or_else(|| format!("<!-- could not load embedded {trimmed} -->"))
         })
     }
 }

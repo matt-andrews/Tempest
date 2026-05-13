@@ -28,9 +28,9 @@ fn collect_embedded_templates(dir: &Dir, templates: &mut HashMap<String, ReportT
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else { continue };
         if !stem.ends_with(".template") { continue }
 
-
         let Some(parser) = parser::create_parser(&path.to_path_buf()) else { continue };
-        let template = parser.parse_report_template(path.to_path_buf())?;
+        let template = parser.parse_embedded_report_template(file, dir)?;
+
         let key = stem.trim_end_matches(".template").to_lowercase();
         templates.insert(key, template);
     }
