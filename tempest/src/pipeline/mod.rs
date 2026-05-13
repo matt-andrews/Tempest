@@ -11,7 +11,17 @@ use crate::pipeline::report_capabilities::get_report_capability;
 use crate::pipeline::report_capabilities::ReportCapability;
 
 pub async fn execute(discovery_result: DiscoveryResult, default_options: OptionsModel) -> anyhow::Result<()>{
+    let report_provider = get_report_capability();
     let discovered = discovery_result.directory;
+
+    let top_level_options = default_options
+        .clone()
+        .merge(discovered.options.iter()
+            .cloned()
+            .reduce(|acc, next| acc.merge(next))
+            .unwrap_or_default());
+
+    report_provider.title(top_level_options, &discovery_result.templates, discovered.test_count());
 
     for directory in discovered.walk() {
         let base_options = default_options
@@ -41,7 +51,6 @@ pub async fn execute(discovery_result: DiscoveryResult, default_options: Options
                 }
             }
 
-            let report_provider = get_report_capability();
             report_provider.report(&descriptor, test_result, assert_result, options, &discovery_result.templates);
         }
     }

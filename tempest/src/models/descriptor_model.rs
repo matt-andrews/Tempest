@@ -40,6 +40,11 @@ impl DescriptorModel {
     pub(crate) fn descendants(&self) -> DescriptorModelIter<'_> {
         DescriptorModelIter { stack: VecDeque::from([(self, OptionsModel::default())]) }
     }
+    pub fn test_count(&self) -> usize {
+        let own = if self.test.is_some() { 1 } else { 0 };
+        let nested: usize = self.describe.iter().flatten().map(|d| d.test_count()).sum();
+        own + nested
+    }
 }
 
 #[cfg(test)]

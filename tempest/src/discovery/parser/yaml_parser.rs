@@ -25,9 +25,11 @@ impl FileParser for YamlFileParser{
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
 
-        template.test    = Self::resolve_liquid_ref(template.test, &parent);
-        template.section = Self::resolve_liquid_ref(template.section, &parent);
-        template.error = Self::resolve_liquid_ref(template.error, &parent);
+        template.test_template    = Self::resolve_liquid_ref(template.test_template, &parent);
+        template.section_template = Self::resolve_liquid_ref(template.section_template, &parent);
+        template.error_template = Self::resolve_liquid_ref(template.error_template, &parent);
+        template.title_template = Self::resolve_liquid_ref(template.title_template, &parent);
+        template.summary_template = Self::resolve_liquid_ref(template.summary_template, &parent);
 
         Ok(template)
     }

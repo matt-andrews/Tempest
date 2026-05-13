@@ -30,4 +30,9 @@ impl DirectoryModel {
     pub fn walk(&self) -> DirectoryModelIter<'_> {
         DirectoryModelIter { queue: VecDeque::from([self]) }
     }
+    pub fn test_count(&self) -> usize {
+        let from_files: usize = self.files.iter().map(|f| f.test_count()).sum();
+        let from_children: usize = self.children.iter().map(|c| c.test_count()).sum();
+        from_files + from_children
+    }
 }

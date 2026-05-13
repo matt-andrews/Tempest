@@ -18,6 +18,13 @@ pub trait ReportCapability{
         options: OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>
     );
+    fn summary(&self);
+    fn title(
+        &self,
+        options: OptionsModel,
+        templates: &HashMap<String, ReportTemplateModel>,
+        test_count: usize,
+    );
 }
 
 #[enum_dispatch(ReportCapability)]

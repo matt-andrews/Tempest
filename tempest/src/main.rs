@@ -32,7 +32,7 @@ async fn main() -> anyhow::Result<()> {
             pipeline::execute(discovery, options).await?;
         }
     }
-
+    
     Ok(())
 }
 

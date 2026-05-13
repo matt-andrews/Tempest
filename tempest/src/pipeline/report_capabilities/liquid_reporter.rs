@@ -34,12 +34,7 @@ impl ReportCapability for LiquidReporter {
         options: OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
     ) {
-        let report_names = options.reports.unwrap_or_default();
-        let active: Vec<&ReportTemplateModel> = templates
-            .iter()
-            .filter(|(key, _)| report_names.contains(key))
-            .map(|(_, v)| v)
-            .collect();
+        let active = build_template_iterator(options, templates);
 
         if active.is_empty() {
             return;
@@ -53,7 +48,7 @@ impl ReportCapability for LiquidReporter {
                     &test_result,
                     template,
                     &assertions,
-                    template.section.clone().unwrap_or_default()
+                    template.section_template.clone().unwrap_or_default()
                 );
             }else {
                 print(
@@ -61,23 +56,48 @@ impl ReportCapability for LiquidReporter {
                     &test_result,
                     template,
                     &assertions,
-                    template.test.clone().unwrap_or_default()
+                    template.test_template.clone().unwrap_or_default()
                 );
             }
         }
     }
+
+    fn summary(&self) {
+        todo!()
+    }
+
+    fn title(
+        &self,
+        options: OptionsModel,
+        templates: &HashMap<String, ReportTemplateModel>,
+        test_count: usize,
+    ) {
+        let active = build_template_iterator(options, templates);
+
+        if active.is_empty() {
+            return;
+        }
+
+        for template in active{
+            let title = template.title_template.clone().unwrap_or_default();
+            let obj = liquid::object!({
+                "test_count": test_count
+            });
+            print_match(template, title, &obj);
+        }
+    }
 }
 
-
-fn print_error(template: &ReportTemplateModel, msg: String){
-    let obj = liquid::object!({"liquid_error_message" : msg.clone()});
-    match PARSER.parse(&template.error.clone().unwrap_or_default()){
-        Ok(tmpl) => match tmpl.render(&obj) {
-            Ok(output) => print!("{output}"),
-            Err(e) => eprintln!("{e}"),
-        },
-        Err(e) => eprintln!("{e}"),
-    };
+fn build_template_iterator(
+    options: OptionsModel,
+    templates: &HashMap<String, ReportTemplateModel>
+) -> Vec<&ReportTemplateModel>{
+    let report_names = options.reports.unwrap_or_default();
+    templates
+        .iter()
+        .filter(|(key, _)| report_names.contains(key))
+        .map(|(_, v)| v)
+        .collect()
 }
 
 fn print(
@@ -87,13 +107,27 @@ fn print(
     assertions: &Vec<Assertion>,
     template_str: String) {
     let globals = build_globals(descriptor, test_result.as_ref(), &assertions);
+    print_match(template, template_str, &globals);
+}
 
+fn print_match(template: &ReportTemplateModel, template_str: String, obj: &liquid::Object){
     match PARSER.parse(&template_str) {
-        Ok(tmpl) => match tmpl.render(&globals) {
+        Ok(tmpl) => match tmpl.render(&obj) {
             Ok(output) => print!("{output}"),
             Err(e) => print_error(template, format!("liquid parse error: {e}")),
         },
         Err(e) => print_error(template, format!("liquid parse error: {e}")),
+    };
+}
+
+fn print_error(template: &ReportTemplateModel, msg: String){
+    let obj = liquid::object!({"liquid_error_message" : msg.clone()});
+    match PARSER.parse(&template.error_template.clone().unwrap_or_default()){
+        Ok(tmpl) => match tmpl.render(&obj) {
+            Ok(output) => print!("{output}"),
+            Err(e) => eprintln!("{e}"),
+        },
+        Err(e) => eprintln!("{e}"),
     };
 }
 
