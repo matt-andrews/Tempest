@@ -80,6 +80,35 @@ color_filter!(
     bright_purple
 );
 
+// Background color filters
+color_filter!(OnRedFilter, OnRedFilterImpl, "on_red", on_red);
+color_filter!(OnGreenFilter, OnGreenFilterImpl, "on_green", on_green);
+color_filter!(OnYellowFilter, OnYellowFilterImpl, "on_yellow", on_yellow);
+color_filter!(
+    OnBrightRedFilter,
+    OnBrightRedFilterImpl,
+    "on_bright_red",
+    on_bright_red
+);
+color_filter!(
+    OnBrightGreenFilter,
+    OnBrightGreenFilterImpl,
+    "on_bright_green",
+    on_bright_green
+);
+color_filter!(
+    OnBrightBlueFilter,
+    OnBrightBlueFilterImpl,
+    "on_bright_blue",
+    on_bright_blue
+);
+color_filter!(
+    OnBrightPurpleFilter,
+    OnBrightPurpleFilterImpl,
+    "on_bright_purple",
+    on_bright_purple
+);
+
 // -- Semantic filters ---------------------------------------------------------
 
 /// Colors the input based on its value as an HTTP status code.

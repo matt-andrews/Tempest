@@ -1,0 +1,70 @@
+name: Reusable - Create GitHub Release
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: "Release tag name (e.g. app/v1.2.3, app/nightly)"
+        required: true
+        type: string
+      area_labels:
+        description: 'Comma-separated area labels to filter PRs (e.g. "area: core,area: ci")'
+        required: true
+        type: string
+      release_name:
+        description: "Override release title; defaults to the tag value"
+        required: false
+        type: string
+        default: ""
+      make_latest:
+        description: "Mark this release as the latest"
+        required: false
+        type: boolean
+        default: false
+      prerelease:
+        description: "Mark this as a pre-release"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: read
+
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Determine PR date range
+        id: date-range
+        env:
+          TAG: ${{ inputs.tag }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          SINCE_DATE=$(bash ./.github/scripts/release-wf/determine-since-date.sh)
+          echo "since_date=$SINCE_DATE" >> "$GITHUB_OUTPUT"
+
+      - name: Collect and format release notes
+        env:
+          SINCE_DATE: ${{ steps.date-range.outputs.since_date }}
+          AREA_LABELS: ${{ inputs.area_labels }}
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          OUTPUT_FILE: release_notes.md
+        run: bash ./.github/scripts/release-wf/collect-prs.sh
+
+      - name: Create or update GitHub Release
+        env:
+          TAG: ${{ inputs.tag }}
+          RELEASE_NAME: ${{ inputs.release_name || inputs.tag }}
+          MAKE_LATEST: ${{ inputs.make_latest }}
+          PRERELEASE: ${{ inputs.prerelease }}
+          NOTES_FILE: release_notes.md
+          GITHUB_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: bash ./.github/scripts/release-wf/create-or-update-release.sh

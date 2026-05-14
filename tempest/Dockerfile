@@ -1,15 +1,35 @@
-FROM rust:1 AS builder
-WORKDIR /app
-# Cache dependency compilation separately from application code.
-# Copy manifests first, build a dummy main, then copy src.
-COPY Cargo.toml Cargo.lock ./
-COPY src/ src/
-RUN cargo build --release --bin tempest
+FROM rust:alpine AS builder
 
-FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN useradd -m tempest
-USER tempest
-WORKDIR /app
-COPY --from=builder /app/target/release/tempest /usr/local/bin/tempest
-CMD ["tempest", "test", "--path", "/etc/tests"]
+RUN apk add --no-cache musl-dev ca-certificates
+
+ENV CLICOLOR_FORCE=1
+
+WORKDIR /build
+
+# Copy manifests only; Docker caches this layer until Cargo.toml/Cargo.lock change.
+COPY Cargo.toml Cargo.lock ./
+RUN mkdir src && \
+    echo 'fn main() {}' > src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl && \
+    rm -rf src
+
+COPY src ./src
+# Touch to force Cargo to relink (stub and real main share the same mtime otherwise).
+RUN touch src/main.rs && \
+    cargo build --release --target x86_64-unknown-linux-musl
+
+# Second pass removes .comment/.note sections that Cargo's strip leaves behind.
+RUN strip --strip-all /build/target/x86_64-unknown-linux-musl/release/tempest
+
+FROM scratch
+
+# enable CLI colors by default
+ENV CLICOLOR_FORCE=1
+
+# CA bundle for reqwest/rustls HTTPS. Falls back to the embedded Mozilla bundle
+# if absent (public CAs still work), but this explicit copy covers private CAs.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
+COPY --from=builder /build/target/x86_64-unknown-linux-musl/release/tempest /tempest
+
+ENTRYPOINT ["/tempest"]

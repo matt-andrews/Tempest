@@ -1,0 +1,26 @@
+## publishable areas
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file: "tempest/**"
+
+## non-publishable areas
+"area: docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "docs/**"
+          - "assets/**"
+          - "README.md"
+          - "DOCKER_HUB_README.md"
+          - "llm.md"
+          - "LICENSE.md"
+
+"area: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**"
+          - "playwright/**"
+          - "scripts/**"
+
+"area: examples":
+  - changed-files:
+      - any-glob-to-any-file: "examples/**"

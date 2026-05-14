@@ -1,6 +1,0 @@
-
-services:
-  tempest:
-    build: .
-    volumes:
-      - ./tests:/etc/tests
