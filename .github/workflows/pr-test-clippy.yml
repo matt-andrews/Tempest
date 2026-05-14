@@ -1,4 +1,4 @@
-name: PR - clippy
+name: PR - Clippy
 
 on:
   workflow_dispatch:
@@ -10,8 +10,8 @@ on:
       - ".github/workflows/pr-test-clippy.yml"
 
 jobs:
-  rust-test:
-    name: Rust Test
+  clippy:
+    name: Clippy
     runs-on: ubuntu-latest
     permissions:
       contents: read
