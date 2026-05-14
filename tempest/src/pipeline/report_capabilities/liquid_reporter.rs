@@ -7,6 +7,7 @@ use crate::pipeline::report_capabilities::ReportCapability;
 use liquid::model::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
+use crate::pipeline::report_capabilities::output_capabilities::{get_output, OutputCapability, OutputCapabilityProvider};
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::utils::liquid_filters::*;
@@ -42,28 +43,31 @@ impl ReportCapability for LiquidReporter {
         options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
     ) {
-        let active = build_template_iterator(options, templates);
+        let active = self.build_template_iterator(options, templates);
 
         if active.is_empty() {
             return;
         }
 
         for template in active {
+            let output_provider = &get_output(template, options);
             if descriptor.test.is_none() {
-                print(
+                self.print(
                     descriptor,
                     test_result,
                     template,
                     assertions,
                     &template.section_template.clone().unwrap_or_default(),
+                    output_provider,
                 );
             } else {
-                print(
+                self.print(
                     descriptor,
                     test_result,
                     template,
                     assertions,
                     &template.test_template.clone().unwrap_or_default(),
+                    output_provider,
                 );
             }
         }
@@ -75,7 +79,7 @@ impl ReportCapability for LiquidReporter {
         templates: &HashMap<String, ReportTemplateModel>,
         results: &[SummaryResult],
     ) {
-        let active = build_template_iterator(options, templates);
+        let active = self.build_template_iterator(options, templates);
 
         if active.is_empty() {
             return;
@@ -92,13 +96,14 @@ impl ReportCapability for LiquidReporter {
         let flaky = 0;
 
         for template in active {
+            let output_provider = &get_output(template, options);
             let summary = template.summary_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "passed": passed,
                 "failed": failed,
                 "flaky": flaky,
             });
-            print_match(template, &summary, &obj);
+            self.print_match(template, &summary, &obj, output_provider);
         }
     }
 
@@ -108,64 +113,82 @@ impl ReportCapability for LiquidReporter {
         templates: &HashMap<String, ReportTemplateModel>,
         test_count: usize,
     ) {
-        let active = build_template_iterator(options, templates);
+        let active = self.build_template_iterator(options, templates);
 
         if active.is_empty() {
             return;
         }
 
         for template in active {
+            let output_provider = &get_output(template, options);
             let title = template.title_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "test_count": test_count
             });
-            print_match(template, &title, &obj);
+            self.print_match(template, &title, &obj, output_provider);
         }
     }
 }
 
-fn build_template_iterator<'a>(
-    options: &OptionsModel,
-    templates: &'a HashMap<String, ReportTemplateModel>,
-) -> Vec<&'a ReportTemplateModel> {
-    let report_names = options.reports.as_deref().unwrap_or_default();
-    templates
-        .iter()
-        .filter(|(key, _)| report_names.contains(&key.as_str().to_string()))
-        .map(|(_, v)| v)
-        .collect()
-}
 
-fn print(
-    descriptor: &DescriptorModel,
-    test_result: Option<&TestResult>,
-    template: &ReportTemplateModel,
-    assertions: &[Assertion],
-    template_str: &str,
-) {
-    let globals = build_globals(descriptor, test_result, assertions);
-    print_match(template, template_str, &globals);
-}
+impl LiquidReporter {
+    fn print(
+        &self,
+        descriptor: &DescriptorModel,
+        test_result: Option<&TestResult>,
+        template: &ReportTemplateModel,
+        assertions: &[Assertion],
+        template_str: &str,
+        output_provider: &OutputCapabilityProvider,
+    ) {
+        let globals = build_globals(descriptor, test_result, assertions);
+        self.print_match(template, template_str, &globals, output_provider);
+    }
 
-fn print_match(template: &ReportTemplateModel, template_str: &str, obj: &liquid::Object) {
-    match PARSER.parse(template_str) {
-        Ok(tmpl) => match tmpl.render(&obj) {
-            Ok(output) => print!("{output}"),
-            Err(e) => print_error(template, &format!("liquid parse error: {e}")),
-        },
-        Err(e) => print_error(template, &format!("liquid parse error: {e}")),
-    };
-}
+    fn print_match(
+        &self,
+        template: &ReportTemplateModel,
+        template_str: &str,
+        obj: &liquid::Object,
+        output_provider: &OutputCapabilityProvider,
+    ) {
+        match PARSER.parse(template_str) {
+            Ok(tmpl) => match tmpl.render(&obj) {
+                Ok(output) => output_provider.print(&output),
+                Err(e) => self.print_error(template, &format!("liquid parse error: {e}"), output_provider),
+            },
+            Err(e) => self.print_error(template, &format!("liquid parse error: {e}"), output_provider),
+        };
+    }
 
-fn print_error(template: &ReportTemplateModel, msg: &str) {
-    let obj = liquid::object!({"liquid_error_message" : msg});
-    match PARSER.parse(&template.error_template.clone().unwrap_or_default()) {
-        Ok(tmpl) => match tmpl.render(&obj) {
-            Ok(output) => print!("{output}"),
-            Err(e) => eprintln!("{e}"),
-        },
-        Err(e) => eprintln!("{e}"),
-    };
+    fn print_error(
+        &self,
+        template: &ReportTemplateModel,
+        msg: &str,
+        output_provider: &OutputCapabilityProvider,
+    ) {
+        let obj = liquid::object!({"liquid_error_message" : msg});
+        match PARSER.parse(&template.error_template.clone().unwrap_or_default()) {
+            Ok(tmpl) => match tmpl.render(&obj) {
+                Ok(output) => output_provider.print(&output),
+                Err(e) => output_provider.println(e.to_string().as_str()),
+            },
+            Err(e) => output_provider.println(e.to_string().as_str()),
+        };
+    }
+
+    fn build_template_iterator<'a>(
+        &self,
+        options: &OptionsModel,
+        templates: &'a HashMap<String, ReportTemplateModel>,
+    ) -> Vec<&'a ReportTemplateModel> {
+        let report_names = options.reports.as_deref().unwrap_or_default();
+        templates
+            .iter()
+            .filter(|(key, _)| report_names.contains(&key.as_str().to_string()))
+            .map(|(_, v)| v)
+            .collect()
+    }
 }
 
 fn build_globals(
@@ -387,7 +410,7 @@ mod tests {
         templates.insert("json".to_string(), make_template(Some("J"), None));
         templates.insert("html".to_string(), make_template(Some("H"), None));
 
-        let active = build_template_iterator(&options_reports(&["console", "html"]), &templates);
+        let active = LiquidReporter.build_template_iterator(&options_reports(&["console", "html"]), &templates);
 
         assert_eq!(active.len(), 2);
         let test_tmpls: Vec<_> = active
@@ -404,7 +427,7 @@ mod tests {
         let mut templates = HashMap::new();
         templates.insert("console".to_string(), make_template(Some("C"), None));
 
-        assert!(build_template_iterator(&options_reports(&[]), &templates).is_empty());
+        assert!(LiquidReporter.build_template_iterator(&options_reports(&[]), &templates).is_empty());
     }
 
     #[test]
@@ -412,6 +435,6 @@ mod tests {
         let mut templates = HashMap::new();
         templates.insert("json".to_string(), make_template(Some("J"), None));
 
-        assert!(build_template_iterator(&options_reports(&["xml"]), &templates).is_empty());
+        assert!(LiquidReporter.build_template_iterator(&options_reports(&["xml"]), &templates).is_empty());
     }
 }

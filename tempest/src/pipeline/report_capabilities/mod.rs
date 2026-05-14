@@ -1,4 +1,5 @@
 mod liquid_reporter;
+mod output_capabilities;
 
 use crate::models::descriptor_model::DescriptorModel;
 use crate::models::options_model::OptionsModel;
