@@ -116,7 +116,7 @@ mod tests {
     #[test]
     fn discover_empty_directory_has_no_files_options_or_children() {
         let dir = tempdir().unwrap();
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
         assert!(result.directory.children.is_empty());
@@ -125,7 +125,7 @@ mod tests {
     #[test]
     fn discover_result_dir_matches_input_path() {
         let dir = tempdir().unwrap();
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert_eq!(result.directory.dir, dir.path());
     }
 
@@ -138,7 +138,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert_eq!(result.directory.files.len(), 1);
         assert_eq!(result.directory.files[0].name.as_deref(), Some("API Test"));
     }
@@ -149,7 +149,7 @@ mod tests {
         fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
         fs::write(dir.path().join("b.spec.yml"), "test:\n  route: /b\n").unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert_eq!(result.directory.files.len(), 2);
     }
 
@@ -162,7 +162,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -179,7 +179,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(result.templates.contains_key("custom"));
         assert_eq!(
             result.templates["custom"].test_template.as_deref(),
@@ -196,7 +196,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(
             result.templates.contains_key("myreport"),
             "key should be lowercased"
@@ -210,7 +210,7 @@ mod tests {
         fs::write(dir.path().join("data.json"), "{}").unwrap();
         fs::write(dir.path().join("config.toml"), "[section]").unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -222,7 +222,7 @@ mod tests {
         fs::write(dir.path().join("data.yml"), "key: value\n").unwrap();
         fs::write(dir.path().join("setup.yaml"), "key: value\n").unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -238,7 +238,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert_eq!(result.directory.children.len(), 1);
         assert_eq!(result.directory.children[0].files.len(), 1);
         assert_eq!(
@@ -254,7 +254,7 @@ mod tests {
         fs::create_dir_all(&deep).unwrap();
         fs::write(deep.join("deep.spec.yml"), "test:\n  route: /deep\n").unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         // result -> child "a" -> child "b" -> child "c" with spec
         let a = &result.directory.children[0];
         let b = &a.children[0];
@@ -275,7 +275,7 @@ mod tests {
         .unwrap();
         fs::write(sub.join("test.spec.yml"), "test:\n  route: /test\n").unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         let child = &result.directory.children[0];
         assert_eq!(child.options.len(), 1);
         assert_eq!(child.options[0].base_uri.as_deref(), Some("http://parent"));
@@ -290,7 +290,7 @@ mod tests {
             reports: None,
         };
 
-        let result = discover(&dir.path(), Some(vec![inherited])).unwrap();
+        let result = discover(dir.path(), Some(vec![inherited])).unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -309,7 +309,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(
             result.templates.contains_key("child"),
             "child templates should bubble up"
@@ -325,7 +325,7 @@ mod tests {
     #[test]
     fn discover_always_includes_builtin_templates_even_in_empty_dir() {
         let dir = tempdir().unwrap();
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(
             result.templates.contains_key("console"),
             "built-in templates should always be present"
@@ -342,7 +342,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(&dir.path(), None).unwrap();
+        let result = discover(dir.path(), None).unwrap();
         assert!(result.templates.contains_key("console"));
         assert!(result.templates.contains_key("myreport"));
     }

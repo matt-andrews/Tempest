@@ -343,8 +343,7 @@ mod tests {
             .find(|f| {
                 f.path()
                     .file_name()
-                    .and_then(|n| n.to_str())
-                    .map_or(false, |n| n == "console.template.yml")
+                    .and_then(|n| n.to_str()) == Some("console.template.yml")
             })
             .expect("console.template.yml should be embedded");
 
@@ -375,8 +374,7 @@ mod tests {
             .find(|f| {
                 f.path()
                     .file_name()
-                    .and_then(|n| n.to_str())
-                    .map_or(false, |n| n == "console.template.yml")
+                    .and_then(|n| n.to_str()) == Some("console.template.yml")
             })
             .expect("console.template.yml should be embedded");
 
