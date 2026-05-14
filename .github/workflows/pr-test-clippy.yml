@@ -7,7 +7,7 @@ on:
     branches: [main]
     paths:
       - "tempest/**"
-      - ".github/workflows/pr-test-unit.yml"
+      - ".github/workflows/pr-test-clippy.yml"
 
 jobs:
   rust-test:
