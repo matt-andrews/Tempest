@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    assignees:
+      - "matt-andrews"
+    commit-message:
+      prefix: "chore"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+    labels: ["dependencies"]
+
+  - package-ecosystem: "cargo"
+    directory: "/tempest"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    assignees:
+      - "matt-andrews"
+    commit-message:
+      prefix: "chore"
+    labels: ["dependencies"]
+
+  - package-ecosystem: "docker"
+    directory: "/tempest"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    assignees:
+      - "matt-andrews"
+    commit-message:
+      prefix: "chore"
+    labels: ["dependencies"]
