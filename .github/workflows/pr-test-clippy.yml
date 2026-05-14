@@ -1,0 +1,33 @@
+name: PR - clippy
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tempest/**"
+      - ".github/workflows/pr-test-unit.yml"
+
+jobs:
+  rust-test:
+    name: Rust Test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ./tempest
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Add Clippy
+        run: rustup component add clippy
+
+      - name: Cargo Check
+        run: cargo clippy --all-targets --all-features -- -D warnings
