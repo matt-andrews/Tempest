@@ -1,0 +1,31 @@
+
+title_template: |
+  { "tests": [
+
+test_template: |
+    {
+      "name": {{ name | json }},
+      "status": {{ status }},
+      "statusMessage": {{ status_message | json }},
+      "duration": {{ duration_ms | round: 2 }},
+      "failed": [
+        {% assign failed_assertions = assertions | where: "passed", false %}{%- for assert in failed_assertions %}
+          {% if assert.passed == false %}{{ assert.expr | json }}{% if assert.error != blank %},{{ assert.error | json }}{% endif %}{% endif %}{% unless forloop.last %}, {% endunless %}
+        {%- endfor %}
+      ]
+    },
+
+error_template: |
+  { "error": "{{liquid_error_message | json}}" },
+
+summary_template: |
+    ],
+    "summary": {
+      "passed": {{ passed }},
+      "flaky": {{ flaky }},
+      "failed": {{ failed }} 
+    }}
+
+file:
+  dir: ./tempest-reports
+  file_name: report.json

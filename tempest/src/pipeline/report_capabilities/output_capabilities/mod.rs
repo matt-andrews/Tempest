@@ -5,6 +5,7 @@ use enum_dispatch::enum_dispatch;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
 use crate::pipeline::report_capabilities::output_capabilities::cli_output::CliOutput;
+use crate::pipeline::report_capabilities::output_capabilities::file_output::FileOutput;
 
 #[enum_dispatch]
 pub trait OutputCapability{
@@ -14,9 +15,14 @@ pub trait OutputCapability{
 
 #[enum_dispatch(OutputCapability)]
 pub enum OutputCapabilityProvider{
-    CliOutput
+    CliOutput,
+    FileOutput,
 }
 
 pub fn get_output(template: &ReportTemplateModel, options: &OptionsModel) -> OutputCapabilityProvider{
-    CliOutput.into()
+    if let Some(file_cfg) = &template.file {
+        FileOutput::new(file_cfg).into()
+    } else {
+        CliOutput.into()
+    }
 }

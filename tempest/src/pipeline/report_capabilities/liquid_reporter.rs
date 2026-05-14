@@ -28,6 +28,7 @@ static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
         .filter(OnBrightPurpleFilter)
         .filter(ColorStatusFilter)
         .filter(ColorDurationFilter)
+        .filter(JsonFilter)
         .build()
         .expect("failed to build Liquid parser")
 });
