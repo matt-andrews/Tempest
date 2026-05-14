@@ -8,6 +8,6 @@ pub struct TestModel {
     pub verb: Option<String>,
     pub body: Option<String>,
     pub assert: Option<Vec<String>>,
-    pub query: Option<HashMap<String, String>>,
+    pub query: Option<HashMap<String, String>>, //todo implement
     pub headers: Option<HashMap<String, String>>,
 }

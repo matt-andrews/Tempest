@@ -1,5 +1,6 @@
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assert_capabilities::AssertCapability;
+use anyhow::anyhow;
 use cel_interpreter::objects::Key;
 use cel_interpreter::{Context, Program, Value};
 use reqwest::header::HeaderMap;
@@ -37,8 +38,10 @@ impl CelParser {
             JsonValue::Number(n) => {
                 if let Some(i) = n.as_i64() {
                     Value::Int(i)
+                } else if let Some(f) = n.as_f64() {
+                    Value::Float(f)
                 } else {
-                    Value::Float(n.as_f64().unwrap())
+                    Value::Null
                 }
             }
             JsonValue::String(s) => Value::String(s.clone().into()),
@@ -56,7 +59,10 @@ impl CelParser {
     }
 
     fn evaluate_assertion(expr: &str, response: &TestResult) -> anyhow::Result<bool> {
-        let program = Program::compile(expr).expect("Could not compile expression");
+        let program = match Program::compile(expr) {
+            Ok(p) => p,
+            Err(e) => return Err(anyhow!("{}", e)),
+        };
 
         let mut ctx = Context::default();
 

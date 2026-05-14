@@ -7,7 +7,7 @@ Tempest is an automated testing framework for HTTP requests.
 
 We have some [examples](./examples/tests) if you'd like to see the yaml structure.
 
-You can run the tests by cloning the repo and calling
+You can run the tests by cloning the repo, cd into `./tempest` and calling
 ```bash
 cargo run -- test --path ./path/to/my/tests
 ```

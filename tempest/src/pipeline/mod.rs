@@ -55,21 +55,22 @@ pub async fn execute(
             let mut test_result: Option<TestResult> = None;
 
             if let Some(test) = &descriptor.test {
-                let test_capability = get_test_capability(&test, &options);
+                let test_capability = get_test_capability(test, &options);
                 test_result = Some(test_capability.test().await);
-                for assert in test.assert.clone().unwrap_or_default() {
-                    let assert_capability = get_assert_capability(&assert);
-                    let result = assert_capability.assert(&test_result.as_ref().unwrap());
+                for assert in test.assert.as_deref().unwrap_or_default() {
+                    let assert_capability = get_assert_capability(assert);
+                    let result = assert_capability.assert(test_result.as_ref().unwrap());
                     assert_result.push(result.clone());
                 }
+
+                summary.push(match assert_result.iter().any(|a| !a.passed) {
+                    true => SummaryResult::Failed,
+                    false => SummaryResult::Passed,
+                });
             }
-            summary.push(match assert_result.iter().any(|a| !a.passed) {
-                true => SummaryResult::Failed,
-                false => SummaryResult::Passed,
-            });
 
             report_provider.report(
-                &descriptor,
+                descriptor,
                 test_result.as_ref(),
                 &assert_result,
                 &options,

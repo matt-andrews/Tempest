@@ -40,11 +40,13 @@ impl TempestStatusCode {
     pub fn from_message(msg: String) -> TempestStatusCode {
         TempestStatusCode {
             code: 504,
-            message: msg.to_string(),
+            message: msg,
         }
     }
+}
 
-    pub fn to_display(&self) -> String {
-        format!("{}", self.message)
+impl std::fmt::Display for TempestStatusCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
     }
 }

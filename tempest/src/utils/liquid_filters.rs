@@ -198,9 +198,9 @@ impl Filter for ColorDurationFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
         let ms = input.as_scalar().and_then(|s| s.to_float()).unwrap_or(0.0);
         let s = input.to_kstr().into_string();
-        let colored = match ms as u64 {
-            0..=50 => s.green(),
-            51..=200 => s.yellow(),
+        let colored = match ms {
+            0.0..=50.0 => s.green(),
+            51.0..=200.0 => s.yellow(),
             _ => s.red(),
         };
         Ok(Value::Scalar(ScalarCow::from(colored.to_string())))

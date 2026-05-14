@@ -5,24 +5,24 @@ use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
 use include_dir::{Dir, File};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
-    fn parse_descriptor(&self, path: &PathBuf) -> anyhow::Result<DescriptorModel> {
+    fn parse_descriptor(&self, path: &Path) -> anyhow::Result<DescriptorModel> {
         let contents = fs::read_to_string(path)?;
         let config: DescriptorModel = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_config(&self, path: &PathBuf) -> anyhow::Result<OptionsModel> {
+    fn parse_config(&self, path: &Path) -> anyhow::Result<OptionsModel> {
         let contents = fs::read_to_string(path)?;
         let config: OptionsModel = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_report_template(&self, path: &PathBuf) -> anyhow::Result<ReportTemplateModel> {
-        let contents = fs::read_to_string(path.clone())?;
+    fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplateModel> {
+        let contents = fs::read_to_string(path)?;
         let mut template: ReportTemplateModel = serde_yml::from_str(&contents)?;
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
@@ -55,7 +55,7 @@ impl FileParser for YamlFileParser {
 }
 
 impl YamlFileParser {
-    fn resolve_liquid_ref(value: Option<String>, base_dir: &PathBuf) -> Option<String> {
+    fn resolve_liquid_ref(value: Option<String>, base_dir: &Path) -> Option<String> {
         value.map(|v| {
             let trimmed = v.trim();
             if trimmed.ends_with(".liquid") {

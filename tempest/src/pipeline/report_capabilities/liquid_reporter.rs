@@ -89,14 +89,14 @@ impl ReportCapability for LiquidReporter {
             .iter()
             .filter(|f| matches!(f, SummaryResult::Failed))
             .count();
-        let flakey = 0;
+        let flaky = 0;
 
         for template in active {
             let summary = template.summary_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "passed": passed,
                 "failed": failed,
-                "flakey": flakey,
+                "flaky": flaky,
             });
             print_match(template, &summary, &obj);
         }
@@ -143,12 +143,12 @@ fn print(
     assertions: &[Assertion],
     template_str: &str,
 ) {
-    let globals = build_globals(descriptor, test_result, &assertions);
+    let globals = build_globals(descriptor, test_result, assertions);
     print_match(template, template_str, &globals);
 }
 
 fn print_match(template: &ReportTemplateModel, template_str: &str, obj: &liquid::Object) {
-    match PARSER.parse(&template_str) {
+    match PARSER.parse(template_str) {
         Ok(tmpl) => match tmpl.render(&obj) {
             Ok(output) => print!("{output}"),
             Err(e) => print_error(template, &format!("liquid parse error: {e}")),

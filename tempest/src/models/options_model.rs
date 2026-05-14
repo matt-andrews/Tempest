@@ -9,7 +9,7 @@ pub struct OptionsModel {
 }
 
 impl OptionsModel {
-    pub fn default() -> Self {
+    pub fn default_debug_false() -> Self {
         Self {
             base_uri: None,
             debug: Some(false),
@@ -30,8 +30,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_has_debug_false_and_no_other_fields() {
-        let d = OptionsModel::default();
+    fn default_debug_false_has_debug_false_and_no_other_fields() {
+        let d = OptionsModel::default_debug_false();
         assert_eq!(d.base_uri, None);
         assert_eq!(d.debug, Some(false));
         assert_eq!(d.reports, None);
