@@ -1,11 +1,11 @@
-mod cli_output;
-mod file_output;
+mod console;
+mod file;
 
 use enum_dispatch::enum_dispatch;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
-use crate::pipeline::reporting::output_capabilities::cli_output::ConsoleSink;
-use crate::pipeline::reporting::output_capabilities::file_output::FileSink;
+use crate::pipeline::reporting::sinks::console::ConsoleSink;
+use crate::pipeline::reporting::sinks::file::FileSink;
 
 #[enum_dispatch]
 pub trait OutputSink {
@@ -14,12 +14,12 @@ pub trait OutputSink {
 }
 
 #[enum_dispatch(OutputSink)]
-pub enum OutputSinkProvider {
+pub enum AnyOutputSink {
     ConsoleSink,
     FileSink,
 }
 
-pub fn get_output_sink(template: &ReportTemplateModel, options: &OptionsModel) -> OutputSinkProvider {
+pub fn output_sink_for(template: &ReportTemplateModel, options: &OptionsModel) -> AnyOutputSink {
     if let Some(file_cfg) = &template.file {
         FileSink::new(file_cfg, options).into()
     } else {

@@ -7,7 +7,7 @@ use crate::pipeline::reporting::Reporter;
 use liquid::model::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use crate::pipeline::reporting::output_capabilities::{get_output_sink, OutputSink, OutputSinkProvider};
+use crate::pipeline::reporting::sinks::{OutputSink, AnyOutputSink, output_sink_for};
 
 pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::utils::liquid_filters::*;
@@ -58,7 +58,7 @@ impl Reporter for LiquidReporter {
                 None => template.section_template.clone().unwrap_or_default()
             };
 
-            let output_provider = &get_output_sink(template, options);
+            let output_provider = &output_sink_for(template, options);
             let globals = build_globals(descriptor, test_result, assertions, test_count);
             self.print_match(template, &template_str, &globals, output_provider);
         }
@@ -87,7 +87,7 @@ impl Reporter for LiquidReporter {
         let flaky = 0;
 
         for template in active {
-            let output_provider = &get_output_sink(template, options);
+            let output_provider = &output_sink_for(template, options);
             let summary = template.summary_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "passed": passed,
@@ -111,7 +111,7 @@ impl Reporter for LiquidReporter {
         }
 
         for template in active {
-            let output_provider = &get_output_sink(template, options);
+            let output_provider = &output_sink_for(template, options);
             let title = template.title_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "test_count": test_count
@@ -129,7 +129,7 @@ impl LiquidReporter {
         template: &ReportTemplateModel,
         template_str: &str,
         obj: &liquid::Object,
-        output_provider: &OutputSinkProvider,
+        output_provider: &AnyOutputSink,
     ) {
         match PARSER.parse(template_str) {
             Ok(tmpl) => match tmpl.render(&obj) {
@@ -144,7 +144,7 @@ impl LiquidReporter {
         &self,
         template: &ReportTemplateModel,
         msg: &str,
-        output_provider: &OutputSinkProvider,
+        output_provider: &AnyOutputSink,
     ) {
         let obj = liquid::object!({"liquid_error_message" : msg});
         match PARSER.parse(&template.error_template.clone().unwrap_or_default()) {

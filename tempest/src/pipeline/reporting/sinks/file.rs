@@ -3,8 +3,8 @@ use std::io::Write;
 use std::path::PathBuf;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::{ReportFileModel};
-use crate::pipeline::reporting::liquid_reporter::PARSER;
-use crate::pipeline::reporting::output_capabilities::OutputSink;
+use crate::pipeline::reporting::liquid::PARSER;
+use crate::pipeline::reporting::sinks::OutputSink;
 
 pub struct FileSink {
     path: PathBuf,

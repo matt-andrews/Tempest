@@ -21,11 +21,11 @@ pub trait FileParser {
 }
 
 #[enum_dispatch(FileParser)]
-pub enum FileParserSelector {
+pub enum AnyFileParser {
     YamlFileParser,
 }
 
-pub fn create_parser(path: &Path) -> Option<FileParserSelector> {
+pub fn parser_for(path: &Path) -> Option<AnyFileParser> {
     let ext = path.extension()?.to_str()?;
 
     match ext {

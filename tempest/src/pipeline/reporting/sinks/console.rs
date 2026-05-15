@@ -1,4 +1,4 @@
-use crate::pipeline::reporting::output_capabilities::OutputSink;
+use crate::pipeline::reporting::sinks::OutputSink;
 
 pub struct ConsoleSink;
 impl OutputSink for ConsoleSink {

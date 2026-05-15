@@ -35,7 +35,7 @@ fn collect_embedded_templates(
             continue;
         }
 
-        let Some(parser) = parser::create_parser(path) else {
+        let Some(parser) = parser::parser_for(path) else {
             continue;
         };
         let template = parser.parse_embedded_report_template(file, dir)?;
@@ -72,7 +72,7 @@ pub fn discover(
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        let Some(parser) = parser::create_parser(path) else {
+        let Some(parser) = parser::parser_for(path) else {
             continue;
         };
 
