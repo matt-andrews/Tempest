@@ -1,23 +1,23 @@
 pub mod yaml_parser;
 
 use crate::discovery::parser::yaml_parser::YamlFileParser;
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::ReportTemplate;
 use enum_dispatch::enum_dispatch;
 use include_dir::{Dir, File};
 use std::path::Path;
 
 #[enum_dispatch]
 pub trait FileParser {
-    fn parse_descriptor(&self, path: &Path) -> anyhow::Result<DescriptorModel>;
-    fn parse_config(&self, path: &Path) -> anyhow::Result<OptionsModel>;
-    fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplateModel>;
+    fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor>;
+    fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions>;
+    fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplate>;
     fn parse_embedded_report_template(
         &self,
         file: &File,
         dir: &Dir,
-    ) -> anyhow::Result<ReportTemplateModel>;
+    ) -> anyhow::Result<ReportTemplate>;
 }
 
 #[enum_dispatch(FileParser)]

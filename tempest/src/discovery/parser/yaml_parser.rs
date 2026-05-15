@@ -1,29 +1,29 @@
 use crate::discovery::BUILTIN_REPORTERS;
 use crate::discovery::parser::FileParser;
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::ReportTemplate;
 use include_dir::{Dir, File};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
-    fn parse_descriptor(&self, path: &Path) -> anyhow::Result<DescriptorModel> {
+    fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
         let contents = fs::read_to_string(path)?;
-        let config: DescriptorModel = serde_yml::from_str(&contents)?;
+        let config: Descriptor = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_config(&self, path: &Path) -> anyhow::Result<OptionsModel> {
+    fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions> {
         let contents = fs::read_to_string(path)?;
-        let config: OptionsModel = serde_yml::from_str(&contents)?;
+        let config: RunOptions = serde_yml::from_str(&contents)?;
         Ok(config)
     }
 
-    fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplateModel> {
+    fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplate> {
         let contents = fs::read_to_string(path)?;
-        let mut template: ReportTemplateModel = serde_yml::from_str(&contents)?;
+        let mut template: ReportTemplate = serde_yml::from_str(&contents)?;
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
 
@@ -40,9 +40,9 @@ impl FileParser for YamlFileParser {
         &self,
         file: &File,
         dir: &Dir,
-    ) -> anyhow::Result<ReportTemplateModel> {
+    ) -> anyhow::Result<ReportTemplate> {
         let contents = file.contents_utf8().unwrap_or_default();
-        let mut template = serde_yml::from_str::<ReportTemplateModel>(contents)?;
+        let mut template = serde_yml::from_str::<ReportTemplate>(contents)?;
 
         template.test_template = Self::resolve_embedded_liquid(template.test_template, dir);
         template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);

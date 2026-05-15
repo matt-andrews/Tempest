@@ -1,6 +1,6 @@
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::ReportTemplate;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::reporting::Reporter;
@@ -38,11 +38,11 @@ pub struct LiquidReporter;
 impl Reporter for LiquidReporter {
     fn report(
         &self,
-        descriptor: &DescriptorModel,
+        descriptor: &Descriptor,
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
     ) {
         let active = self.build_template_iterator(options, templates);
@@ -66,8 +66,8 @@ impl Reporter for LiquidReporter {
 
     fn summary(
         &self,
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
     ) {
         let active = self.build_template_iterator(options, templates);
@@ -100,8 +100,8 @@ impl Reporter for LiquidReporter {
 
     fn title(
         &self,
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
     ) {
         let active = self.build_template_iterator(options, templates);
@@ -126,7 +126,7 @@ impl LiquidReporter {
 
     fn print_match(
         &self,
-        template: &ReportTemplateModel,
+        template: &ReportTemplate,
         template_str: &str,
         obj: &liquid::Object,
         output_provider: &AnyOutputSink,
@@ -142,7 +142,7 @@ impl LiquidReporter {
 
     fn print_error(
         &self,
-        template: &ReportTemplateModel,
+        template: &ReportTemplate,
         msg: &str,
         output_provider: &AnyOutputSink,
     ) {
@@ -158,9 +158,9 @@ impl LiquidReporter {
 
     fn build_template_iterator<'a>(
         &self,
-        options: &OptionsModel,
-        templates: &'a HashMap<String, ReportTemplateModel>,
-    ) -> Vec<&'a ReportTemplateModel> {
+        options: &RunOptions,
+        templates: &'a HashMap<String, ReportTemplate>,
+    ) -> Vec<&'a ReportTemplate> {
         let report_names = options.reports.as_deref().unwrap_or_default();
         templates
             .iter()
@@ -171,7 +171,7 @@ impl LiquidReporter {
 }
 
 fn build_globals(
-    descriptor: &DescriptorModel,
+    descriptor: &Descriptor,
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
     test_count: usize,
@@ -215,20 +215,20 @@ fn build_globals(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::descriptor_model::DescriptorModel;
-    use crate::models::options_model::OptionsModel;
-    use crate::models::report_template_model::ReportTemplateModel;
-    use crate::models::test_model::TestModel;
+    use crate::models::descriptor::Descriptor;
+    use crate::models::run_options::RunOptions;
+    use crate::models::report_template::ReportTemplate;
+    use crate::models::test_spec::TestSpec;
     use crate::models::test_result::{Assertion, TempestStatusCode, TestResult};
     use std::time::Duration;
 
-    fn descriptor(name: &str, has_test: bool) -> DescriptorModel {
-        DescriptorModel {
+    fn descriptor(name: &str, has_test: bool) -> Descriptor {
+        Descriptor {
             name: Some(name.to_string()),
             description: Some(format!("{name} description")),
             tags: None,
             test: if has_test {
-                Some(TestModel::default())
+                Some(TestSpec::default())
             } else {
                 None
             },
@@ -263,8 +263,8 @@ mod tests {
         }
     }
 
-    fn make_template(test_tmpl: Option<&str>, section_tmpl: Option<&str>) -> ReportTemplateModel {
-        ReportTemplateModel {
+    fn make_template(test_tmpl: Option<&str>, section_tmpl: Option<&str>) -> ReportTemplate {
+        ReportTemplate {
             test_template: test_tmpl.map(str::to_string),
             section_template: section_tmpl.map(str::to_string),
             error_template: Some("ERR:{{ liquid_error_message }}".to_string()),
@@ -274,8 +274,8 @@ mod tests {
         }
     }
 
-    fn options_reports(reports: &[&str]) -> OptionsModel {
-        OptionsModel {
+    fn options_reports(reports: &[&str]) -> RunOptions {
+        RunOptions {
             base_uri: None,
             debug: None,
             reports: if reports.is_empty() {
@@ -303,7 +303,7 @@ mod tests {
 
     #[test]
     fn globals_name_defaults_to_empty_string_when_none() {
-        let d = DescriptorModel {
+        let d = Descriptor {
             name: None,
             description: None,
             tags: None,

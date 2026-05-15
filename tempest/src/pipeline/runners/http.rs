@@ -1,5 +1,5 @@
-use crate::models::options_model::OptionsModel;
-use crate::models::test_model::TestModel;
+use crate::models::run_options::RunOptions;
+use crate::models::test_spec::TestSpec;
 use crate::models::test_result::{TempestStatusCode, TestResult};
 use crate::pipeline::runners::TestRunner;
 use async_trait::async_trait;
@@ -17,11 +17,11 @@ static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 pub struct HttpTestRunner {
     route: String,
     #[allow(dead_code)] //we will need this field here sooner or later
-    options: OptionsModel,
-    test: TestModel,
+    options: RunOptions,
+    test: TestSpec,
 }
 impl HttpTestRunner {
-    pub fn new(route: &str, options: &OptionsModel, test: &TestModel) -> Self {
+    pub fn new(route: &str, options: &RunOptions, test: &TestSpec) -> Self {
         Self {
             route: route.to_string(),
             options: options.clone(),
@@ -96,18 +96,18 @@ impl TestRunner for HttpTestRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::options_model::OptionsModel;
-    use crate::models::test_model::TestModel;
+    use crate::models::run_options::RunOptions;
+    use crate::models::test_spec::TestSpec;
     use crate::pipeline::runners::TestRunner;
     use mockito::Server;
     use std::collections::HashMap;
 
-    fn capability(url: &str, test: &TestModel) -> HttpTestRunner {
-        HttpTestRunner::new(url, &OptionsModel::default(), test)
+    fn test_runner(url: &str, test: &TestSpec) -> HttpTestRunner {
+        HttpTestRunner::new(url, &RunOptions::default(), test)
     }
 
-    fn test_model(route: &str, verb: Option<&str>) -> TestModel {
-        TestModel {
+    fn test_model(route: &str, verb: Option<&str>) -> TestSpec {
+        TestSpec {
             route: route.to_string(),
             verb: verb.map(str::to_string),
             ..Default::default()
@@ -126,7 +126,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/ping", server.url()),
             &test_model("/ping", Some("GET")),
         )
@@ -147,7 +147,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/default", server.url()),
             &test_model("/default", None),
         )
@@ -168,13 +168,13 @@ mod tests {
             .create_async()
             .await;
 
-        let test = TestModel {
+        let test = TestSpec {
             route: "/submit".to_string(),
             verb: Some("POST".to_string()),
             body: Some("hello body".to_string()),
             ..Default::default()
         };
-        let result = capability(&format!("{}/submit", server.url()), &test)
+        let result = test_runner(&format!("{}/submit", server.url()), &test)
             .run()
             .await;
 
@@ -192,13 +192,13 @@ mod tests {
             .create_async()
             .await;
 
-        let test = TestModel {
+        let test = TestSpec {
             route: "/item/1".to_string(),
             verb: Some("PUT".to_string()),
             body: Some("updated".to_string()),
             ..Default::default()
         };
-        let result = capability(&format!("{}/item/1", server.url()), &test)
+        let result = test_runner(&format!("{}/item/1", server.url()), &test)
             .run()
             .await;
 
@@ -215,7 +215,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/item/1", server.url()),
             &test_model("/item/1", Some("DELETE")),
         )
@@ -229,12 +229,12 @@ mod tests {
     #[tokio::test]
     async fn unknown_verb_returns_default_result_without_sending_request() {
         // No mock server needed — no request should be made.
-        let test = TestModel {
+        let test = TestSpec {
             route: "http://127.0.0.1:1".to_string(),
             verb: Some("FOOBAR".to_string()),
             ..Default::default()
         };
-        let cap = HttpTestRunner::new("http://127.0.0.1:1", &OptionsModel::default(), &test);
+        let cap = HttpTestRunner::new("http://127.0.0.1:1", &RunOptions::default(), &test);
         let result = cap.run().await;
 
         assert_eq!(
@@ -261,13 +261,13 @@ mod tests {
         headers.insert("x-api-key".to_string(), "secret".to_string());
         headers.insert("accept".to_string(), "application/json".to_string());
 
-        let test = TestModel {
+        let test = TestSpec {
             route: "/headers".to_string(),
             verb: Some("GET".to_string()),
             headers: Some(headers),
             ..Default::default()
         };
-        let result = capability(&format!("{}/headers", server.url()), &test)
+        let result = test_runner(&format!("{}/headers", server.url()), &test)
             .run()
             .await;
 
@@ -288,7 +288,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/data", server.url()),
             &test_model("/data", Some("GET")),
         )
@@ -312,7 +312,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/text", server.url()),
             &test_model("/text", Some("GET")),
         )
@@ -333,7 +333,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/hdr", server.url()),
             &test_model("/hdr", Some("GET")),
         )
@@ -350,7 +350,7 @@ mod tests {
         // Port 1 is reserved and will always be refused.
         let test = test_model("http://127.0.0.1:1/nope", Some("GET"));
         let cap =
-            HttpTestRunner::new("http://127.0.0.1:1/nope", &OptionsModel::default(), &test);
+            HttpTestRunner::new("http://127.0.0.1:1/nope", &RunOptions::default(), &test);
         let result = cap.run().await;
 
         assert_eq!(result.status.code, 504);
@@ -368,7 +368,7 @@ mod tests {
             .create_async()
             .await;
 
-        let result = capability(
+        let result = test_runner(
             &format!("{}/slow", server.url()),
             &test_model("/slow", Some("GET")),
         )

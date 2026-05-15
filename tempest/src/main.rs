@@ -3,7 +3,7 @@ mod models;
 pub mod pipeline;
 mod utils;
 
-use crate::models::options_model::OptionsModel;
+use crate::models::run_options::RunOptions;
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
@@ -27,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
     let args = Cli::parse();
     match args.command {
         Commands::Test { path } => {
-            let mut options = OptionsModel::default_debug_false();
+            let mut options = RunOptions::default_debug_false();
             options.reports = Some(vec!["console".to_string()]);
 
             let discovery = &discovery::discover(&path, None)?;

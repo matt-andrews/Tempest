@@ -1,8 +1,8 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::{ReportFileModel};
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::{ReportFile};
 use crate::pipeline::reporting::liquid::PARSER;
 use crate::pipeline::reporting::sinks::OutputSink;
 
@@ -11,7 +11,7 @@ pub struct FileSink {
 }
 
 impl FileSink {
-    pub fn new(file_cfg: &ReportFileModel, options: &OptionsModel) -> Self {
+    pub fn new(file_cfg: &ReportFile, options: &RunOptions) -> Self {
         let dir = file_cfg.dir.clone().unwrap_or_else(|| PathBuf::from("."));
         let name = file_cfg.file_name.as_deref().unwrap_or("report.txt");
         let obj = liquid::object!({

@@ -3,7 +3,7 @@ mod reporting;
 pub mod runners;
 
 use crate::discovery::DiscoveryResult;
-use crate::models::options_model::OptionsModel;
+use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
@@ -12,7 +12,7 @@ use crate::pipeline::runners::{TestRunner, test_runner_for};
 
 pub async fn execute(
     discovery_result: &DiscoveryResult,
-    default_options: &OptionsModel,
+    default_options: &RunOptions,
 ) -> anyhow::Result<()> {
     let report_provider = reporter_for();
     let discovered = &discovery_result.directory;
@@ -54,11 +54,11 @@ pub async fn execute(
             let mut test_result: Option<TestResult> = None;
 
             if let Some(test) = &descriptor.test {
-                let test_capability = test_runner_for(test, &options);
-                test_result = Some(test_capability.run().await);
+                let test_runner = test_runner_for(test, &options);
+                test_result = Some(test_runner.run().await);
                 for assert in test.assert.as_deref().unwrap_or_default() {
-                    let assert_capability = assertion_evaluator_for(assert);
-                    let result = assert_capability.evaluate(test_result.as_ref().unwrap());
+                    let assert_evaluator = assertion_evaluator_for(assert);
+                    let result = assert_evaluator.evaluate(test_result.as_ref().unwrap());
                     assert_result.push(result.clone());
                 }
 

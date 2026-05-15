@@ -1,9 +1,9 @@
 mod liquid;
 mod sinks;
 
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::ReportTemplate;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::reporting::liquid::LiquidReporter;
@@ -14,23 +14,23 @@ use std::collections::HashMap;
 pub trait Reporter {
     fn report(
         &self,
-        descriptor: &DescriptorModel,
+        descriptor: &Descriptor,
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
     );
     fn summary(
         &self,
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
     );
     fn title(
         &self,
-        options: &OptionsModel,
-        templates: &HashMap<String, ReportTemplateModel>,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
     );
 }

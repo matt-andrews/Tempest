@@ -1,7 +1,7 @@
-pub mod descriptor_model;
-pub mod directory_model;
-pub mod options_model;
-pub mod report_template_model;
+pub mod descriptor;
+pub mod directory_node;
+pub mod run_options;
+pub mod report_template;
 pub mod summary_result;
-pub mod test_model;
+pub mod test_spec;
 pub mod test_result;

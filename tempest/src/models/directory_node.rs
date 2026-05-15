@@ -1,23 +1,23 @@
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::options_model::OptionsModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::run_options::RunOptions;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct DirectoryModel {
-    pub files: Vec<DescriptorModel>,
-    pub options: Vec<OptionsModel>,
-    pub children: Vec<DirectoryModel>,
+pub struct DirectoryNode {
+    pub files: Vec<Descriptor>,
+    pub options: Vec<RunOptions>,
+    pub children: Vec<DirectoryNode>,
     pub dir: PathBuf,
 }
 
-pub struct DirectoryModelIter<'a> {
-    queue: VecDeque<&'a DirectoryModel>,
+pub struct DirectoryNodeIter<'a> {
+    queue: VecDeque<&'a DirectoryNode>,
 }
 
-impl<'a> Iterator for DirectoryModelIter<'a> {
-    type Item = &'a DirectoryModel;
+impl<'a> Iterator for DirectoryNodeIter<'a> {
+    type Item = &'a DirectoryNode;
 
     fn next(&mut self) -> Option<Self::Item> {
         let dir = self.queue.pop_front()?;
@@ -26,9 +26,9 @@ impl<'a> Iterator for DirectoryModelIter<'a> {
     }
 }
 
-impl DirectoryModel {
-    pub fn walk(&self) -> DirectoryModelIter<'_> {
-        DirectoryModelIter {
+impl DirectoryNode {
+    pub fn walk(&self) -> DirectoryNodeIter<'_> {
+        DirectoryNodeIter {
             queue: VecDeque::from([self]),
         }
     }
@@ -42,11 +42,11 @@ impl DirectoryModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::descriptor_model::DescriptorModel;
-    use crate::models::test_model::TestModel;
+    use crate::models::descriptor::Descriptor;
+    use crate::models::test_spec::TestSpec;
 
-    fn empty_dir(path: &str) -> DirectoryModel {
-        DirectoryModel {
+    fn empty_dir(path: &str) -> DirectoryNode {
+        DirectoryNode {
             files: vec![],
             options: vec![],
             children: vec![],
@@ -54,12 +54,12 @@ mod tests {
         }
     }
 
-    fn descriptor_with_test() -> DescriptorModel {
-        DescriptorModel {
+    fn descriptor_with_test() -> Descriptor {
+        Descriptor {
             name: None,
             description: None,
             tags: None,
-            test: Some(TestModel::default()),
+            test: Some(TestSpec::default()),
             describe: None,
             options: None,
         }
@@ -68,7 +68,7 @@ mod tests {
     #[test]
     fn walk_single_dir_yields_itself() {
         let root = empty_dir("root");
-        let dirs: Vec<&DirectoryModel> = root.walk().collect();
+        let dirs: Vec<&DirectoryNode> = root.walk().collect();
         assert_eq!(dirs.len(), 1);
         assert_eq!(dirs[0].dir, PathBuf::from("root"));
     }
@@ -78,14 +78,14 @@ mod tests {
         // root -> [child1, child2], child1 -> [grandchild]
         // BFS order: root, child1, child2, grandchild
         let grandchild = empty_dir("grandchild");
-        let child1 = DirectoryModel {
+        let child1 = DirectoryNode {
             files: vec![],
             options: vec![],
             children: vec![grandchild],
             dir: PathBuf::from("child1"),
         };
         let child2 = empty_dir("child2");
-        let root = DirectoryModel {
+        let root = DirectoryNode {
             files: vec![],
             options: vec![],
             children: vec![child1, child2],
@@ -111,13 +111,13 @@ mod tests {
 
     #[test]
     fn test_count_sums_files_and_children_recursively() {
-        let child = DirectoryModel {
+        let child = DirectoryNode {
             files: vec![descriptor_with_test()],
             options: vec![],
             children: vec![],
             dir: PathBuf::from("child"),
         };
-        let root = DirectoryModel {
+        let root = DirectoryNode {
             files: vec![descriptor_with_test(), descriptor_with_test()],
             options: vec![],
             children: vec![child],
