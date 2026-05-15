@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
-pub struct TestModel {
+pub struct TestSpec {
     pub route: String,
 
     pub verb: Option<String>,

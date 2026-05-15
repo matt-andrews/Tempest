@@ -1,8 +1,8 @@
 use crate::discovery::parser::FileParser;
-use crate::models::descriptor_model::DescriptorModel;
-use crate::models::directory_model::DirectoryModel;
-use crate::models::options_model::OptionsModel;
-use crate::models::report_template_model::ReportTemplateModel;
+use crate::models::descriptor::Descriptor;
+use crate::models::directory_node::DirectoryNode;
+use crate::models::run_options::RunOptions;
+use crate::models::report_template::ReportTemplate;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::path::Path;
@@ -12,11 +12,11 @@ mod parser;
 static BUILTIN_REPORTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/builtin_reporters");
 
 pub struct DiscoveryResult {
-    pub directory: DirectoryModel,
-    pub templates: HashMap<String, ReportTemplateModel>,
+    pub directory: DirectoryNode,
+    pub templates: HashMap<String, ReportTemplate>,
 }
 
-fn discover_internal_templates() -> anyhow::Result<HashMap<String, ReportTemplateModel>> {
+fn discover_internal_templates() -> anyhow::Result<HashMap<String, ReportTemplate>> {
     let mut templates = HashMap::new();
     collect_embedded_templates(&BUILTIN_REPORTERS, &mut templates)?;
     Ok(templates)
@@ -24,7 +24,7 @@ fn discover_internal_templates() -> anyhow::Result<HashMap<String, ReportTemplat
 
 fn collect_embedded_templates(
     dir: &Dir,
-    templates: &mut HashMap<String, ReportTemplateModel>,
+    templates: &mut HashMap<String, ReportTemplate>,
 ) -> anyhow::Result<()> {
     for file in dir.files() {
         let path = file.path();
@@ -35,7 +35,7 @@ fn collect_embedded_templates(
             continue;
         }
 
-        let Some(parser) = parser::create_parser(path) else {
+        let Some(parser) = parser::parser_for(path) else {
             continue;
         };
         let template = parser.parse_embedded_report_template(file, dir)?;
@@ -53,15 +53,15 @@ fn collect_embedded_templates(
 
 pub fn discover(
     dir: &Path,
-    inherited_configs: Option<Vec<OptionsModel>>,
+    inherited_configs: Option<Vec<RunOptions>>,
 ) -> anyhow::Result<DiscoveryResult> {
     let (dirs, files): (Vec<_>, Vec<_>) = std::fs::read_dir(dir)?
         .filter_map(|e| e.ok())
         .partition(|e| e.path().is_dir());
 
-    let mut options: Vec<OptionsModel> = inherited_configs.unwrap_or_default();
-    let mut tests: Vec<DescriptorModel> = Vec::new();
-    let mut templates: HashMap<String, ReportTemplateModel> = discover_internal_templates()
+    let mut options: Vec<RunOptions> = inherited_configs.unwrap_or_default();
+    let mut tests: Vec<Descriptor> = Vec::new();
+    let mut templates: HashMap<String, ReportTemplate> = discover_internal_templates()
         .unwrap_or_else(|e| {
             eprintln!("{e}");
             HashMap::new()
@@ -72,7 +72,7 @@ pub fn discover(
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
-        let Some(parser) = parser::create_parser(path) else {
+        let Some(parser) = parser::parser_for(path) else {
             continue;
         };
 
@@ -95,7 +95,7 @@ pub fn discover(
     }
 
     Ok(DiscoveryResult {
-        directory: DirectoryModel {
+        directory: DirectoryNode {
             files: tests,
             options,
             children,
@@ -108,7 +108,7 @@ pub fn discover(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::options_model::OptionsModel;
+    use crate::models::run_options::RunOptions;
     use std::fs;
     use std::path::PathBuf;
     use tempfile::tempdir;
@@ -284,10 +284,11 @@ mod tests {
     #[test]
     fn discover_uses_provided_inherited_configs_as_starting_options() {
         let dir = tempdir().unwrap();
-        let inherited = OptionsModel {
+        let inherited = RunOptions {
             base_uri: Some("http://inherited".to_string()),
             debug: None,
             reports: None,
+            start_time: None,
         };
 
         let result = discover(dir.path(), Some(vec![inherited])).unwrap();

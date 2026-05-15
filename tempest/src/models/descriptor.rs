@@ -1,30 +1,30 @@
-use crate::models::options_model::OptionsModel;
-use crate::models::test_model::TestModel;
+use crate::models::run_options::RunOptions;
+use crate::models::test_spec::TestSpec;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct DescriptorModel {
+pub struct Descriptor {
     pub name: Option<String>,
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
 
-    pub test: Option<TestModel>,
-    pub describe: Option<Vec<DescriptorModel>>,
+    pub test: Option<TestSpec>,
+    pub describe: Option<Vec<Descriptor>>,
 
-    pub options: Option<OptionsModel>,
+    pub options: Option<RunOptions>,
 }
 
-pub struct DescriptorModelIter<'a> {
+pub struct DescriptorIter<'a> {
     // Each stack entry carries the node and its parent's accumulated options,
     // so the pipeline can merge the full ancestor chain without re-walking the tree.
     // DFS (push_front + rev children) preserves source order: a section header is
     // always yielded immediately before its own tests, not after all sibling sections.
-    stack: VecDeque<(&'a DescriptorModel, OptionsModel)>,
+    stack: VecDeque<(&'a Descriptor, RunOptions)>,
 }
 
-impl<'a> Iterator for DescriptorModelIter<'a> {
-    type Item = (&'a DescriptorModel, OptionsModel);
+impl<'a> Iterator for DescriptorIter<'a> {
+    type Item = (&'a Descriptor, RunOptions);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (node, parent_options) = self.stack.pop_front()?;
@@ -38,10 +38,10 @@ impl<'a> Iterator for DescriptorModelIter<'a> {
     }
 }
 
-impl DescriptorModel {
-    pub(crate) fn descendants(&self) -> DescriptorModelIter<'_> {
-        DescriptorModelIter {
-            stack: VecDeque::from([(self, OptionsModel::default())]),
+impl Descriptor {
+    pub(crate) fn descendants(&self) -> DescriptorIter<'_> {
+        DescriptorIter {
+            stack: VecDeque::from([(self, RunOptions::default())]),
         }
     }
     pub fn test_count(&self) -> usize {
@@ -54,22 +54,23 @@ impl DescriptorModel {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::options_model::OptionsModel;
+    use crate::models::run_options::RunOptions;
 
-    fn options(base_uri: &str) -> OptionsModel {
-        OptionsModel {
+    fn options(base_uri: &str) -> RunOptions {
+        RunOptions {
             base_uri: Some(base_uri.to_string()),
             debug: None,
             reports: None,
+            start_time: None,
         }
     }
 
     fn group(
         name: &str,
-        opts: Option<OptionsModel>,
-        children: Vec<DescriptorModel>,
-    ) -> DescriptorModel {
-        DescriptorModel {
+        opts: Option<RunOptions>,
+        children: Vec<Descriptor>,
+    ) -> Descriptor {
+        Descriptor {
             name: Some(name.to_string()),
             description: None,
             tags: None,
@@ -79,8 +80,8 @@ mod tests {
         }
     }
 
-    fn leaf(name: &str, opts: Option<OptionsModel>) -> DescriptorModel {
-        DescriptorModel {
+    fn leaf(name: &str, opts: Option<RunOptions>) -> Descriptor {
+        Descriptor {
             name: Some(name.to_string()),
             description: None,
             tags: None,
@@ -90,7 +91,7 @@ mod tests {
         }
     }
 
-    fn collected(root: &DescriptorModel) -> Vec<(String, Option<String>)> {
+    fn collected(root: &Descriptor) -> Vec<(String, Option<String>)> {
         root.descendants()
             .map(|(d, parent_opts)| (d.name.clone().unwrap_or_default(), parent_opts.base_uri))
             .collect()
@@ -182,10 +183,11 @@ mod tests {
         // leaf's parent_options should carry both debug AND base_uri from higher ancestors
         let root = group(
             "root",
-            Some(OptionsModel {
+            Some(RunOptions {
                 base_uri: None,
                 debug: Some(true),
                 reports: None,
+                start_time: None,
             }),
             vec![group(
                 "a",

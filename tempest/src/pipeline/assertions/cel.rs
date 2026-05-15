@@ -1,5 +1,5 @@
 use crate::models::test_result::{Assertion, TestResult};
-use crate::pipeline::assert_capabilities::AssertCapability;
+use crate::pipeline::assertions::AssertionEvaluator;
 use anyhow::anyhow;
 use cel_interpreter::objects::Key;
 use cel_interpreter::{Context, Program, Value};
@@ -8,11 +8,11 @@ use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-pub struct CelParser {
+pub struct CelAssertionEvaluator {
     assertion: String,
 }
-impl AssertCapability for CelParser {
-    fn assert(&self, data: &TestResult) -> Assertion {
+impl AssertionEvaluator for CelAssertionEvaluator {
+    fn evaluate(&self, data: &TestResult) -> Assertion {
         let result = Self::evaluate_assertion(&self.assertion, data).map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
@@ -25,7 +25,7 @@ impl AssertCapability for CelParser {
         }
     }
 }
-impl CelParser {
+impl CelAssertionEvaluator {
     pub fn new(assertion: &str) -> Self {
         Self {
             assertion: assertion.to_string(),
@@ -135,7 +135,7 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelParser::new(expr).assert(r)
+        CelAssertionEvaluator::new(expr).evaluate(r)
     }
 
     #[test]
