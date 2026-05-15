@@ -1,3 +1,4 @@
+use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
@@ -6,6 +7,7 @@ pub struct OptionsModel {
     pub base_uri: Option<String>,
     pub debug: Option<bool>,
     pub reports: Option<Vec<String>>,
+    pub start_time: Option<DateTime>,
 }
 
 impl OptionsModel {
@@ -14,6 +16,7 @@ impl OptionsModel {
             base_uri: None,
             debug: Some(false),
             reports: None,
+            start_time: Some(DateTime::now()),
         }
     }
     pub fn merge(self, other: OptionsModel) -> OptionsModel {
@@ -21,6 +24,7 @@ impl OptionsModel {
             base_uri: other.base_uri.or(self.base_uri),
             debug: other.debug.or(self.debug),
             reports: other.reports.or(self.reports),
+            start_time: other.start_time.or(self.start_time),
         }
     }
 }
@@ -43,11 +47,13 @@ mod tests {
             base_uri: Some("http://base".to_string()),
             debug: Some(false),
             reports: Some(vec!["base.html".to_string()]),
+            start_time: None,
         };
         let other = OptionsModel {
             base_uri: Some("http://other".to_string()),
             debug: Some(true),
             reports: Some(vec!["other.html".to_string()]),
+            start_time: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -61,11 +67,13 @@ mod tests {
             base_uri: Some("http://base".to_string()),
             debug: Some(true),
             reports: Some(vec!["r.html".to_string()]),
+            start_time: None,
         };
         let other = OptionsModel {
             base_uri: None,
             debug: None,
             reports: None,
+            start_time: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
@@ -79,11 +87,13 @@ mod tests {
             base_uri: None,
             debug: None,
             reports: None,
+            start_time: None,
         };
         let other = OptionsModel {
             base_uri: None,
             debug: None,
             reports: None,
+            start_time: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);

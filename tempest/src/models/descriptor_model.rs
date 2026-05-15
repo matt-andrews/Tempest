@@ -61,6 +61,7 @@ mod tests {
             base_uri: Some(base_uri.to_string()),
             debug: None,
             reports: None,
+            start_time: None,
         }
     }
 
@@ -186,6 +187,7 @@ mod tests {
                 base_uri: None,
                 debug: Some(true),
                 reports: None,
+                start_time: None,
             }),
             vec![group(
                 "a",

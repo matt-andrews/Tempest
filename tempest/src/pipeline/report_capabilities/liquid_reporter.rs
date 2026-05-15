@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use crate::pipeline::report_capabilities::output_capabilities::{get_output, OutputCapability, OutputCapabilityProvider};
 
-static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
+pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::utils::liquid_filters::*;
     liquid::ParserBuilder::with_stdlib()
         .filter(RedFilter)
@@ -43,6 +43,7 @@ impl ReportCapability for LiquidReporter {
         assertions: &[Assertion],
         options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
+        test_count: usize,
     ) {
         let active = self.build_template_iterator(options, templates);
 
@@ -50,27 +51,16 @@ impl ReportCapability for LiquidReporter {
             return;
         }
 
+
         for template in active {
+            let template_str = match descriptor.test{
+                Some(_) =>  template.test_template.clone().unwrap_or_default(),
+                None => template.section_template.clone().unwrap_or_default()
+            };
+
             let output_provider = &get_output(template, options);
-            if descriptor.test.is_none() {
-                self.print(
-                    descriptor,
-                    test_result,
-                    template,
-                    assertions,
-                    &template.section_template.clone().unwrap_or_default(),
-                    output_provider,
-                );
-            } else {
-                self.print(
-                    descriptor,
-                    test_result,
-                    template,
-                    assertions,
-                    &template.test_template.clone().unwrap_or_default(),
-                    output_provider,
-                );
-            }
+            let globals = build_globals(descriptor, test_result, assertions, test_count);
+            self.print_match(template, &template_str, &globals, output_provider);
         }
     }
 
@@ -133,18 +123,6 @@ impl ReportCapability for LiquidReporter {
 
 
 impl LiquidReporter {
-    fn print(
-        &self,
-        descriptor: &DescriptorModel,
-        test_result: Option<&TestResult>,
-        template: &ReportTemplateModel,
-        assertions: &[Assertion],
-        template_str: &str,
-        output_provider: &OutputCapabilityProvider,
-    ) {
-        let globals = build_globals(descriptor, test_result, assertions);
-        self.print_match(template, template_str, &globals, output_provider);
-    }
 
     fn print_match(
         &self,
@@ -196,6 +174,7 @@ fn build_globals(
     descriptor: &DescriptorModel,
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
+    test_count: usize,
 ) -> liquid::Object {
     let all_passed = assertions.iter().all(|a| a.passed);
 
@@ -219,6 +198,7 @@ fn build_globals(
             "status_message": result.status.message.clone(),
             "body":           result.body.clone(),
             "duration_ms":    result.duration.as_secs_f64() * 1000.0,
+            "test_count":     test_count,
         })
     } else {
         liquid::object!({
@@ -303,6 +283,7 @@ mod tests {
             } else {
                 Some(reports.iter().map(|s| s.to_string()).collect())
             },
+            start_time: None,
         }
     }
 
@@ -313,7 +294,7 @@ mod tests {
     #[test]
     fn globals_exposes_name_and_description() {
         let d = descriptor("login", false);
-        let globals = build_globals(&d, None, &[]);
+        let globals = build_globals(&d, None, &[], 0);
         assert_eq!(
             render("{{ name }}|{{ description }}", &globals),
             "login|login description"
@@ -330,7 +311,7 @@ mod tests {
             describe: None,
             options: None,
         };
-        let globals = build_globals(&d, None, &[]);
+        let globals = build_globals(&d, None, &[], 0);
         assert_eq!(render("{{ name }}", &globals), "");
     }
 
@@ -341,6 +322,7 @@ mod tests {
             &d,
             None,
             &[assertion("a == 1", true), assertion("b == 2", true)],
+            0,
         );
         assert_eq!(render("{{ passed }}", &globals), "true");
     }
@@ -352,6 +334,7 @@ mod tests {
             &d,
             None,
             &[assertion("a == 1", true), assertion("b == 99", false)],
+            0,
         );
         assert_eq!(render("{{ passed }}", &globals), "false");
     }
@@ -360,7 +343,7 @@ mod tests {
     fn globals_with_test_result_exposes_status_body_and_duration() {
         let d = descriptor("t", true);
         let r = test_result(404, "not found", 250);
-        let globals = build_globals(&d, Some(&r), &[]);
+        let globals = build_globals(&d, Some(&r), &[], 0);
         assert_eq!(render("{{ status }}|{{ body }}", &globals), "404|not found");
         let ms: f64 = render("{{ duration_ms }}", &globals).parse().unwrap();
         assert!((ms - 250.0).abs() < 1.0);
@@ -369,7 +352,7 @@ mod tests {
     #[test]
     fn globals_without_test_result_omits_http_fields() {
         let d = descriptor("t", false);
-        let globals = build_globals(&d, None, &[]);
+        let globals = build_globals(&d, None, &[], 0);
         // liquid raises on unknown vars; use conditionals to verify keys are absent
         assert_eq!(
             render("{% if status %}yes{% else %}no{% endif %}", &globals),
@@ -393,7 +376,7 @@ mod tests {
             assertion("status == 200", true),
             assertion("body != ''", false),
         ];
-        let globals = build_globals(&d, Some(&r), &assertions);
+        let globals = build_globals(&d, Some(&r), &assertions, 0);
         let out = render(
             "{% for a in assertions %}{{ a.expr }}={{ a.passed }};{{ a.error }}|{% endfor %}",
             &globals,

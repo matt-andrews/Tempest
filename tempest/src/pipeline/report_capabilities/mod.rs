@@ -19,6 +19,7 @@ pub trait ReportCapability {
         assertions: &[Assertion],
         options: &OptionsModel,
         templates: &HashMap<String, ReportTemplateModel>,
+        test_count: usize,
     );
     fn summary(
         &self,

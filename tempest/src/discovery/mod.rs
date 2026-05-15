@@ -288,6 +288,7 @@ mod tests {
             base_uri: Some("http://inherited".to_string()),
             debug: None,
             reports: None,
+            start_time: None,
         };
 
         let result = discover(dir.path(), Some(vec![inherited])).unwrap();

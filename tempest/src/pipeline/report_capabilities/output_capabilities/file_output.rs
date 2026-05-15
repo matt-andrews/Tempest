@@ -1,7 +1,9 @@
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
+use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::{ReportFileModel};
+use crate::pipeline::report_capabilities::liquid_reporter::PARSER;
 use crate::pipeline::report_capabilities::output_capabilities::OutputCapability;
 
 pub struct FileOutput {
@@ -9,9 +11,20 @@ pub struct FileOutput {
 }
 
 impl FileOutput {
-    pub fn new(file_cfg: &ReportFileModel) -> Self {
+    pub fn new(file_cfg: &ReportFileModel, options: &OptionsModel) -> Self {
         let dir = file_cfg.dir.clone().unwrap_or_else(|| PathBuf::from("."));
         let name = file_cfg.file_name.as_deref().unwrap_or("report.txt");
+        let obj = liquid::object!({
+                "start_timestamp": options.start_time.unwrap_or_default().unix_timestamp()
+            });
+        let name = match PARSER.parse(name){
+            Ok(tmpl) => match tmpl.render(&obj) {
+                Ok(output) => &output.clone(),
+                Err(_) => name,
+            },
+            Err(_) => name,
+        };
+
         Self { path: dir.join(name) }
     }
 

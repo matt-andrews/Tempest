@@ -75,6 +75,7 @@ pub async fn execute(
                 &assert_result,
                 &options,
                 &discovery_result.templates,
+                summary.len()
             );
         }
     }

@@ -21,7 +21,7 @@ pub enum OutputCapabilityProvider{
 
 pub fn get_output(template: &ReportTemplateModel, options: &OptionsModel) -> OutputCapabilityProvider{
     if let Some(file_cfg) = &template.file {
-        FileOutput::new(file_cfg).into()
+        FileOutput::new(file_cfg, options).into()
     } else {
         CliOutput.into()
     }
