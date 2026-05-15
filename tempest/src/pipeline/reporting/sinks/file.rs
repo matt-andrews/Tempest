@@ -3,14 +3,14 @@ use std::io::Write;
 use std::path::PathBuf;
 use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::{ReportFileModel};
-use crate::pipeline::report_capabilities::liquid_reporter::PARSER;
-use crate::pipeline::report_capabilities::output_capabilities::OutputCapability;
+use crate::pipeline::reporting::liquid_reporter::PARSER;
+use crate::pipeline::reporting::output_capabilities::OutputSink;
 
-pub struct FileOutput {
+pub struct FileSink {
     path: PathBuf,
 }
 
-impl FileOutput {
+impl FileSink {
     pub fn new(file_cfg: &ReportFileModel, options: &OptionsModel) -> Self {
         let dir = file_cfg.dir.clone().unwrap_or_else(|| PathBuf::from("."));
         let name = file_cfg.file_name.as_deref().unwrap_or("report.txt");
@@ -40,7 +40,7 @@ impl FileOutput {
     }
 }
 
-impl OutputCapability for FileOutput {
+impl OutputSink for FileSink {
     fn println(&self, msg: &str) {
         let mut file = self.open_append();
         _ = writeln!(file, "{}", msg).map_err(|e|println!("{e}"));

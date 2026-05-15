@@ -3,11 +3,11 @@ use crate::models::options_model::OptionsModel;
 use crate::models::report_template_model::ReportTemplateModel;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
-use crate::pipeline::report_capabilities::ReportCapability;
+use crate::pipeline::reporting::Reporter;
 use liquid::model::Value;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use crate::pipeline::report_capabilities::output_capabilities::{get_output, OutputCapability, OutputCapabilityProvider};
+use crate::pipeline::reporting::output_capabilities::{get_output_sink, OutputSink, OutputSinkProvider};
 
 pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::utils::liquid_filters::*;
@@ -35,7 +35,7 @@ pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
 
 pub struct LiquidReporter;
 
-impl ReportCapability for LiquidReporter {
+impl Reporter for LiquidReporter {
     fn report(
         &self,
         descriptor: &DescriptorModel,
@@ -58,7 +58,7 @@ impl ReportCapability for LiquidReporter {
                 None => template.section_template.clone().unwrap_or_default()
             };
 
-            let output_provider = &get_output(template, options);
+            let output_provider = &get_output_sink(template, options);
             let globals = build_globals(descriptor, test_result, assertions, test_count);
             self.print_match(template, &template_str, &globals, output_provider);
         }
@@ -87,7 +87,7 @@ impl ReportCapability for LiquidReporter {
         let flaky = 0;
 
         for template in active {
-            let output_provider = &get_output(template, options);
+            let output_provider = &get_output_sink(template, options);
             let summary = template.summary_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "passed": passed,
@@ -111,7 +111,7 @@ impl ReportCapability for LiquidReporter {
         }
 
         for template in active {
-            let output_provider = &get_output(template, options);
+            let output_provider = &get_output_sink(template, options);
             let title = template.title_template.clone().unwrap_or_default();
             let obj = liquid::object!({
                 "test_count": test_count
@@ -129,7 +129,7 @@ impl LiquidReporter {
         template: &ReportTemplateModel,
         template_str: &str,
         obj: &liquid::Object,
-        output_provider: &OutputCapabilityProvider,
+        output_provider: &OutputSinkProvider,
     ) {
         match PARSER.parse(template_str) {
             Ok(tmpl) => match tmpl.render(&obj) {
@@ -144,7 +144,7 @@ impl LiquidReporter {
         &self,
         template: &ReportTemplateModel,
         msg: &str,
-        output_provider: &OutputCapabilityProvider,
+        output_provider: &OutputSinkProvider,
     ) {
         let obj = liquid::object!({"liquid_error_message" : msg});
         match PARSER.parse(&template.error_template.clone().unwrap_or_default()) {
