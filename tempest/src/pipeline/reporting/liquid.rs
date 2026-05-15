@@ -1,13 +1,9 @@
-use crate::models::descriptor::Descriptor;
-use crate::models::run_options::RunOptions;
-use crate::models::report_template::ReportTemplate;
-use crate::models::summary_result::SummaryResult;
-use crate::models::test_result::{Assertion, TestResult};
-use crate::pipeline::reporting::Reporter;
-use liquid::model::Value;
-use std::collections::HashMap;
 use std::sync::LazyLock;
-use crate::pipeline::reporting::sinks::{OutputSink, AnyOutputSink, output_sink_for};
+use liquid_core::Value;
+use crate::models::descriptor::Descriptor;
+use crate::models::report_template::ReportTemplate;
+use crate::models::test_result::{Assertion, TestResult};
+use crate::pipeline::reporting::event::ReportEvent;
 
 pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::utils::liquid_filters::*;
@@ -33,144 +29,65 @@ pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
         .expect("failed to build Liquid parser")
 });
 
-pub struct LiquidReporter;
-
-impl Reporter for LiquidReporter {
-    fn report(
+pub struct LiquidRenderer;
+impl LiquidRenderer{
+    pub fn render(
         &self,
-        descriptor: &Descriptor,
-        test_result: Option<&TestResult>,
-        assertions: &[Assertion],
-        options: &RunOptions,
-        templates: &HashMap<String, ReportTemplate>,
-        test_count: usize,
-    ) {
-        let active = self.build_template_iterator(options, templates);
-
-        if active.is_empty() {
-            return;
-        }
-
-
-        for template in active {
-            let template_str = match descriptor.test{
-                Some(_) =>  template.test_template.clone().unwrap_or_default(),
-                None => template.section_template.clone().unwrap_or_default()
-            };
-
-            let output_provider = &output_sink_for(template, options);
-            let globals = build_globals(descriptor, test_result, assertions, test_count);
-            self.print_match(template, &template_str, &globals, output_provider);
-        }
+        template: &ReportTemplate,
+        event: &ReportEvent<'_>,
+    ) -> anyhow::Result<String>{
+        let template_str = event.template(template).unwrap_or_default();
+        let globals = self.build_globals(event);
+        let parsed = PARSER.parse(template_str)?;
+        Ok(parsed.render(&globals)?)
     }
 
-    fn summary(
+    fn build_globals(
         &self,
-        options: &RunOptions,
-        templates: &HashMap<String, ReportTemplate>,
-        results: &[SummaryResult],
-    ) {
-        let active = self.build_template_iterator(options, templates);
+        event: &ReportEvent<'_>,
+    ) -> liquid::Object {
+        match event {
+            ReportEvent::Title { test_count } => {
+                liquid::object!({
+                "test_count": *test_count,
+            })
+            }
 
-        if active.is_empty() {
-            return;
-        }
+            ReportEvent::Summary {
+                passed,
+                failed,
+                flaky,
+            } => {
+                liquid::object!({
+                "passed": *passed,
+                "failed": *failed,
+                "flaky": *flaky,
+            })
+            }
 
-        let passed = results
-            .iter()
-            .filter(|f| matches!(f, SummaryResult::Passed))
-            .count();
-        let failed = results
-            .iter()
-            .filter(|f| matches!(f, SummaryResult::Failed))
-            .count();
-        let flaky = 0;
+            ReportEvent::Descriptor {
+                descriptor,
+                test_result,
+                assertions,
+                test_count,
+            } => build_descriptor_globals(
+                descriptor,
+                *test_result,
+                assertions,
+                *test_count,
+            ),
 
-        for template in active {
-            let output_provider = &output_sink_for(template, options);
-            let summary = template.summary_template.clone().unwrap_or_default();
-            let obj = liquid::object!({
-                "passed": passed,
-                "failed": failed,
-                "flaky": flaky,
-            });
-            self.print_match(template, &summary, &obj, output_provider);
-        }
-    }
-
-    fn title(
-        &self,
-        options: &RunOptions,
-        templates: &HashMap<String, ReportTemplate>,
-        test_count: usize,
-    ) {
-        let active = self.build_template_iterator(options, templates);
-
-        if active.is_empty() {
-            return;
-        }
-
-        for template in active {
-            let output_provider = &output_sink_for(template, options);
-            let title = template.title_template.clone().unwrap_or_default();
-            let obj = liquid::object!({
-                "test_count": test_count
-            });
-            self.print_match(template, &title, &obj, output_provider);
+            ReportEvent::Error {
+                msg
+            } => {
+                liquid::object!({
+                    "liquid_error_message": msg
+                })
+            }
         }
     }
 }
-
-
-impl LiquidReporter {
-
-    fn print_match(
-        &self,
-        template: &ReportTemplate,
-        template_str: &str,
-        obj: &liquid::Object,
-        output_provider: &AnyOutputSink,
-    ) {
-        match PARSER.parse(template_str) {
-            Ok(tmpl) => match tmpl.render(&obj) {
-                Ok(output) => output_provider.print(&output),
-                Err(e) => self.print_error(template, &format!("liquid parse error: {e}"), output_provider),
-            },
-            Err(e) => self.print_error(template, &format!("liquid parse error: {e}"), output_provider),
-        };
-    }
-
-    fn print_error(
-        &self,
-        template: &ReportTemplate,
-        msg: &str,
-        output_provider: &AnyOutputSink,
-    ) {
-        let obj = liquid::object!({"liquid_error_message" : msg});
-        match PARSER.parse(&template.error_template.clone().unwrap_or_default()) {
-            Ok(tmpl) => match tmpl.render(&obj) {
-                Ok(output) => output_provider.print(&output),
-                Err(e) => output_provider.println(e.to_string().as_str()),
-            },
-            Err(e) => output_provider.println(e.to_string().as_str()),
-        };
-    }
-
-    fn build_template_iterator<'a>(
-        &self,
-        options: &RunOptions,
-        templates: &'a HashMap<String, ReportTemplate>,
-    ) -> Vec<&'a ReportTemplate> {
-        let report_names = options.reports.as_deref().unwrap_or_default();
-        templates
-            .iter()
-            .filter(|(key, _)| report_names.contains(&key.as_str().to_string()))
-            .map(|(_, v)| v)
-            .collect()
-    }
-}
-
-fn build_globals(
+fn build_descriptor_globals(
     descriptor: &Descriptor,
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
@@ -182,29 +99,29 @@ fn build_globals(
         .iter()
         .map(|a| {
             Value::Object(liquid::object!({
-                "expr":   a.expr.clone(),
+                "expr": a.expr.clone(),
                 "passed": a.passed,
-                "error":  a.error.clone(),
+                "error": a.error.clone(),
             }))
         })
         .collect();
 
     let mut globals = if let Some(result) = test_result {
         liquid::object!({
-            "name":           descriptor.name.clone().unwrap_or_default(),
-            "description":    descriptor.description.clone().unwrap_or_default(),
-            "passed":         all_passed,
-            "status":         result.status.code as i64,
+            "name": descriptor.name.clone().unwrap_or_default(),
+            "description": descriptor.description.clone().unwrap_or_default(),
+            "passed": all_passed,
+            "status": result.status.code as i64,
             "status_message": result.status.message.clone(),
-            "body":           result.body.clone(),
-            "duration_ms":    result.duration.as_secs_f64() * 1000.0,
-            "test_count":     test_count,
+            "body": result.body.clone(),
+            "duration_ms": result.duration.as_secs_f64() * 1000.0,
+            "test_count": test_count,
         })
     } else {
         liquid::object!({
-            "name":        descriptor.name.clone().unwrap_or_default(),
+            "name": descriptor.name.clone().unwrap_or_default(),
             "description": descriptor.description.clone().unwrap_or_default(),
-            "passed":      all_passed,
+            "passed": all_passed,
         })
     };
 
@@ -216,22 +133,28 @@ fn build_globals(
 mod tests {
     use super::*;
     use crate::models::descriptor::Descriptor;
-    use crate::models::run_options::RunOptions;
     use crate::models::report_template::ReportTemplate;
     use crate::models::test_spec::TestSpec;
     use crate::models::test_result::{Assertion, TempestStatusCode, TestResult};
     use std::time::Duration;
 
-    fn descriptor(name: &str, has_test: bool) -> Descriptor {
+    fn template(test_template: &str) -> ReportTemplate {
+        ReportTemplate {
+            test_template: Some(test_template.to_string()),
+            section_template: Some(test_template.to_string()),
+            error_template: Some(test_template.to_string()),
+            title_template: Some(test_template.to_string()),
+            summary_template: Some(test_template.to_string()),
+            file: None,
+        }
+    }
+
+    fn descriptor(has_test: bool) -> Descriptor {
         Descriptor {
-            name: Some(name.to_string()),
-            description: Some(format!("{name} description")),
+            name: Some("login".to_string()),
+            description: Some("login description".to_string()),
             tags: None,
-            test: if has_test {
-                Some(TestSpec::default())
-            } else {
-                None
-            },
+            test: has_test.then(TestSpec::default),
             describe: None,
             options: None,
         }
@@ -249,176 +172,123 @@ mod tests {
         }
     }
 
-    fn test_result(code: u16, body: &str, duration_ms: u64) -> TestResult {
+    fn test_result() -> TestResult {
         TestResult {
             status: TempestStatusCode {
-                code,
-                message: "OK".to_string(),
+                code: 404,
+                message: "Not Found".to_string(),
             },
             headers: reqwest::header::HeaderMap::new(),
-            body: body.to_string(),
+            body: "missing".to_string(),
             json: None,
             bytes: vec![],
-            duration: Duration::from_millis(duration_ms),
+            duration: Duration::from_millis(250),
         }
-    }
-
-    fn make_template(test_tmpl: Option<&str>, section_tmpl: Option<&str>) -> ReportTemplate {
-        ReportTemplate {
-            test_template: test_tmpl.map(str::to_string),
-            section_template: section_tmpl.map(str::to_string),
-            error_template: Some("ERR:{{ liquid_error_message }}".to_string()),
-            title_template: None,
-            summary_template: None,
-            file: None,
-        }
-    }
-
-    fn options_reports(reports: &[&str]) -> RunOptions {
-        RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: if reports.is_empty() {
-                None
-            } else {
-                Some(reports.iter().map(|s| s.to_string()).collect())
-            },
-            start_time: None,
-        }
-    }
-
-    fn render(template_str: &str, globals: &liquid::Object) -> String {
-        PARSER.parse(template_str).unwrap().render(globals).unwrap()
     }
 
     #[test]
-    fn globals_exposes_name_and_description() {
-        let d = descriptor("login", false);
-        let globals = build_globals(&d, None, &[], 0);
-        assert_eq!(
-            render("{{ name }}|{{ description }}", &globals),
-            "login|login description"
-        );
+    fn renders_title_globals() {
+        let renderer = LiquidRenderer;
+        let event = ReportEvent::Title { test_count: 12 };
+
+        let output = renderer
+            .render(&template("{{ test_count }}"), &event)
+            .unwrap();
+
+        assert_eq!(output, "12");
     }
 
     #[test]
-    fn globals_name_defaults_to_empty_string_when_none() {
-        let d = Descriptor {
-            name: None,
-            description: None,
-            tags: None,
-            test: None,
-            describe: None,
-            options: None,
+    fn renders_summary_globals() {
+        let renderer = LiquidRenderer;
+        let event = ReportEvent::Summary {
+            passed: 8,
+            failed: 2,
+            flaky: 1,
         };
-        let globals = build_globals(&d, None, &[], 0);
-        assert_eq!(render("{{ name }}", &globals), "");
+
+        let output = renderer
+            .render(&template("{{ passed }}|{{ failed }}|{{ flaky }}"), &event)
+            .unwrap();
+
+        assert_eq!(output, "8|2|1");
     }
 
     #[test]
-    fn globals_passed_true_when_all_assertions_pass() {
-        let d = descriptor("t", false);
-        let globals = build_globals(
-            &d,
-            None,
-            &[assertion("a == 1", true), assertion("b == 2", true)],
-            0,
-        );
-        assert_eq!(render("{{ passed }}", &globals), "true");
-    }
-
-    #[test]
-    fn globals_passed_false_when_any_assertion_fails() {
-        let d = descriptor("t", false);
-        let globals = build_globals(
-            &d,
-            None,
-            &[assertion("a == 1", true), assertion("b == 99", false)],
-            0,
-        );
-        assert_eq!(render("{{ passed }}", &globals), "false");
-    }
-
-    #[test]
-    fn globals_with_test_result_exposes_status_body_and_duration() {
-        let d = descriptor("t", true);
-        let r = test_result(404, "not found", 250);
-        let globals = build_globals(&d, Some(&r), &[], 0);
-        assert_eq!(render("{{ status }}|{{ body }}", &globals), "404|not found");
-        let ms: f64 = render("{{ duration_ms }}", &globals).parse().unwrap();
-        assert!((ms - 250.0).abs() < 1.0);
-    }
-
-    #[test]
-    fn globals_without_test_result_omits_http_fields() {
-        let d = descriptor("t", false);
-        let globals = build_globals(&d, None, &[], 0);
-        // liquid raises on unknown vars; use conditionals to verify keys are absent
-        assert_eq!(
-            render("{% if status %}yes{% else %}no{% endif %}", &globals),
-            "no"
-        );
-        assert_eq!(
-            render("{% if body %}yes{% else %}no{% endif %}", &globals),
-            "no"
-        );
-        assert_eq!(
-            render("{% if duration_ms %}yes{% else %}no{% endif %}", &globals),
-            "no"
-        );
-    }
-
-    #[test]
-    fn globals_assertions_array_is_iterable_with_expr_passed_and_error() {
-        let d = descriptor("t", true);
-        let r = test_result(200, "", 0);
+    fn renders_descriptor_globals_for_test_result() {
+        let renderer = LiquidRenderer;
+        let descriptor = descriptor(true);
+        let result = test_result();
         let assertions = vec![
-            assertion("status == 200", true),
-            assertion("body != ''", false),
+            assertion("status == 404u", true),
+            assertion("body.contains(\"ok\")", false),
         ];
-        let globals = build_globals(&d, Some(&r), &assertions, 0);
-        let out = render(
-            "{% for a in assertions %}{{ a.expr }}={{ a.passed }};{{ a.error }}|{% endfor %}",
-            &globals,
-        );
+
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            test_result: Some(&result),
+            assertions: &assertions,
+            test_count: 5,
+        };
+
+        let output = renderer
+            .render(
+                &template(
+                    "{{ name }}|{{ description }}|{{ passed }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
+                ),
+                &event,
+            )
+            .unwrap();
+
         assert_eq!(
-            out,
-            "status == 200=true;|body != ''=false;assertion failed|"
+            output,
+            "login|login description|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
         );
     }
 
     #[test]
-    fn template_iterator_returns_only_reports_named_in_options() {
-        let mut templates = HashMap::new();
-        templates.insert("console".to_string(), make_template(Some("C"), None));
-        templates.insert("json".to_string(), make_template(Some("J"), None));
-        templates.insert("html".to_string(), make_template(Some("H"), None));
+    fn renders_descriptor_globals_for_section_without_http_fields() {
+        let renderer = LiquidRenderer;
+        let descriptor = descriptor(false);
 
-        let active = LiquidReporter.build_template_iterator(&options_reports(&["console", "html"]), &templates);
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            test_result: None,
+            assertions: &[],
+            test_count: 0,
+        };
 
-        assert_eq!(active.len(), 2);
-        let test_tmpls: Vec<_> = active
-            .iter()
-            .map(|t| t.test_template.as_deref().unwrap_or(""))
-            .collect();
-        assert!(test_tmpls.contains(&"C"));
-        assert!(test_tmpls.contains(&"H"));
-        assert!(!test_tmpls.contains(&"J"));
+        let output = renderer
+            .render(
+                &template("{{ name }}|{% if status %}has-status{% else %}no-status{% endif %}"),
+                &event,
+            )
+            .unwrap();
+
+        assert_eq!(output, "login|no-status");
     }
 
     #[test]
-    fn template_iterator_empty_when_reports_not_configured() {
-        let mut templates = HashMap::new();
-        templates.insert("console".to_string(), make_template(Some("C"), None));
+    fn renders_error_globals() {
+        let renderer = LiquidRenderer;
+        let event = ReportEvent::Error {
+            msg: "template failed",
+        };
 
-        assert!(LiquidReporter.build_template_iterator(&options_reports(&[]), &templates).is_empty());
+        let output = renderer
+            .render(&template("ERR: {{ liquid_error_message }}"), &event)
+            .unwrap();
+
+        assert_eq!(output, "ERR: template failed");
     }
 
     #[test]
-    fn template_iterator_empty_when_no_template_name_matches() {
-        let mut templates = HashMap::new();
-        templates.insert("json".to_string(), make_template(Some("J"), None));
+    fn returns_error_for_invalid_liquid_template() {
+        let renderer = LiquidRenderer;
+        let event = ReportEvent::Title { test_count: 1 };
 
-        assert!(LiquidReporter.build_template_iterator(&options_reports(&["xml"]), &templates).is_empty());
+        let result = renderer.render(&template("{{ broken"), &event);
+
+        assert!(result.is_err());
     }
 }
