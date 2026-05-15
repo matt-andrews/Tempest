@@ -100,10 +100,9 @@ fn active_templates<'a>(
     options: &RunOptions,
 ) -> Vec<&'a ReportTemplate> {
     let report_names = options.reports.as_deref().unwrap_or_default();
-    templates
+    report_names
         .iter()
-        .filter(|(key, _)| report_names.contains(&key.as_str().to_string()))
-        .map(|(_, v)| v)
+        .filter_map(|name| templates.get(name))
         .collect()
 }
 

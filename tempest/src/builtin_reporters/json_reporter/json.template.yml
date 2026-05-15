@@ -18,7 +18,7 @@ test_template: |
 
 error_template: |
   {% if test_count > 1 %},{%endif%}
-  { "error": "{{liquid_error_message | json}}" }
+  { "error": {{ liquid_error_message | json }} }
 
 summary_template: |
     ],
