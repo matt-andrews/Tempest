@@ -1,7 +1,7 @@
 name: "HTTP Mechanics"
 description: "Explore HTTP request and response behaviors using httpbin.org"
 options:
-  base_uri: "https://httpbin.org"
+  base_uri: "{{ env.HTTPBIN_BASE_URI }}"
 
 describe:
   - name: "Status Codes"

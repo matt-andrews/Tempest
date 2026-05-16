@@ -1,7 +1,7 @@
 use crate::models::descriptor::Descriptor;
 use crate::models::run_options::RunOptions;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -10,6 +10,7 @@ pub struct DirectoryNode {
     pub options: Vec<RunOptions>,
     pub children: Vec<DirectoryNode>,
     pub dir: PathBuf,
+    pub envs: HashMap<String, String>,
 }
 
 pub struct DirectoryNodeIter<'a> {
@@ -51,6 +52,7 @@ mod tests {
             options: vec![],
             children: vec![],
             dir: PathBuf::from(path),
+            envs: HashMap::new(),
         }
     }
 
@@ -84,6 +86,7 @@ mod tests {
             options: vec![],
             children: vec![grandchild],
             dir: PathBuf::from("child1"),
+            envs: HashMap::new(),
         };
         let child2 = empty_dir("child2");
         let root = DirectoryNode {
@@ -91,6 +94,7 @@ mod tests {
             options: vec![],
             children: vec![child1, child2],
             dir: PathBuf::from("root"),
+            envs: HashMap::new(),
         };
 
         let paths: Vec<&PathBuf> = root.walk().map(|d| &d.dir).collect();
@@ -117,12 +121,14 @@ mod tests {
             options: vec![],
             children: vec![],
             dir: PathBuf::from("child"),
+            envs: HashMap::new(),
         };
         let root = DirectoryNode {
             files: vec![descriptor_with_test(), descriptor_with_test()],
             options: vec![],
             children: vec![child],
             dir: PathBuf::from("root"),
+            envs: HashMap::new(),
         };
         assert_eq!(root.test_count(), 3);
     }

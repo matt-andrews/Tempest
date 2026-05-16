@@ -51,7 +51,7 @@ pub async fn execute(
                 .unwrap_or_default(),
         );
 
-        let mut context = RunContext::default();
+        let mut context = RunContext::new("", &directory.envs);
 
         for (descriptor, ancestor_options) in directory.files.iter().flat_map(|m| m.descendants()) {
 
@@ -62,7 +62,7 @@ pub async fn execute(
 
             if let Some(file_name) = &descriptor.file{
                 if file_name.to_owned() != context.file_name{
-                    context = RunContext::default();
+                    context = RunContext::new(file_name, &directory.envs);
                 }
             }
 
