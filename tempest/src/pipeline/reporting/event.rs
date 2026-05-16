@@ -62,6 +62,7 @@ mod tests {
             test: has_test.then(TestSpec::default),
             describe: None,
             options: None,
+            file: None,
         }
     }
 

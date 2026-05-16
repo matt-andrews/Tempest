@@ -91,23 +91,15 @@ fn build_descriptor_globals(
         .collect();
 
     let mut globals = if let Some(result) = test_result {
-        liquid::object!({
-            "name": descriptor.name.clone().unwrap_or_default(),
-            "description": descriptor.description.clone().unwrap_or_default(),
-            "passed": all_passed,
-            "status": result.status.code as i64,
-            "status_message": result.status.message.clone(),
-            "body": result.body.clone(),
-            "duration_ms": result.duration.as_secs_f64() * 1000.0,
-            "test_count": test_count,
-        })
+        result.to_liquid_template()
     } else {
-        liquid::object!({
-            "name": descriptor.name.clone().unwrap_or_default(),
-            "description": descriptor.description.clone().unwrap_or_default(),
-            "passed": all_passed,
-        })
+        liquid::object!({})
     };
+
+    globals.insert("name".into(), Value::scalar(descriptor.name.clone().unwrap_or_default()));
+    globals.insert("description".into(), Value::scalar(descriptor.description.clone().unwrap_or_default()));
+    globals.insert("passed".into(), Value::scalar(all_passed));
+    globals.insert("test_count".into(), Value::scalar(test_count.to_string()));
 
     globals.insert("assertions".into(), Value::Array(assertion_values));
     globals
@@ -141,6 +133,7 @@ mod tests {
             test: has_test.then(TestSpec::default),
             describe: None,
             options: None,
+            file: None,
         }
     }
 

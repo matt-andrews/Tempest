@@ -2,14 +2,17 @@ pub mod assertions;
 mod reporting;
 pub mod runners;
 pub mod templating;
+pub mod variables;
 
 use crate::discovery::DiscoveryResult;
+use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{reporter_for, Reporter};
 use crate::pipeline::runners::{TestRunner, test_runner_for};
+use crate::pipeline::variables::{variable_assignment_for, VariableAssignment};
 
 pub async fn execute(
     discovery_result: &DiscoveryResult,
@@ -45,11 +48,19 @@ pub async fn execute(
                 .unwrap_or_default(),
         );
 
+        let mut context = RunContext::default();
+
         for (descriptor, ancestor_options) in directory.files.iter().flat_map(|m| m.descendants()) {
             let options = base_options
                 .clone()
                 .merge(ancestor_options)
                 .merge(descriptor.options.clone().unwrap_or_default());
+
+            if let Some(file_name) = &descriptor.file{
+                if file_name.to_owned() != context.file_name{
+                    context = RunContext::default();
+                }
+            }
 
             let mut assert_result: Vec<Assertion> = Vec::new();
             let mut test_result: Option<TestResult> = None;
@@ -61,6 +72,11 @@ pub async fn execute(
                     let assert_evaluator = assertion_evaluator_for(assert);
                     let result = assert_evaluator.evaluate(test_result.as_ref().unwrap());
                     assert_result.push(result.clone());
+                }
+
+                for var in test.vars.as_deref().unwrap_or_default() {
+                    let assign_var = variable_assignment_for(var);
+                    assign_var.set(test_result.as_ref().unwrap(), &mut context);
                 }
 
                 summary.push(match assert_result.iter().any(|a| !a.passed) {

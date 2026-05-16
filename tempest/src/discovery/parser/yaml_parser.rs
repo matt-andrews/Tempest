@@ -11,8 +11,9 @@ pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
         let contents = fs::read_to_string(path)?;
-        let config: Descriptor = serde_yml::from_str(&contents)?;
-        Ok(config)
+        let mut result: Descriptor = serde_yml::from_str(&contents)?;
+        result.file = Some(path.file_stem().unwrap_or_default().to_str().unwrap_or_default().to_owned());
+        Ok(result)
     }
 
     fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions> {

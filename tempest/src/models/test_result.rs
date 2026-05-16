@@ -17,6 +17,17 @@ pub struct TestResult {
     pub duration: Duration,
 }
 
+impl TestResult{
+    pub fn to_liquid_template(&self) -> liquid::Object{
+        liquid::object!({
+            "status": self.status.code as i64,
+            "status_message": self.status.message.clone(),
+            "body": self.body.clone(),
+            "duration_ms": self.duration.as_secs_f64() * 1000.0,
+        })
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Assertion {
     pub expr: String,

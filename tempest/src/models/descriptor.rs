@@ -13,6 +13,8 @@ pub struct Descriptor {
     pub describe: Option<Vec<Descriptor>>,
 
     pub options: Option<RunOptions>,
+
+    pub file: Option<String>
 }
 
 pub struct DescriptorIter<'a> {
@@ -77,6 +79,7 @@ mod tests {
             test: None,
             describe: Some(children),
             options: opts,
+            file: None,
         }
     }
 
@@ -88,6 +91,7 @@ mod tests {
             test: None,
             describe: None,
             options: opts,
+            file: None,
         }
     }
 
