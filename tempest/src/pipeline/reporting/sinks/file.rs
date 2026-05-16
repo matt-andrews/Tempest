@@ -3,8 +3,9 @@ use std::io::Write;
 use std::path::PathBuf;
 use crate::models::run_options::RunOptions;
 use crate::models::report_template::{ReportFile};
-use crate::pipeline::reporting::liquid::PARSER;
 use crate::pipeline::reporting::sinks::OutputSink;
+use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::pipeline::templating::TemplateEngine;
 
 pub struct FileSink {
     path: PathBuf,
@@ -17,11 +18,10 @@ impl FileSink {
         let obj = liquid::object!({
                 "start_timestamp": options.start_time.unwrap_or_default().unix_timestamp()
             });
-        let name = match PARSER.parse(name){
-            Ok(tmpl) => match tmpl.render(&obj) {
-                Ok(output) => &output.clone(),
-                Err(_) => name,
-            },
+        
+        let liquid = LiquidEngine;
+        let name = match liquid.render(name, &obj){
+            Ok(output) => &output.clone(),
             Err(_) => name,
         };
 

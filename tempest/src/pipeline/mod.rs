@@ -1,6 +1,7 @@
 pub mod assertions;
 mod reporting;
 pub mod runners;
+pub mod templating;
 
 use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;

@@ -17,7 +17,7 @@ pub struct TemplateReporter{
 impl TemplateReporter {
     pub fn new() -> Self{
         Self{
-            renderer: LiquidRenderer
+            renderer: LiquidRenderer::new()
         }
     }
     fn emit(

@@ -1,36 +1,21 @@
-use std::sync::LazyLock;
 use liquid_core::Value;
 use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::reporting::event::ReportEvent;
+use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::pipeline::templating::TemplateEngine;
 
-pub static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
-    use crate::utils::liquid_filters::*;
-    liquid::ParserBuilder::with_stdlib()
-        .filter(RedFilter)
-        .filter(GreenFilter)
-        .filter(YellowFilter)
-        .filter(BrightRedFilter)
-        .filter(BrightGreenFilter)
-        .filter(BrightBlueFilter)
-        .filter(BrightPurpleFilter)
-        .filter(OnRedFilter)
-        .filter(OnGreenFilter)
-        .filter(OnYellowFilter)
-        .filter(OnBrightRedFilter)
-        .filter(OnBrightGreenFilter)
-        .filter(OnBrightBlueFilter)
-        .filter(OnBrightPurpleFilter)
-        .filter(ColorStatusFilter)
-        .filter(ColorDurationFilter)
-        .filter(JsonFilter)
-        .build()
-        .expect("failed to build Liquid parser")
-});
-
-pub struct LiquidRenderer;
+pub struct LiquidRenderer{
+    engine: LiquidEngine
+}
 impl LiquidRenderer{
+    pub fn new() -> Self{
+        Self{
+            engine: LiquidEngine
+        }
+    }
+
     pub fn render(
         &self,
         template: &ReportTemplate,
@@ -38,8 +23,7 @@ impl LiquidRenderer{
     ) -> anyhow::Result<String>{
         let template_str = event.template(template).unwrap_or_default();
         let globals = self.build_globals(event);
-        let parsed = PARSER.parse(template_str)?;
-        Ok(parsed.render(&globals)?)
+        self.engine.render(template_str, &globals)
     }
 
     fn build_globals(
@@ -188,7 +172,7 @@ mod tests {
 
     #[test]
     fn renders_title_globals() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let event = ReportEvent::Title { test_count: 12 };
 
         let output = renderer
@@ -200,7 +184,7 @@ mod tests {
 
     #[test]
     fn renders_summary_globals() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let event = ReportEvent::Summary {
             passed: 8,
             failed: 2,
@@ -216,7 +200,7 @@ mod tests {
 
     #[test]
     fn renders_descriptor_globals_for_test_result() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let descriptor = descriptor(true);
         let result = test_result();
         let assertions = vec![
@@ -248,7 +232,7 @@ mod tests {
 
     #[test]
     fn renders_descriptor_globals_for_section_without_http_fields() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let descriptor = descriptor(false);
 
         let event = ReportEvent::Descriptor {
@@ -270,7 +254,7 @@ mod tests {
 
     #[test]
     fn renders_error_globals() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let event = ReportEvent::Error {
             msg: "template failed",
         };
@@ -284,7 +268,7 @@ mod tests {
 
     #[test]
     fn returns_error_for_invalid_liquid_template() {
-        let renderer = LiquidRenderer;
+        let renderer = LiquidRenderer::new();
         let event = ReportEvent::Title { test_count: 1 };
 
         let result = renderer.render(&template("{{ broken"), &event);
