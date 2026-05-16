@@ -12,6 +12,7 @@ use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{reporter_for, Reporter};
 use crate::pipeline::runners::{TestRunner, test_runner_for};
+use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::{variable_assignment_for, VariableAssignment};
 
 pub async fn execute(
@@ -20,6 +21,8 @@ pub async fn execute(
 ) -> anyhow::Result<()> {
     let report_provider = reporter_for();
     let discovered = &discovery_result.directory;
+
+    let template_engine = LiquidEngine;
 
     let top_level_options = default_options.clone().merge(
         discovered
@@ -51,6 +54,7 @@ pub async fn execute(
         let mut context = RunContext::default();
 
         for (descriptor, ancestor_options) in directory.files.iter().flat_map(|m| m.descendants()) {
+
             let options = base_options
                 .clone()
                 .merge(ancestor_options)
@@ -62,19 +66,25 @@ pub async fn execute(
                 }
             }
 
+            let mut descriptor = descriptor.to_owned();
+            descriptor.render_template(&template_engine, &liquid::object!(&context));
+
             let mut assert_result: Vec<Assertion> = Vec::new();
             let mut test_result: Option<TestResult> = None;
 
             if let Some(test) = &descriptor.test {
-                let test_runner = test_runner_for(test, &options);
+                let mut test = test.to_owned();
+                test.render_template(&template_engine, &liquid::object!(&context));
+
+                let test_runner = test_runner_for(&test, &options);
                 test_result = Some(test_runner.run().await);
-                for assert in test.assert.as_deref().unwrap_or_default() {
+                for assert in &test.assert.unwrap_or_default() {
                     let assert_evaluator = assertion_evaluator_for(assert);
                     let result = assert_evaluator.evaluate(test_result.as_ref().unwrap());
                     assert_result.push(result.clone());
                 }
 
-                for var in test.vars.as_deref().unwrap_or_default() {
+                for var in &test.vars.unwrap_or_default() {
                     let assign_var = variable_assignment_for(var);
                     assign_var.set(test_result.as_ref().unwrap(), &mut context);
                 }
@@ -86,7 +96,7 @@ pub async fn execute(
             }
 
             report_provider.report(
-                descriptor,
+                &descriptor,
                 test_result.as_ref(),
                 &assert_result,
                 &options,

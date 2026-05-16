@@ -204,3 +204,12 @@ describe:
           assert:
             - "status == 200"
             - "body == \"HTTPBIN\""
+          vars:
+            - "var_status={{ status }}"
+
+      - name: "Variable reading experiment"
+        description: "we can read variables published by other tests"
+        test:
+          route: "/status/{{ file.var_status }}"
+          assert:
+            - "status == {{ file.var_status }}"

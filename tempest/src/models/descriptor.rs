@@ -2,6 +2,8 @@ use crate::models::run_options::RunOptions;
 use crate::models::test_spec::TestSpec;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::pipeline::templating::TemplateEngine;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Descriptor {
@@ -50,6 +52,12 @@ impl Descriptor {
         let own = if self.test.is_some() { 1 } else { 0 };
         let nested: usize = self.describe.iter().flatten().map(|d| d.test_count()).sum();
         own + nested
+    }
+    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object){
+        self.name = engine.render_option_string_or_self(&self.name, obj);
+        self.description = engine.render_option_string_or_self(&self.description, obj);
+        self.tags = engine.render_vec_string_or_self(&self.tags, obj);
+        self.file = engine.render_option_string_or_self(&self.file, obj);
     }
 }
 
