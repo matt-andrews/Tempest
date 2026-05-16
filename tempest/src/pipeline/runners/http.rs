@@ -6,6 +6,8 @@ use async_trait::async_trait;
 use reqwest::header::HeaderMap;
 use std::sync::LazyLock;
 use std::time::Instant;
+use colored::Colorize;
+use crate::pipeline::reporting::{reporter_for, AnyReporter};
 
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
@@ -18,7 +20,7 @@ pub struct HttpTestRunner {
     route: String,
     #[allow(dead_code)] //we will need this field here sooner or later
     options: RunOptions,
-    test: TestSpec,
+    test: TestSpec
 }
 impl HttpTestRunner {
     pub fn new(route: &str, options: &RunOptions, test: &TestSpec) -> Self {
@@ -26,6 +28,12 @@ impl HttpTestRunner {
             route: route.to_string(),
             options: options.clone(),
             test: test.clone(),
+        }
+    }
+
+    fn print_debug(&self, message: &str) {
+        if let Some(debug) = self.options.debug && debug{
+            println!("\nDEBUG: {}", message.on_bright_yellow().black());
         }
     }
 }
@@ -50,6 +58,8 @@ impl TestRunner for HttpTestRunner {
             "HEAD" => Some(CLIENT.head(&self.route)),
             _ => None,
         };
+
+        self.print_debug(&self.route);
 
         if let Some(mut builder) = builder {
             for header in self.test.headers.clone().unwrap_or_default() {

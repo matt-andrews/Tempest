@@ -109,8 +109,6 @@ describe:
 
       - name: "Rust .gitignore template"
         description: "Fetch the actual Rust gitignore content — assert it includes target/"
-        options:
-          debug: true
         test:
           route: "/gitignore/templates/Rust"
           headers:

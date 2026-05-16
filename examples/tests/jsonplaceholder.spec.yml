@@ -103,8 +103,6 @@ describe:
 
       - name: "Get Leanne Graham"
         description: "User #1 is a fixed fixture — useful for deterministic assertions"
-        options:
-          debug: true
         test:
           route: "/users/1"
           assert:

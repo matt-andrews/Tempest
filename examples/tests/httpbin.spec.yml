@@ -189,9 +189,7 @@ describe:
             - "body.contains(\"user-agent\")"
 
       - name: "Delay endpoint (simulates a slow API)"
-        description: "Useful for testing timeout behavior; debug shows full response"
-        options:
-          debug: true
+        description: "Useful for testing timeout behavior"
         test:
           route: "/delay/1"
           assert:

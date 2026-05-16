@@ -55,7 +55,16 @@ fn collect_embedded_templates(
 
 fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
     let contents = fs::read_to_string(path)?;
-    let config: HashMap<String, String> = serde_yml::from_str(&contents)?;
+    let config: HashMap<String, String> = contents
+        .lines()
+        .filter_map(|line| {
+            let mut parts = line.split('=');
+            match (parts.next(), parts.next()) {
+                (Some(key), Some(value)) => Some((key.trim().to_owned(), value.trim().to_owned())),
+                _ => None,
+            }
+        })
+        .collect();
     Ok(config)
 }
 
@@ -84,6 +93,10 @@ pub fn discover(
         let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
             continue;
         };
+        if file_name.ends_with(".env") {
+            inherited_envs.extend(parse_env(path)?);
+            continue;
+        }
         let Some(parser) = parser::parser_for(path) else {
             continue;
         };
@@ -96,9 +109,8 @@ pub fn discover(
             let template = parser.parse_report_template(path)?;
             let key = stem.trim_end_matches(".template").to_lowercase();
             templates.insert(key, template);
-        } else if file_name.ends_with(".env"){
-            inherited_envs.extend(parse_env(path)?);
         }
+
     }
 
     let mut children = Vec::new();

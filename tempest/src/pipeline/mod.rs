@@ -13,6 +13,7 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{reporter_for, Reporter};
 use crate::pipeline::runners::{TestRunner, test_runner_for};
 use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::pipeline::templating::TemplateEngine;
 use crate::pipeline::variables::{variable_assignment_for, VariableAssignment};
 
 pub async fn execute(
@@ -54,19 +55,27 @@ pub async fn execute(
         let mut context = RunContext::new("", &directory.envs);
 
         for (descriptor, ancestor_options) in directory.files.iter().flat_map(|m| m.descendants()) {
+            let mut descriptor = descriptor.to_owned();
 
-            let options = base_options
+            if let Some(file_name) = descriptor.file.clone() {
+                let file_name = template_engine.render_string_or_self(
+                    &file_name,
+                    &liquid::object!(&context),
+                );
+
+                if file_name != context.file_name {
+                    context = RunContext::new(&file_name, &directory.envs);
+                }
+
+                descriptor.file = Some(file_name);
+            }
+
+            let mut options = base_options
                 .clone()
                 .merge(ancestor_options)
                 .merge(descriptor.options.clone().unwrap_or_default());
 
-            if let Some(file_name) = &descriptor.file{
-                if file_name.to_owned() != context.file_name{
-                    context = RunContext::new(file_name, &directory.envs);
-                }
-            }
-
-            let mut descriptor = descriptor.to_owned();
+            options.render_template(&template_engine, &liquid::object!(&context));
             descriptor.render_template(&template_engine, &liquid::object!(&context));
 
             let mut assert_result: Vec<Assertion> = Vec::new();
