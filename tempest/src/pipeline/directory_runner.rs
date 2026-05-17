@@ -73,6 +73,7 @@ impl<'a> DirectoryRunner<'a> {
         let mut saw_failure = false;
 
         loop {
+            context.retry_attempts = retry_attempts;
             let mut outcome = self
                 .execute_descriptor(descriptor, ancestor_options.clone(), context)
                 .await;

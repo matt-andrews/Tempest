@@ -6,6 +6,7 @@ pub struct RunContext {
     pub file_name: String,
     pub file: HashMap<String, String>,
     pub env: HashMap<String, String>,
+    pub retry_attempts: usize,
 }
 
 impl RunContext {
@@ -14,6 +15,7 @@ impl RunContext {
             file_name: file_name.to_owned(),
             file: HashMap::new(),
             env: env.to_owned(),
+            retry_attempts: 0,
         }
     }
 }
