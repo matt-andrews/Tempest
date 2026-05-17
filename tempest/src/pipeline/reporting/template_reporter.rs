@@ -57,6 +57,7 @@ impl Reporter for TemplateReporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
+        retry_count: usize,
     ) {
         self.emit(
             ReportEvent::Descriptor {
@@ -64,6 +65,7 @@ impl Reporter for TemplateReporter {
                 test_result,
                 assertions,
                 test_count,
+                retry_count,
             },
             options,
             templates,
@@ -84,7 +86,10 @@ impl Reporter for TemplateReporter {
             .iter()
             .filter(|f| matches!(f, SummaryResult::Failed))
             .count();
-        let flaky = 0;
+        let flaky = results
+            .iter()
+            .filter(|f| matches!(f, SummaryResult::Flaky))
+            .count();
         self.emit(
             ReportEvent::Summary {
                 passed,

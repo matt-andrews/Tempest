@@ -22,6 +22,7 @@ pub trait Reporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
+        retry_count: usize,
     );
     fn summary(
         &self,

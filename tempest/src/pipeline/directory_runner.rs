@@ -47,14 +47,55 @@ impl<'a> DirectoryRunner<'a> {
         let mut context = RunContext::new("", &self.directory.envs);
         for (descriptor, ancestor_options) in self.descriptors() {
             let outcome = self
-                .execute_descriptor(descriptor, ancestor_options, &mut context)
+                .execute_descriptor_with_retries(
+                    descriptor,
+                    ancestor_options,
+                    &mut context,
+                    summary.len(),
+                )
                 .await;
 
             if let Some(result) = &outcome.summary_result {
                 summary.push(result.to_owned());
             }
+        }
+    }
 
-            self.report_descriptor(&outcome, summary.len());
+    async fn execute_descriptor_with_retries(
+        &self,
+        descriptor: &Descriptor,
+        ancestor_options: RunOptions,
+        context: &mut RunContext,
+        test_count: usize,
+    ) -> DescriptorOutcome {
+        let context_before_descriptor = context.clone();
+        let mut retry_attempts = 0usize;
+        let mut saw_failure = false;
+
+        loop {
+            let mut outcome = self
+                .execute_descriptor(descriptor, ancestor_options.clone(), context)
+                .await;
+
+            self.report_descriptor(&outcome, test_count, retry_attempts);
+
+            match &outcome.summary_result {
+                Some(SummaryResult::Failed) => {
+                    let max_retries = usize::from(outcome.options.retries.unwrap_or(0));
+                    if retry_attempts < max_retries {
+                        retry_attempts += 1;
+                        saw_failure = true;
+                        *context = context_before_descriptor.clone();
+                        continue;
+                    }
+                }
+                Some(SummaryResult::Passed) if saw_failure => {
+                    outcome.summary_result = Some(SummaryResult::Flaky);
+                }
+                _ => {}
+            }
+
+            return outcome;
         }
     }
 
@@ -154,10 +195,8 @@ impl<'a> DirectoryRunner<'a> {
     fn apply_file_context(&self, descriptor: &mut Descriptor, context: &mut RunContext) {
         if let Some(file_name) = descriptor.file.clone() {
             if file_name != context.file_name {
-                *context = RunContext::new(
-                    file_name.to_str().unwrap_or_default(),
-                    &self.directory.envs,
-                );
+                *context =
+                    RunContext::new(file_name.to_str().unwrap_or_default(), &self.directory.envs);
             }
 
             descriptor.file = Some(file_name);
@@ -186,7 +225,7 @@ impl<'a> DirectoryRunner<'a> {
         descriptor.render_template(self.template_engine, &obj);
     }
 
-    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize) {
+    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize, retry_count: usize) {
         self.reporter.report(
             &outcome.descriptor,
             outcome.test_result.as_ref(),
@@ -194,6 +233,7 @@ impl<'a> DirectoryRunner<'a> {
             &outcome.options,
             self.templates,
             count,
+            retry_count,
         );
     }
 }
@@ -217,7 +257,7 @@ mod tests {
     use super::*;
     use crate::models::descriptor::Descriptor;
     use crate::models::directory_node::DirectoryNode;
-    use crate::models::report_template::ReportTemplate;
+    use crate::models::report_template::{ReportFile, ReportTemplate};
     use crate::models::run_options::RunOptions;
     use crate::models::summary_result::SummaryResult;
     use crate::models::test_spec::TestSpec;
@@ -595,6 +635,251 @@ mod tests {
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Passed));
         mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn retry_pass_after_failure_yields_single_flaky_summary() {
+        let mut server = Server::new_async().await;
+        let fail = server
+            .mock("GET", "/unstable")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+        let pass = server
+            .mock("GET", "/unstable")
+            .with_status(200)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let reporter = reporter_for();
+        let dir = dir_node(vec![get_descriptor(
+            &format!("{}/unstable", server.url()),
+            Some(vec!["status == 200"]),
+        )]);
+
+        let mut summary = Vec::new();
+        make_runner(
+            &dir,
+            &engine,
+            &templates,
+            &reporter,
+            RunOptions {
+                retries: Some(1),
+                ..Default::default()
+            },
+        )
+        .execute_dir(&mut summary)
+        .await;
+
+        assert_eq!(summary.len(), 1);
+        assert!(matches!(summary[0], SummaryResult::Flaky));
+        fail.assert_async().await;
+        pass.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn retry_exhaustion_yields_single_failed_summary() {
+        let mut server = Server::new_async().await;
+        let fail = server
+            .mock("GET", "/down")
+            .with_status(500)
+            .expect(3)
+            .create_async()
+            .await;
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let reporter = reporter_for();
+        let dir = dir_node(vec![get_descriptor(
+            &format!("{}/down", server.url()),
+            Some(vec!["status == 200"]),
+        )]);
+
+        let mut summary = Vec::new();
+        make_runner(
+            &dir,
+            &engine,
+            &templates,
+            &reporter,
+            RunOptions {
+                retries: Some(2),
+                ..Default::default()
+            },
+        )
+        .execute_dir(&mut summary)
+        .await;
+
+        assert_eq!(summary.len(), 1);
+        assert!(matches!(summary[0], SummaryResult::Failed));
+        fail.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn retry_attempts_are_reported_but_summary_counts_descriptor_once() {
+        let mut server = Server::new_async().await;
+        server
+            .mock("GET", "/reported")
+            .with_status(500)
+            .expect(1)
+            .create_async()
+            .await;
+        server
+            .mock("GET", "/reported")
+            .with_status(200)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let report_dir = tempfile::tempdir().unwrap();
+        let report_path = report_dir.path().join("report.txt");
+        let mut templates = HashMap::new();
+        templates.insert(
+            "file".to_string(),
+            ReportTemplate {
+                test_template: Some("{{ status }}\n".to_string()),
+                section_template: None,
+                error_template: None,
+                title_template: None,
+                summary_template: None,
+                file: Some(ReportFile {
+                    dir: Some(report_dir.path().to_path_buf()),
+                    file_name: Some("report.txt".to_string()),
+                }),
+            },
+        );
+
+        let engine = LiquidEngine;
+        let reporter = reporter_for();
+        let dir = dir_node(vec![get_descriptor(
+            &format!("{}/reported", server.url()),
+            Some(vec!["status == 200"]),
+        )]);
+
+        let mut summary = Vec::new();
+        make_runner(
+            &dir,
+            &engine,
+            &templates,
+            &reporter,
+            RunOptions {
+                reports: Some(vec!["file".to_string()]),
+                retries: Some(1),
+                ..Default::default()
+            },
+        )
+        .execute_dir(&mut summary)
+        .await;
+
+        let report = std::fs::read_to_string(report_path).unwrap();
+
+        assert_eq!(summary.len(), 1);
+        assert!(matches!(summary[0], SummaryResult::Flaky));
+        assert_eq!(report.lines().collect::<Vec<_>>(), vec!["500", "200"]);
+    }
+
+    #[tokio::test]
+    async fn failed_retry_attempts_do_not_mutate_context_for_next_attempt() {
+        let mut server = Server::new_async().await;
+        server
+            .mock("GET", "/seed")
+            .with_status(200)
+            .with_body("start")
+            .expect(1)
+            .create_async()
+            .await;
+        server
+            .mock("GET", "/unstable/start")
+            .with_status(500)
+            .with_body("bad")
+            .expect(1)
+            .create_async()
+            .await;
+        server
+            .mock("GET", "/unstable/start")
+            .with_status(200)
+            .with_body("good")
+            .expect(1)
+            .create_async()
+            .await;
+        let consumer = server
+            .mock("GET", "/items/good")
+            .with_status(200)
+            .expect(1)
+            .create_async()
+            .await;
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let reporter = reporter_for();
+        let seed = Descriptor {
+            name: Some("seed".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/seed", server.url()),
+                verb: Some("GET".to_string()),
+                assert: Some(vec!["status == 200".to_string()]),
+                vars: Some(vec!["token={{ body }}".to_string()]),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+        let unstable = Descriptor {
+            name: Some("unstable".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/unstable/{{{{ file.token }}}}", server.url()),
+                verb: Some("GET".to_string()),
+                assert: Some(vec!["status == 200".to_string()]),
+                vars: Some(vec!["token={{ body }}".to_string()]),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+        let consumer_descriptor = Descriptor {
+            name: Some("consumer".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/items/{{{{ file.token }}}}", server.url()),
+                verb: Some("GET".to_string()),
+                assert: Some(vec!["status == 200".to_string()]),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+
+        let dir = dir_node(vec![seed, unstable, consumer_descriptor]);
+        let mut summary = Vec::new();
+        make_runner(
+            &dir,
+            &engine,
+            &templates,
+            &reporter,
+            RunOptions {
+                retries: Some(1),
+                ..Default::default()
+            },
+        )
+        .execute_dir(&mut summary)
+        .await;
+
+        assert_eq!(summary.len(), 3);
+        assert!(matches!(summary[0], SummaryResult::Passed));
+        assert!(matches!(summary[1], SummaryResult::Flaky));
+        assert!(matches!(summary[2], SummaryResult::Passed));
+        consumer.assert_async().await;
     }
 
     #[tokio::test]

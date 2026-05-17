@@ -11,6 +11,7 @@ pub enum ReportEvent<'a> {
         test_result: Option<&'a TestResult>,
         assertions: &'a [Assertion],
         test_count: usize,
+        retry_count: usize,
     },
     Summary {
         passed: usize,
@@ -80,6 +81,7 @@ mod tests {
             test_result: None,
             assertions: &[],
             test_count: 1,
+            retry_count: 0,
         };
 
         assert_eq!(event.template(&template()), Some("test"));
@@ -93,6 +95,7 @@ mod tests {
             test_result: None,
             assertions: &[],
             test_count: 0,
+            retry_count: 0,
         };
 
         assert_eq!(event.template(&template()), Some("section"));
