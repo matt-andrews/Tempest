@@ -3,8 +3,8 @@ mod reporting;
 pub mod runners;
 pub mod templating;
 pub mod variables;
-pub mod pipeline_runner;
-pub mod directory_runner;
+mod pipeline_runner;
+mod directory_runner;
 
 use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;
@@ -14,7 +14,7 @@ pub async fn execute(
     discovery_result: &DiscoveryResult,
     default_options: &RunOptions,
 ) -> anyhow::Result<()>{
-    let mut run = PipelineRunner::new(discovery_result.clone(), default_options.clone());
+    let mut run = PipelineRunner::new(discovery_result, default_options.clone());
 
     run.title();
     run.walk().await;

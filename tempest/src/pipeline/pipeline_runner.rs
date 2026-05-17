@@ -5,16 +5,16 @@ use crate::pipeline::directory_runner::DirectoryRunner;
 use crate::pipeline::reporting::{reporter_for, AnyReporter, Reporter};
 use crate::pipeline::templating::liquid::LiquidEngine;
 
-pub struct PipelineRunner{
+pub struct PipelineRunner<'a> {
     reporter: AnyReporter,
     options: RunOptions,
-    discovered: DiscoveryResult,
+    discovered: &'a DiscoveryResult,
     summary: Vec<SummaryResult>,
     template_engine: LiquidEngine,
 }
 
-impl PipelineRunner {
-    pub fn new(discovery_result: DiscoveryResult, default_options: RunOptions) -> Self{
+impl<'a> PipelineRunner<'a> {
+    pub fn new(discovery_result: &'a DiscoveryResult, default_options: RunOptions) -> Self{
         let options = merge_option_chain(&default_options, &discovery_result.directory.options);
         Self{
             reporter: reporter_for(),
