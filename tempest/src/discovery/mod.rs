@@ -57,12 +57,17 @@ fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
     let contents = fs::read_to_string(path)?;
     let config: HashMap<String, String> = contents
         .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            line.split_once('#')
+                .map_or(line, |(before, _)| before)
+                .trim()
+        })
+        .filter(|line| !line.is_empty())
         .filter_map(|line| {
-            let mut parts = line.split('=');
-            match (parts.next(), parts.next()) {
-                (Some(key), Some(value)) => Some((key.trim().to_owned(), value.trim().to_owned())),
-                _ => None,
-            }
+            line.split_once('=')
+                .map(|(key, value)| (key.trim().to_owned(), value.trim().to_owned()))
         })
         .collect();
     Ok(config)
