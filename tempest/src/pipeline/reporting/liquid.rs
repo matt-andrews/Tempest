@@ -1,18 +1,18 @@
-use liquid_core::Value;
 use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::reporting::event::ReportEvent;
-use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::templating::TemplateEngine;
+use crate::pipeline::templating::liquid::LiquidEngine;
+use liquid_core::Value;
 
-pub struct LiquidRenderer{
-    engine: LiquidEngine
+pub struct LiquidRenderer {
+    engine: LiquidEngine,
 }
-impl LiquidRenderer{
-    pub fn new() -> Self{
-        Self{
-            engine: LiquidEngine
+impl LiquidRenderer {
+    pub fn new() -> Self {
+        Self {
+            engine: LiquidEngine,
         }
     }
 
@@ -20,21 +20,18 @@ impl LiquidRenderer{
         &self,
         template: &ReportTemplate,
         event: &ReportEvent<'_>,
-    ) -> anyhow::Result<String>{
+    ) -> anyhow::Result<String> {
         let template_str = event.template(template).unwrap_or_default();
         let globals = self.build_globals(event);
         self.engine.render(template_str, &globals)
     }
 
-    fn build_globals(
-        &self,
-        event: &ReportEvent<'_>,
-    ) -> liquid::Object {
+    fn build_globals(&self, event: &ReportEvent<'_>) -> liquid::Object {
         match event {
             ReportEvent::Title { test_count } => {
                 liquid::object!({
-                "test_count": *test_count,
-            })
+                    "test_count": *test_count,
+                })
             }
 
             ReportEvent::Summary {
@@ -43,10 +40,10 @@ impl LiquidRenderer{
                 flaky,
             } => {
                 liquid::object!({
-                "passed": *passed,
-                "failed": *failed,
-                "flaky": *flaky,
-            })
+                    "passed": *passed,
+                    "failed": *failed,
+                    "flaky": *flaky,
+                })
             }
 
             ReportEvent::Descriptor {
@@ -54,16 +51,9 @@ impl LiquidRenderer{
                 test_result,
                 assertions,
                 test_count,
-            } => build_descriptor_globals(
-                descriptor,
-                *test_result,
-                assertions,
-                *test_count,
-            ),
+            } => build_descriptor_globals(descriptor, *test_result, assertions, *test_count),
 
-            ReportEvent::Error {
-                msg
-            } => {
+            ReportEvent::Error { msg } => {
                 liquid::object!({
                     "liquid_error_message": msg
                 })
@@ -96,8 +86,14 @@ fn build_descriptor_globals(
         liquid::object!({})
     };
 
-    globals.insert("name".into(), Value::scalar(descriptor.name.clone().unwrap_or_default()));
-    globals.insert("description".into(), Value::scalar(descriptor.description.clone().unwrap_or_default()));
+    globals.insert(
+        "name".into(),
+        Value::scalar(descriptor.name.clone().unwrap_or_default()),
+    );
+    globals.insert(
+        "description".into(),
+        Value::scalar(descriptor.description.clone().unwrap_or_default()),
+    );
     globals.insert("passed".into(), Value::scalar(all_passed));
     globals.insert("test_count".into(), Value::scalar(test_count.to_string()));
 
@@ -110,8 +106,8 @@ mod tests {
     use super::*;
     use crate::models::descriptor::Descriptor;
     use crate::models::report_template::ReportTemplate;
-    use crate::models::test_spec::TestSpec;
     use crate::models::test_result::{Assertion, TempestStatusCode, TestResult};
+    use crate::models::test_spec::TestSpec;
     use std::time::Duration;
 
     fn template(test_template: &str) -> ReportTemplate {

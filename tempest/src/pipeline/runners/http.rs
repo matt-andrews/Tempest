@@ -1,12 +1,12 @@
 use crate::models::run_options::RunOptions;
-use crate::models::test_spec::TestSpec;
 use crate::models::test_result::{TempestStatusCode, TestResult};
+use crate::models::test_spec::TestSpec;
 use crate::pipeline::runners::TestRunner;
 use async_trait::async_trait;
+use colored::Colorize;
 use reqwest::header::HeaderMap;
 use std::sync::LazyLock;
 use std::time::Instant;
-use colored::Colorize;
 
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
@@ -19,7 +19,7 @@ pub struct HttpTestRunner {
     route: String,
     #[allow(dead_code)] //we will need this field here sooner or later
     options: RunOptions,
-    test: TestSpec
+    test: TestSpec,
 }
 impl HttpTestRunner {
     pub fn new(route: &str, options: &RunOptions, test: &TestSpec) -> Self {
@@ -31,7 +31,9 @@ impl HttpTestRunner {
     }
 
     fn print_debug(&self, message: &str) {
-        if let Some(debug) = self.options.debug && debug{
+        if let Some(debug) = self.options.debug
+            && debug
+        {
             println!("\nDEBUG: {}", message.on_bright_yellow().black());
         }
     }
@@ -358,8 +360,7 @@ mod tests {
     async fn connection_error_produces_504_status() {
         // Port 1 is reserved and will always be refused.
         let test = test_model("http://127.0.0.1:1/nope", Some("GET"));
-        let cap =
-            HttpTestRunner::new("http://127.0.0.1:1/nope", &RunOptions::default(), &test);
+        let cap = HttpTestRunner::new("http://127.0.0.1:1/nope", &RunOptions::default(), &test);
         let result = cap.run().await;
 
         assert_eq!(result.status.code, 504);

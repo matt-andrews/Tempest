@@ -17,8 +17,8 @@ pub struct TestResult {
     pub duration: Duration,
 }
 
-impl TestResult{
-    pub fn to_liquid_template(&self) -> liquid::Object{
+impl TestResult {
+    pub fn to_liquid_template(&self) -> liquid::Object {
         liquid::object!({
             "status": self.status.code as i64,
             "status_message": self.status.message.clone(),

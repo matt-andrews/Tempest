@@ -3,9 +3,9 @@ mod models;
 pub mod pipeline;
 mod utils;
 
-use std::collections::HashMap;
 use crate::models::run_options::RunOptions;
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Parser)]

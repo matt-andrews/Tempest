@@ -1,6 +1,6 @@
 use crate::models::run_options::RunOptions;
-use crate::models::test_spec::TestSpec;
 use crate::models::test_result::TestResult;
+use crate::models::test_spec::TestSpec;
 use crate::pipeline::runners::http::HttpTestRunner;
 use async_trait::async_trait;
 use enum_dispatch::enum_dispatch;

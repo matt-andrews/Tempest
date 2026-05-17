@@ -2,7 +2,7 @@ use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::directory_runner::DirectoryRunner;
-use crate::pipeline::reporting::{reporter_for, AnyReporter, Reporter};
+use crate::pipeline::reporting::{AnyReporter, Reporter, reporter_for};
 use crate::pipeline::templating::liquid::LiquidEngine;
 
 pub struct PipelineRunner<'a> {
@@ -14,9 +14,9 @@ pub struct PipelineRunner<'a> {
 }
 
 impl<'a> PipelineRunner<'a> {
-    pub fn new(discovery_result: &'a DiscoveryResult, default_options: RunOptions) -> Self{
+    pub fn new(discovery_result: &'a DiscoveryResult, default_options: RunOptions) -> Self {
         let options = merge_option_chain(&default_options, &discovery_result.directory.options);
-        Self{
+        Self {
             reporter: reporter_for(),
             options,
             discovered: discovery_result,
@@ -24,7 +24,7 @@ impl<'a> PipelineRunner<'a> {
             template_engine: LiquidEngine,
         }
     }
-    pub fn title(&self){
+    pub fn title(&self) {
         self.reporter.title(
             &self.options,
             &self.discovered.templates,
@@ -32,16 +32,13 @@ impl<'a> PipelineRunner<'a> {
         );
     }
 
-    pub fn summary(&self){
-        self.reporter.summary(
-            &self.options,
-            &self.discovered.templates,
-            &self.summary
-        );
+    pub fn summary(&self) {
+        self.reporter
+            .summary(&self.options, &self.discovered.templates, &self.summary);
     }
 
-    pub async fn walk(&mut self){
-        for directory in self.discovered.directory.walk(){
+    pub async fn walk(&mut self) {
+        for directory in self.discovered.directory.walk() {
             let base_options = merge_option_chain(&self.options, &directory.options);
 
             let run = DirectoryRunner::new(

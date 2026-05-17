@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::report_template::ReportTemplate;
@@ -9,11 +8,12 @@ use crate::models::test_result::{Assertion, TestResult};
 use crate::models::test_spec::TestSpec;
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{AnyReporter, Reporter};
-use crate::pipeline::runners::{test_runner_for};
-use crate::pipeline::templating::liquid::LiquidEngine;
-use crate::pipeline::templating::TemplateEngine;
-use crate::pipeline::variables::{variable_assignment_for, VariableAssignment};
 use crate::pipeline::runners::TestRunner;
+use crate::pipeline::runners::test_runner_for;
+use crate::pipeline::templating::TemplateEngine;
+use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
+use std::collections::HashMap;
 
 pub struct DirectoryRunner<'a> {
     reporter: &'a AnyReporter,
@@ -30,8 +30,8 @@ impl<'a> DirectoryRunner<'a> {
         template_engine: &'a LiquidEngine,
         templates: &'a HashMap<String, ReportTemplate>,
         reporter: &'a AnyReporter,
-    ) -> Self{
-        Self{
+    ) -> Self {
+        Self {
             reporter,
             base_options,
             directory,
@@ -39,7 +39,7 @@ impl<'a> DirectoryRunner<'a> {
             template_engine,
         }
     }
-    pub async fn execute_dir(&self, summary: &mut Vec<SummaryResult>){
+    pub async fn execute_dir(&self, summary: &mut Vec<SummaryResult>) {
         let mut context = RunContext::new("", &self.directory.envs);
         for (descriptor, ancestor_options) in self.descriptors() {
             let outcome = self
@@ -58,7 +58,7 @@ impl<'a> DirectoryRunner<'a> {
         &self,
         descriptor: &Descriptor,
         ancestor_options: RunOptions,
-        context: &mut RunContext
+        context: &mut RunContext,
     ) -> DescriptorOutcome {
         let mut descriptor = descriptor.to_owned();
 
@@ -68,7 +68,9 @@ impl<'a> DirectoryRunner<'a> {
 
         self.render_inputs(&mut descriptor, &mut options, context);
 
-        let test_run = self.run_test_if_present(&descriptor, &options, context).await;
+        let test_run = self
+            .run_test_if_present(&descriptor, &options, context)
+            .await;
 
         DescriptorOutcome {
             descriptor,
@@ -83,7 +85,7 @@ impl<'a> DirectoryRunner<'a> {
         &self,
         descriptor: &Descriptor,
         options: &RunOptions,
-        context: &mut RunContext
+        context: &mut RunContext,
     ) -> TestRunOutcome {
         let Some(test) = &descriptor.test else {
             return TestRunOutcome {
@@ -94,7 +96,7 @@ impl<'a> DirectoryRunner<'a> {
         };
 
         let mut test = test.to_owned();
-        test.render_template(&self.template_engine, &liquid::object!(&context));
+        test.render_template(self.template_engine, &liquid::object!(&context));
 
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
@@ -136,14 +138,11 @@ impl<'a> DirectoryRunner<'a> {
         self.directory.files.iter().flat_map(|m| m.descendants())
     }
 
-    fn apply_file_context(&self,
-                          descriptor: &mut Descriptor,
-                          context: &mut RunContext) {
+    fn apply_file_context(&self, descriptor: &mut Descriptor, context: &mut RunContext) {
         if let Some(file_name) = descriptor.file.clone() {
-            let file_name = self.template_engine.render_string_or_self(
-                &file_name,
-                &liquid::object!(&context),
-            );
+            let file_name = self
+                .template_engine
+                .render_string_or_self(&file_name, &liquid::object!(&context));
 
             if file_name != context.file_name {
                 *context = RunContext::new(&file_name, &self.directory.envs);
@@ -168,21 +167,21 @@ impl<'a> DirectoryRunner<'a> {
         &self,
         descriptor: &mut Descriptor,
         options: &mut RunOptions,
-        context: &RunContext
+        context: &RunContext,
     ) {
         let obj = liquid::object!(&context);
-        options.render_template(&self.template_engine, &obj);
-        descriptor.render_template(&self.template_engine, &obj);
+        options.render_template(self.template_engine, &obj);
+        descriptor.render_template(self.template_engine, &obj);
     }
 
-    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize){
+    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize) {
         self.reporter.report(
             &outcome.descriptor,
             outcome.test_result.as_ref(),
             &outcome.assertions,
             &outcome.options,
-            &self.templates,
-            count
+            self.templates,
+            count,
         );
     }
 }
@@ -289,7 +288,11 @@ mod tests {
     #[tokio::test]
     async fn passing_assertion_yields_passed_summary() {
         let mut server = Server::new_async().await;
-        server.mock("GET", "/ok").with_status(200).create_async().await;
+        server
+            .mock("GET", "/ok")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
@@ -311,7 +314,11 @@ mod tests {
     #[tokio::test]
     async fn failing_assertion_yields_failed_summary() {
         let mut server = Server::new_async().await;
-        server.mock("GET", "/ok").with_status(200).create_async().await;
+        server
+            .mock("GET", "/ok")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
@@ -333,15 +340,16 @@ mod tests {
     #[tokio::test]
     async fn test_without_assertions_yields_passed_summary() {
         let mut server = Server::new_async().await;
-        server.mock("GET", "/ok").with_status(200).create_async().await;
+        server
+            .mock("GET", "/ok")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
         let reporter = reporter_for();
-        let dir = dir_node(vec![get_descriptor(
-            &format!("{}/ok", server.url()),
-            None,
-        )]);
+        let dir = dir_node(vec![get_descriptor(&format!("{}/ok", server.url()), None)]);
 
         let mut summary = Vec::new();
         make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
@@ -355,8 +363,16 @@ mod tests {
     #[tokio::test]
     async fn multiple_descriptors_produce_multiple_summary_entries() {
         let mut server = Server::new_async().await;
-        server.mock("GET", "/a").with_status(200).create_async().await;
-        server.mock("GET", "/b").with_status(404).create_async().await;
+        server
+            .mock("GET", "/a")
+            .with_status(200)
+            .create_async()
+            .await;
+        server
+            .mock("GET", "/b")
+            .with_status(404)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
@@ -379,7 +395,11 @@ mod tests {
     #[tokio::test]
     async fn base_uri_is_prepended_to_relative_route() {
         let mut server = Server::new_async().await;
-        let mock = server.mock("GET", "/items").with_status(200).create_async().await;
+        let mock = server
+            .mock("GET", "/items")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
@@ -392,7 +412,10 @@ mod tests {
             &engine,
             &templates,
             &reporter,
-            RunOptions { base_uri: Some(server.url()), ..Default::default() },
+            RunOptions {
+                base_uri: Some(server.url()),
+                ..Default::default()
+            },
         )
         .execute_dir(&mut summary)
         .await;
@@ -405,7 +428,11 @@ mod tests {
     #[tokio::test]
     async fn descriptor_options_override_base_options() {
         let mut server = Server::new_async().await;
-        let mock = server.mock("GET", "/path").with_status(200).create_async().await;
+        let mock = server
+            .mock("GET", "/path")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
@@ -435,7 +462,10 @@ mod tests {
             &engine,
             &templates,
             &reporter,
-            RunOptions { base_uri: Some("http://127.0.0.1:1".to_string()), ..Default::default() },
+            RunOptions {
+                base_uri: Some("http://127.0.0.1:1".to_string()),
+                ..Default::default()
+            },
         )
         .execute_dir(&mut summary)
         .await;
@@ -507,7 +537,11 @@ mod tests {
     #[tokio::test]
     async fn env_vars_are_available_in_route_templates() {
         let mut server = Server::new_async().await;
-        let mock = server.mock("GET", "/api").with_status(200).create_async().await;
+        let mock = server
+            .mock("GET", "/api")
+            .with_status(200)
+            .create_async()
+            .await;
 
         let engine = LiquidEngine;
         let templates = HashMap::new();

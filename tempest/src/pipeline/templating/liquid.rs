@@ -1,6 +1,6 @@
+use crate::pipeline::templating::TemplateEngine;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use crate::pipeline::templating::TemplateEngine;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::pipeline::templating::liquid_filters::*;
@@ -34,49 +34,48 @@ impl TemplateEngine for LiquidEngine {
         Ok(parsed.render(context)?)
     }
 
-    fn render_string_or_self(&self, source: &str, context: &liquid::Object ) -> String {
-       self.render(source, context).unwrap_or(source.to_owned())
+    fn render_string_or_self(&self, source: &str, context: &liquid::Object) -> String {
+        self.render(source, context).unwrap_or(source.to_owned())
     }
 
     fn render_option_string_or_self(
         &self,
         source: &Option<String>,
-        context: &liquid::Object
+        context: &liquid::Object,
     ) -> Option<String> {
-        match source {
-            Some(value) => Some(self.render(&value, context).unwrap_or(value.to_owned())),
-            None => None
-        }
+        source
+            .as_ref()
+            .map(|value| self.render(value, context).unwrap_or(value.to_owned()))
     }
 
     fn render_vec_string_or_self(
         &self,
         source: &Option<Vec<String>>,
-        context: &liquid::Object
+        context: &liquid::Object,
     ) -> Option<Vec<String>> {
-        match source {
-            Some(values) => Some(
-                values.iter()
-                    .map(|m| self.render(m, context).unwrap_or(m.to_owned()))
-                    .collect()),
-            None => None,
-        }
+        source.as_ref().map(|values| {
+            values
+                .iter()
+                .map(|m| self.render(m, context).unwrap_or(m.to_owned()))
+                .collect()
+        })
     }
 
     fn render_hashmap_string_or_self(
         &self,
         source: &Option<HashMap<String, String>>,
-        context:
-        &liquid::Object
+        context: &liquid::Object,
     ) -> Option<HashMap<String, String>> {
-        match source {
-            Some(values) => Some(
-                values.iter()
-                    .map(|(key, value)| (
+        source.as_ref().map(|values| {
+            values
+                .iter()
+                .map(|(key, value)| {
+                    (
                         self.render(key, context).unwrap_or(key.to_owned()),
-                        self.render(value, context).unwrap_or(value.to_owned()))
-                    ).collect()),
-            None => None,
-        }
+                        self.render(value, context).unwrap_or(value.to_owned()),
+                    )
+                })
+                .collect()
+        })
     }
 }

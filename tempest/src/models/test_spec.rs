@@ -1,7 +1,7 @@
+use crate::pipeline::templating::TemplateEngine;
+use crate::pipeline::templating::liquid::LiquidEngine;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use crate::pipeline::templating::liquid::LiquidEngine;
-use crate::pipeline::templating::TemplateEngine;
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct TestSpec {
@@ -15,8 +15,8 @@ pub struct TestSpec {
     pub headers: Option<HashMap<String, String>>,
 }
 
-impl TestSpec{
-    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object){
+impl TestSpec {
+    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
         self.route = engine.render_string_or_self(&self.route, obj);
 
         self.verb = engine.render_option_string_or_self(&self.verb, obj);

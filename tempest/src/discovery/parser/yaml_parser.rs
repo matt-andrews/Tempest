@@ -1,8 +1,8 @@
 use crate::discovery::BUILTIN_REPORTERS;
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use include_dir::{Dir, File};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -341,11 +341,7 @@ mod tests {
 
         let template_file = console_dir
             .files()
-            .find(|f| {
-                f.path()
-                    .file_name()
-                    .and_then(|n| n.to_str()) == Some("console.template.yml")
-            })
+            .find(|f| f.path().file_name().and_then(|n| n.to_str()) == Some("console.template.yml"))
             .expect("console.template.yml should be embedded");
 
         let result = YamlFileParser
@@ -372,11 +368,7 @@ mod tests {
 
         let template_file = console_dir
             .files()
-            .find(|f| {
-                f.path()
-                    .file_name()
-                    .and_then(|n| n.to_str()) == Some("console.template.yml")
-            })
+            .find(|f| f.path().file_name().and_then(|n| n.to_str()) == Some("console.template.yml"))
             .expect("console.template.yml should be embedded");
 
         let result = YamlFileParser

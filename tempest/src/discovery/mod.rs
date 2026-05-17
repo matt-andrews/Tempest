@@ -1,8 +1,8 @@
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
@@ -110,7 +110,6 @@ pub fn discover(
             let key = stem.trim_end_matches(".template").to_lowercase();
             templates.insert(key, template);
         }
-
     }
 
     let mut children = Vec::new();
@@ -346,7 +345,11 @@ mod tests {
 
     #[test]
     fn discover_returns_error_for_nonexistent_directory() {
-        let result = discover(&PathBuf::from("/no/such/directory/exists"), None, &mut HashMap::new());
+        let result = discover(
+            &PathBuf::from("/no/such/directory/exists"),
+            None,
+            &mut HashMap::new(),
+        );
         assert!(result.is_err());
     }
 

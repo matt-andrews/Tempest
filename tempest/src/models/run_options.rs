@@ -1,7 +1,7 @@
+use crate::pipeline::templating::TemplateEngine;
+use crate::pipeline::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
-use crate::pipeline::templating::liquid::LiquidEngine;
-use crate::pipeline::templating::TemplateEngine;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
@@ -29,7 +29,7 @@ impl RunOptions {
             start_time: other.start_time.or(self.start_time),
         }
     }
-    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object){
+    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
         self.base_uri = engine.render_option_string_or_self(&self.base_uri, obj);
     }
 }
