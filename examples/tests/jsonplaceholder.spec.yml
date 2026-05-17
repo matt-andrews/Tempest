@@ -1,7 +1,7 @@
 name: "REST API Patterns"
 description: "Full CRUD lifecycle tests against JSONPlaceholder — a free fake REST API"
 options:
-  base_uri: "https://jsonplaceholder.typicode.com"
+  base_uri: "{{ env.JSON_PLACEHOLDER_BASE_URI }}"
 
 describe:
   - name: "Posts"
@@ -103,8 +103,6 @@ describe:
 
       - name: "Get Leanne Graham"
         description: "User #1 is a fixed fixture — useful for deterministic assertions"
-        options:
-          debug: true
         test:
           route: "/users/1"
           assert:

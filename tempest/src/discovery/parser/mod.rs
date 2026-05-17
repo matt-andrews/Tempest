@@ -2,8 +2,8 @@ pub mod yaml_parser;
 
 use crate::discovery::parser::yaml_parser::YamlFileParser;
 use crate::models::descriptor::Descriptor;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use enum_dispatch::enum_dispatch;
 use include_dir::{Dir, File};
 use std::path::Path;

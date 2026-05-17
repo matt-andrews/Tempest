@@ -1,16 +1,18 @@
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
+use std::fs;
 use std::path::Path;
 
 mod parser;
 
 static BUILTIN_REPORTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/builtin_reporters");
 
+#[derive(Debug, Clone)]
 pub struct DiscoveryResult {
     pub directory: DirectoryNode,
     pub templates: HashMap<String, ReportTemplate>,
@@ -51,11 +53,32 @@ fn collect_embedded_templates(
     Ok(())
 }
 
+fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
+    let contents = fs::read_to_string(path)?;
+    let config: HashMap<String, String> = contents
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .map(|line| {
+            line.split_once('#')
+                .map_or(line, |(before, _)| before)
+                .trim()
+        })
+        .filter(|line| !line.is_empty())
+        .filter_map(|line| {
+            line.split_once('=')
+                .map(|(key, value)| (key.trim().to_owned(), value.trim().to_owned()))
+        })
+        .collect();
+    Ok(config)
+}
+
 pub fn discover(
     dir: &Path,
     inherited_configs: Option<Vec<RunOptions>>,
+    inherited_envs: &mut HashMap<String, String>,
 ) -> anyhow::Result<DiscoveryResult> {
-    let (dirs, files): (Vec<_>, Vec<_>) = std::fs::read_dir(dir)?
+    let (dirs, files): (Vec<_>, Vec<_>) = fs::read_dir(dir)?
         .filter_map(|e| e.ok())
         .partition(|e| e.path().is_dir());
 
@@ -72,6 +95,13 @@ pub fn discover(
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
+        let Some(file_name) = path.file_name().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if file_name.ends_with(".env") {
+            inherited_envs.extend(parse_env(path)?);
+            continue;
+        }
         let Some(parser) = parser::parser_for(path) else {
             continue;
         };
@@ -89,7 +119,7 @@ pub fn discover(
 
     let mut children = Vec::new();
     for entry in dirs {
-        let sub = discover(&entry.path(), Some(options.clone()))?;
+        let sub = discover(&entry.path(), Some(options.clone()), inherited_envs)?;
         children.push(sub.directory);
         templates.extend(sub.templates);
     }
@@ -100,6 +130,7 @@ pub fn discover(
             options,
             children,
             dir: dir.to_path_buf(),
+            envs: inherited_envs.clone(),
         },
         templates,
     })
@@ -116,7 +147,7 @@ mod tests {
     #[test]
     fn discover_empty_directory_has_no_files_options_or_children() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
         assert!(result.directory.children.is_empty());
@@ -125,7 +156,7 @@ mod tests {
     #[test]
     fn discover_result_dir_matches_input_path() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.dir, dir.path());
     }
 
@@ -138,7 +169,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.files.len(), 1);
         assert_eq!(result.directory.files[0].name.as_deref(), Some("API Test"));
     }
@@ -149,7 +180,7 @@ mod tests {
         fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
         fs::write(dir.path().join("b.spec.yml"), "test:\n  route: /b\n").unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.files.len(), 2);
     }
 
@@ -162,7 +193,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -179,7 +210,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(result.templates.contains_key("custom"));
         assert_eq!(
             result.templates["custom"].test_template.as_deref(),
@@ -196,7 +227,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(
             result.templates.contains_key("myreport"),
             "key should be lowercased"
@@ -210,7 +241,7 @@ mod tests {
         fs::write(dir.path().join("data.json"), "{}").unwrap();
         fs::write(dir.path().join("config.toml"), "[section]").unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -222,7 +253,7 @@ mod tests {
         fs::write(dir.path().join("data.yml"), "key: value\n").unwrap();
         fs::write(dir.path().join("setup.yaml"), "key: value\n").unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -238,7 +269,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.children.len(), 1);
         assert_eq!(result.directory.children[0].files.len(), 1);
         assert_eq!(
@@ -254,7 +285,7 @@ mod tests {
         fs::create_dir_all(&deep).unwrap();
         fs::write(deep.join("deep.spec.yml"), "test:\n  route: /deep\n").unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         // result -> child "a" -> child "b" -> child "c" with spec
         let a = &result.directory.children[0];
         let b = &a.children[0];
@@ -275,7 +306,7 @@ mod tests {
         .unwrap();
         fs::write(sub.join("test.spec.yml"), "test:\n  route: /test\n").unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         let child = &result.directory.children[0];
         assert_eq!(child.options.len(), 1);
         assert_eq!(child.options[0].base_uri.as_deref(), Some("http://parent"));
@@ -291,7 +322,7 @@ mod tests {
             start_time: None,
         };
 
-        let result = discover(dir.path(), Some(vec![inherited])).unwrap();
+        let result = discover(dir.path(), Some(vec![inherited]), &mut HashMap::new()).unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -310,7 +341,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(
             result.templates.contains_key("child"),
             "child templates should bubble up"
@@ -319,14 +350,18 @@ mod tests {
 
     #[test]
     fn discover_returns_error_for_nonexistent_directory() {
-        let result = discover(&PathBuf::from("/no/such/directory/exists"), None);
+        let result = discover(
+            &PathBuf::from("/no/such/directory/exists"),
+            None,
+            &mut HashMap::new(),
+        );
         assert!(result.is_err());
     }
 
     #[test]
     fn discover_always_includes_builtin_templates_even_in_empty_dir() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(
             result.templates.contains_key("console"),
             "built-in templates should always be present"
@@ -343,7 +378,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None).unwrap();
+        let result = discover(dir.path(), None, &mut HashMap::new()).unwrap();
         assert!(result.templates.contains_key("console"));
         assert!(result.templates.contains_key("myreport"));
     }

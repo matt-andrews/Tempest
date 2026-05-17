@@ -5,6 +5,7 @@ mod utils;
 
 use crate::models::run_options::RunOptions;
 use clap::{Parser, Subcommand};
+use std::collections::HashMap;
 use std::path::PathBuf;
 
 #[derive(Parser)]
@@ -30,7 +31,7 @@ async fn main() -> anyhow::Result<()> {
             let mut options = RunOptions::default_debug_false();
             options.reports = Some(vec!["console".to_string()]);
 
-            let discovery = &discovery::discover(&path, None)?;
+            let discovery = &discovery::discover(&path, None, &mut HashMap::new())?;
             pipeline::execute(discovery, &options).await?;
         }
     }

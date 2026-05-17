@@ -1,8 +1,8 @@
 use colored::Colorize;
-use serde_json;
 use liquid_core::model::{ScalarCow, Value};
 use liquid_core::parser::{FilterArguments, ParameterReflection};
 use liquid_core::{Filter, FilterReflection, ParseFilter, Runtime, ValueView};
+use serde_json;
 
 macro_rules! color_filter {
     ($parser:ident, $filter:ident, $name:literal, $method:ident) => {
@@ -223,22 +223,32 @@ impl std::fmt::Display for JsonFilterImpl {
     }
 }
 impl FilterReflection for JsonFilter {
-    fn name(&self) -> &'static str { "json" }
-    fn description(&self) -> &'static str { "Serialize value as a JSON string" }
-    fn positional_parameters(&self) -> &'static [ParameterReflection] { &[] }
-    fn keyword_parameters(&self) -> &'static [ParameterReflection] { &[] }
+    fn name(&self) -> &'static str {
+        "json"
+    }
+    fn description(&self) -> &'static str {
+        "Serialize value as a JSON string"
+    }
+    fn positional_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
+    fn keyword_parameters(&self) -> &'static [ParameterReflection] {
+        &[]
+    }
 }
 impl ParseFilter for JsonFilter {
     fn parse(&self, _: FilterArguments) -> liquid_core::Result<Box<dyn Filter>> {
         Ok(Box::new(JsonFilterImpl))
     }
-    fn reflection(&self) -> &dyn FilterReflection { self }
+    fn reflection(&self) -> &dyn FilterReflection {
+        self
+    }
 }
 impl Filter for JsonFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
         let s = input.to_kstr().into_string();
-        let encoded = serde_json::to_string(&s)
-            .map_err(|e| liquid_core::Error::with_msg(e.to_string()))?;
+        let encoded =
+            serde_json::to_string(&s).map_err(|e| liquid_core::Error::with_msg(e.to_string()))?;
         Ok(Value::Scalar(ScalarCow::from(encoded)))
     }
 }

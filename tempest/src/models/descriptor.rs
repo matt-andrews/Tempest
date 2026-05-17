@@ -1,5 +1,7 @@
 use crate::models::run_options::RunOptions;
 use crate::models::test_spec::TestSpec;
+use crate::pipeline::templating::TemplateEngine;
+use crate::pipeline::templating::liquid::LiquidEngine;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 
@@ -13,6 +15,8 @@ pub struct Descriptor {
     pub describe: Option<Vec<Descriptor>>,
 
     pub options: Option<RunOptions>,
+
+    pub file: Option<String>,
 }
 
 pub struct DescriptorIter<'a> {
@@ -49,6 +53,12 @@ impl Descriptor {
         let nested: usize = self.describe.iter().flatten().map(|d| d.test_count()).sum();
         own + nested
     }
+    pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
+        self.name = engine.render_option_string_or_self(&self.name, obj);
+        self.description = engine.render_option_string_or_self(&self.description, obj);
+        self.tags = engine.render_vec_string_or_self(&self.tags, obj);
+        self.file = engine.render_option_string_or_self(&self.file, obj);
+    }
 }
 
 #[cfg(test)]
@@ -65,11 +75,7 @@ mod tests {
         }
     }
 
-    fn group(
-        name: &str,
-        opts: Option<RunOptions>,
-        children: Vec<Descriptor>,
-    ) -> Descriptor {
+    fn group(name: &str, opts: Option<RunOptions>, children: Vec<Descriptor>) -> Descriptor {
         Descriptor {
             name: Some(name.to_string()),
             description: None,
@@ -77,6 +83,7 @@ mod tests {
             test: None,
             describe: Some(children),
             options: opts,
+            file: None,
         }
     }
 
@@ -88,6 +95,7 @@ mod tests {
             test: None,
             describe: None,
             options: opts,
+            file: None,
         }
     }
 

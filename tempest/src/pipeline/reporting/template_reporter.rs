@@ -1,23 +1,23 @@
-use std::collections::HashMap;
 use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
+use crate::pipeline::reporting::Reporter;
 use crate::pipeline::reporting::event::ReportEvent;
 use crate::pipeline::reporting::liquid::LiquidRenderer;
-use crate::pipeline::reporting::Reporter;
-use crate::pipeline::reporting::sinks::output_sink_for;
 use crate::pipeline::reporting::sinks::OutputSink;
+use crate::pipeline::reporting::sinks::output_sink_for;
+use std::collections::HashMap;
 
-pub struct TemplateReporter{
-    renderer: LiquidRenderer
+pub struct TemplateReporter {
+    renderer: LiquidRenderer,
 }
 
 impl TemplateReporter {
-    pub fn new() -> Self{
-        Self{
-            renderer: LiquidRenderer
+    pub fn new() -> Self {
+        Self {
+            renderer: LiquidRenderer::new(),
         }
     }
     fn emit(
@@ -25,21 +25,26 @@ impl TemplateReporter {
         event: ReportEvent<'_>,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
-    ){
-       for template in active_templates(templates, options){
-           let sink = output_sink_for(template, options);
-           match self.renderer.render(template, &event){
-               Ok(output) => sink.print(&output),
-               Err(err) => {
-                   match self.renderer.render(template, &ReportEvent::Error {
-                       msg: &err.to_string(),
-                   }){
-                       Ok(fallback) => sink.print(&fallback),
-                       Err(err) => sink.println(&format!("Failed to render and fallback: {}", err))
-                   };
-               }
-           }
-       }
+    ) {
+        for template in active_templates(templates, options) {
+            let sink = output_sink_for(template, options);
+            match self.renderer.render(template, &event) {
+                Ok(output) => sink.print(&output),
+                Err(err) => {
+                    match self.renderer.render(
+                        template,
+                        &ReportEvent::Error {
+                            msg: &err.to_string(),
+                        },
+                    ) {
+                        Ok(fallback) => sink.print(&fallback),
+                        Err(err) => {
+                            sink.println(&format!("Failed to render and fallback: {}", err))
+                        }
+                    };
+                }
+            }
+        }
     }
 }
 
@@ -51,21 +56,25 @@ impl Reporter for TemplateReporter {
         assertions: &[Assertion],
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
-        test_count: usize
+        test_count: usize,
     ) {
-        self.emit(ReportEvent::Descriptor {
-            descriptor,
-            test_result,
-            assertions,
-            test_count
-        }, options, templates);
+        self.emit(
+            ReportEvent::Descriptor {
+                descriptor,
+                test_result,
+                assertions,
+                test_count,
+            },
+            options,
+            templates,
+        );
     }
 
     fn summary(
         &self,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
-        results: &[SummaryResult]
+        results: &[SummaryResult],
     ) {
         let passed = results
             .iter()
@@ -76,22 +85,24 @@ impl Reporter for TemplateReporter {
             .filter(|f| matches!(f, SummaryResult::Failed))
             .count();
         let flaky = 0;
-        self.emit(ReportEvent::Summary {
-            passed,
-            failed,
-            flaky,
-        }, options, templates);
+        self.emit(
+            ReportEvent::Summary {
+                passed,
+                failed,
+                flaky,
+            },
+            options,
+            templates,
+        );
     }
 
     fn title(
         &self,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
-        test_count: usize
+        test_count: usize,
     ) {
-        self.emit(ReportEvent::Title {
-            test_count
-        }, options, templates);
+        self.emit(ReportEvent::Title { test_count }, options, templates);
     }
 }
 

@@ -1,7 +1,7 @@
 name: "GitHub API Explorer"
 description: "Explore GitHub's public REST API — no auth required for these endpoints"
 options:
-  base_uri: "https://api.github.com"
+  base_uri: "{{ env.GITHUB_BASE_URI }}"
 
 describe:
   - name: "Users"
@@ -109,8 +109,6 @@ describe:
 
       - name: "Rust .gitignore template"
         description: "Fetch the actual Rust gitignore content — assert it includes target/"
-        options:
-          debug: true
         test:
           route: "/gitignore/templates/Rust"
           headers:

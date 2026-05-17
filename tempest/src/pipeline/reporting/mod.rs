@@ -1,16 +1,16 @@
+pub mod event;
 mod liquid;
 mod sinks;
-pub mod event;
 pub mod template_reporter;
 
 use crate::models::descriptor::Descriptor;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
+use crate::pipeline::reporting::template_reporter::TemplateReporter;
 use enum_dispatch::enum_dispatch;
 use std::collections::HashMap;
-use crate::pipeline::reporting::template_reporter::TemplateReporter;
 
 #[enum_dispatch]
 pub trait Reporter {

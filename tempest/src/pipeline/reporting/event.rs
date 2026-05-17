@@ -2,36 +2,36 @@ use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::test_result::{Assertion, TestResult};
 
-pub enum ReportEvent<'a>{
-    Title{
+pub enum ReportEvent<'a> {
+    Title {
         test_count: usize,
     },
-    Descriptor{
+    Descriptor {
         descriptor: &'a Descriptor,
         test_result: Option<&'a TestResult>,
-        assertions: &'a[Assertion],
+        assertions: &'a [Assertion],
         test_count: usize,
     },
-    Summary{
+    Summary {
         passed: usize,
         failed: usize,
-        flaky: usize
+        flaky: usize,
     },
-    Error{
-        msg: &'a str
-    }
+    Error {
+        msg: &'a str,
+    },
 }
 
-impl<'a> ReportEvent<'a>{
-    pub fn template<'t>(&self, template: &'t ReportTemplate) -> Option<&'t str>{
-        match self{
+impl<'a> ReportEvent<'a> {
+    pub fn template<'t>(&self, template: &'t ReportTemplate) -> Option<&'t str> {
+        match self {
             ReportEvent::Title { .. } => template.title_template.as_deref(),
             ReportEvent::Descriptor { descriptor, .. } if descriptor.test.is_some() => {
                 template.test_template.as_deref()
             }
             ReportEvent::Descriptor { .. } => template.section_template.as_deref(),
             ReportEvent::Summary { .. } => template.summary_template.as_deref(),
-            ReportEvent::Error { .. }=> template.error_template.as_deref(),
+            ReportEvent::Error { .. } => template.error_template.as_deref(),
         }
     }
 }
@@ -62,6 +62,7 @@ mod tests {
             test: has_test.then(TestSpec::default),
             describe: None,
             options: None,
+            file: None,
         }
     }
 

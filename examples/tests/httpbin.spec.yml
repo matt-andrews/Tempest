@@ -1,7 +1,7 @@
 name: "HTTP Mechanics"
 description: "Explore HTTP request and response behaviors using httpbin.org"
 options:
-  base_uri: "https://httpbin.org"
+  base_uri: "{{ env.HTTPBIN_BASE_URI }}"
 
 describe:
   - name: "Status Codes"
@@ -189,9 +189,7 @@ describe:
             - "body.contains(\"user-agent\")"
 
       - name: "Delay endpoint (simulates a slow API)"
-        description: "Useful for testing timeout behavior; debug shows full response"
-        options:
-          debug: true
+        description: "Useful for testing timeout behavior"
         test:
           route: "/delay/1"
           assert:
@@ -204,3 +202,12 @@ describe:
           assert:
             - "status == 200"
             - "body == \"HTTPBIN\""
+          vars:
+            - "var_status={{ status }}"
+
+      - name: "Variable reading experiment"
+        description: "we can read variables published by other tests"
+        test:
+          route: "/status/{{ file.var_status }}"
+          assert:
+            - "status == {{ file.var_status }}"

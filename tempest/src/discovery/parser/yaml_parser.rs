@@ -1,8 +1,8 @@
 use crate::discovery::BUILTIN_REPORTERS;
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use include_dir::{Dir, File};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -11,8 +11,9 @@ pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
         let contents = fs::read_to_string(path)?;
-        let config: Descriptor = serde_yml::from_str(&contents)?;
-        Ok(config)
+        let mut result: Descriptor = serde_yml::from_str(&contents)?;
+        result.file = Some(path.to_str().unwrap_or_default().to_owned());
+        Ok(result)
     }
 
     fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions> {
@@ -340,11 +341,7 @@ mod tests {
 
         let template_file = console_dir
             .files()
-            .find(|f| {
-                f.path()
-                    .file_name()
-                    .and_then(|n| n.to_str()) == Some("console.template.yml")
-            })
+            .find(|f| f.path().file_name().and_then(|n| n.to_str()) == Some("console.template.yml"))
             .expect("console.template.yml should be embedded");
 
         let result = YamlFileParser
@@ -371,11 +368,7 @@ mod tests {
 
         let template_file = console_dir
             .files()
-            .find(|f| {
-                f.path()
-                    .file_name()
-                    .and_then(|n| n.to_str()) == Some("console.template.yml")
-            })
+            .find(|f| f.path().file_name().and_then(|n| n.to_str()) == Some("console.template.yml"))
             .expect("console.template.yml should be embedded");
 
         let result = YamlFileParser

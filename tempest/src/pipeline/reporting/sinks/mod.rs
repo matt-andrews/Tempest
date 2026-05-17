@@ -1,11 +1,11 @@
 mod console;
 mod file;
 
-use enum_dispatch::enum_dispatch;
-use crate::models::run_options::RunOptions;
 use crate::models::report_template::ReportTemplate;
+use crate::models::run_options::RunOptions;
 use crate::pipeline::reporting::sinks::console::ConsoleSink;
 use crate::pipeline::reporting::sinks::file::FileSink;
+use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 pub trait OutputSink {
