@@ -108,7 +108,6 @@ mod tests {
     use crate::models::report_template::ReportTemplate;
     use crate::models::test_result::{Assertion, TempestStatusCode, TestResult};
     use crate::models::test_spec::TestSpec;
-    use std::path::PathBuf;
     use std::time::Duration;
 
     fn template(test_template: &str) -> ReportTemplate {

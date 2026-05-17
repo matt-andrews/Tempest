@@ -50,6 +50,17 @@ We use [Liquid Template](https://shopify.github.io/liquid/) syntax for report cu
 
 To learn more about how you can use templates currently, please view the built-in [examples](./tempest/src/builtin_reporters). Templates that specify `file:` will write to that file, or else they will just print to the console.
 
+## Assertions
+There are several expressions and functions that you can use to assert.
+
+| Name      | Description                       | Example Usage                                     |
+|-----------|-----------------------------------|---------------------------------------------------|
+| `status`  | The response status code          | `"status == 200"`                                 |
+| `json`    | The json response object          | `'json.name == "myObj"'`                          |
+| `body`    | The stringified response body     | `'body == "hello"'`                               |
+| `headers` | The hashmap headers collection    | `'headers["content-type"] == "application/json"'` |
+| `bytes`   | The response body as a byte array | `'bytes == fileBytes("img.jpg")'`                 |
+
 ## License
 
 &copy; 2026 Matthew Andrews

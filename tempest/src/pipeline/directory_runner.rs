@@ -11,7 +11,6 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{AnyReporter, Reporter};
 use crate::pipeline::runners::TestRunner;
 use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::templating::TemplateEngine;
 use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use std::collections::HashMap;
@@ -156,7 +155,7 @@ impl<'a> DirectoryRunner<'a> {
         if let Some(file_name) = descriptor.file.clone() {
             if file_name != context.file_name {
                 *context = RunContext::new(
-                    &file_name.to_str().unwrap_or_default(),
+                    file_name.to_str().unwrap_or_default(),
                     &self.directory.envs,
                 );
             }

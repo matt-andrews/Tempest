@@ -42,7 +42,6 @@ mod tests {
     use crate::models::descriptor::Descriptor;
     use crate::models::report_template::ReportTemplate;
     use crate::models::test_spec::TestSpec;
-    use std::path::PathBuf;
 
     fn template() -> ReportTemplate {
         ReportTemplate {
