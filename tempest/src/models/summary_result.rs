@@ -2,5 +2,5 @@
 pub enum SummaryResult {
     Passed,
     Failed,
-    Flaky
+    Flaky,
 }

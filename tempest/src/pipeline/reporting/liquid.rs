@@ -52,7 +52,13 @@ impl LiquidRenderer {
                 assertions,
                 test_count,
                 retry_count,
-            } => build_descriptor_globals(descriptor, *test_result, assertions, *test_count, *retry_count),
+            } => build_descriptor_globals(
+                descriptor,
+                *test_result,
+                assertions,
+                *test_count,
+                *retry_count,
+            ),
 
             ReportEvent::Error { msg } => {
                 liquid::object!({

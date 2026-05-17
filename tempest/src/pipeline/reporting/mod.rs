@@ -14,6 +14,8 @@ use std::collections::HashMap;
 
 #[enum_dispatch]
 pub trait Reporter {
+    //i need to figure out how to fix this later.
+    #[allow(clippy::too_many_arguments)]
     fn report(
         &self,
         descriptor: &Descriptor,

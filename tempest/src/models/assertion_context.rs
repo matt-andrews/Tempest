@@ -156,7 +156,10 @@ mod tests {
         let file = make_file(&dir, "sibling.bin");
 
         // sub/../sibling.bin stays within suite_dir and should resolve correctly
-        assert_eq!(suite(&dir).resolve_file("sub/../sibling.bin").unwrap(), file);
+        assert_eq!(
+            suite(&dir).resolve_file("sub/../sibling.bin").unwrap(),
+            file
+        );
     }
 
     #[test]
