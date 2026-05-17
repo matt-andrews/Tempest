@@ -7,7 +7,6 @@ use reqwest::header::HeaderMap;
 use std::sync::LazyLock;
 use std::time::Instant;
 use colored::Colorize;
-use crate::pipeline::reporting::{reporter_for, AnyReporter};
 
 static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()

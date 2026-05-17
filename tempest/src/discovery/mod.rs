@@ -6,13 +6,13 @@ use crate::models::report_template::ReportTemplate;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
-use std::hash::Hash;
 use std::path::Path;
 
 mod parser;
 
 static BUILTIN_REPORTERS: Dir = include_dir!("$CARGO_MANIFEST_DIR/src/builtin_reporters");
 
+#[derive(Debug, Clone)]
 pub struct DiscoveryResult {
     pub directory: DirectoryNode,
     pub templates: HashMap<String, ReportTemplate>,
@@ -73,7 +73,7 @@ pub fn discover(
     inherited_configs: Option<Vec<RunOptions>>,
     inherited_envs: &mut HashMap<String, String>,
 ) -> anyhow::Result<DiscoveryResult> {
-    let (dirs, files): (Vec<_>, Vec<_>) = std::fs::read_dir(dir)?
+    let (dirs, files): (Vec<_>, Vec<_>) = fs::read_dir(dir)?
         .filter_map(|e| e.ok())
         .partition(|e| e.path().is_dir());
 
