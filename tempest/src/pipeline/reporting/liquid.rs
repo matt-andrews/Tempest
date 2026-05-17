@@ -51,7 +51,14 @@ impl LiquidRenderer {
                 test_result,
                 assertions,
                 test_count,
-            } => build_descriptor_globals(descriptor, *test_result, assertions, *test_count),
+                retry_count,
+            } => build_descriptor_globals(
+                descriptor,
+                *test_result,
+                assertions,
+                *test_count,
+                *retry_count,
+            ),
 
             ReportEvent::Error { msg } => {
                 liquid::object!({
@@ -66,6 +73,7 @@ fn build_descriptor_globals(
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
     test_count: usize,
+    retry_count: usize,
 ) -> liquid::Object {
     let all_passed = assertions.iter().all(|a| a.passed);
 
@@ -96,6 +104,7 @@ fn build_descriptor_globals(
     );
     globals.insert("passed".into(), Value::scalar(all_passed));
     globals.insert("test_count".into(), Value::scalar(test_count.to_string()));
+    globals.insert("retry_count".into(), Value::scalar(retry_count.to_string()));
 
     globals.insert("assertions".into(), Value::Array(assertion_values));
     globals
@@ -202,6 +211,7 @@ mod tests {
             test_result: Some(&result),
             assertions: &assertions,
             test_count: 5,
+            retry_count: 0,
         };
 
         let output = renderer
@@ -229,6 +239,7 @@ mod tests {
             test_result: None,
             assertions: &[],
             test_count: 0,
+            retry_count: 0,
         };
 
         let output = renderer

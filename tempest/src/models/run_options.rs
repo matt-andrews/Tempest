@@ -5,10 +5,12 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
-    #[serde(rename = "base_uri")]
     pub base_uri: Option<String>,
     pub debug: Option<bool>,
     pub reports: Option<Vec<String>>,
+    pub retries: Option<u8>,
+
+    #[serde(skip)]
     pub start_time: Option<DateTime>,
 }
 
@@ -19,6 +21,7 @@ impl RunOptions {
             debug: Some(false),
             reports: None,
             start_time: Some(DateTime::now()),
+            retries: Some(0),
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -27,6 +30,7 @@ impl RunOptions {
             debug: other.debug.or(self.debug),
             reports: other.reports.or(self.reports),
             start_time: other.start_time.or(self.start_time),
+            retries: other.retries.or(self.retries),
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
@@ -53,17 +57,20 @@ mod tests {
             debug: Some(false),
             reports: Some(vec!["base.html".to_string()]),
             start_time: None,
+            retries: Some(0),
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
             debug: Some(true),
             reports: Some(vec!["other.html".to_string()]),
             start_time: None,
+            retries: Some(0),
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
         assert_eq!(merged.debug, Some(true));
         assert_eq!(merged.reports, Some(vec!["other.html".to_string()]));
+        assert_eq!(merged.retries, Some(0));
     }
 
     #[test]
@@ -73,17 +80,20 @@ mod tests {
             debug: Some(true),
             reports: Some(vec!["r.html".to_string()]),
             start_time: None,
+            retries: Some(0),
         };
         let other = RunOptions {
             base_uri: None,
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
         assert_eq!(merged.debug, Some(true));
         assert_eq!(merged.reports, Some(vec!["r.html".to_string()]));
+        assert_eq!(merged.retries, Some(0));
     }
 
     #[test]
@@ -93,16 +103,51 @@ mod tests {
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         };
         let other = RunOptions {
             base_uri: None,
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);
         assert_eq!(merged.debug, None);
         assert_eq!(merged.reports, None);
+        assert_eq!(merged.retries, Some(0));
+    }
+
+    #[test]
+    fn merge_preserves_retries() {
+        let base = RunOptions {
+            retries: Some(1),
+            ..Default::default()
+        };
+        let other = RunOptions {
+            retries: Some(3),
+            ..Default::default()
+        };
+
+        let merged = base.merge(other);
+
+        assert_eq!(merged.retries, Some(3));
+    }
+
+    #[test]
+    fn merge_falls_back_to_self_retries_when_other_is_none() {
+        let base = RunOptions {
+            retries: Some(2),
+            ..Default::default()
+        };
+        let other = RunOptions {
+            retries: None,
+            ..Default::default()
+        };
+
+        let merged = base.merge(other);
+
+        assert_eq!(merged.retries, Some(2));
     }
 }

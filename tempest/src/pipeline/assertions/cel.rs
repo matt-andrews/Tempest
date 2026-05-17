@@ -276,8 +276,15 @@ mod tests {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
-        let a = eval_with_ctx(r#"fileBytes("/root.bin").size() == 4"#, &result(200, ""), ctx);
-        assert!(a.passed, "/root.bin should resolve from suite_dir even with a spec_file set");
+        let a = eval_with_ctx(
+            r#"fileBytes("/root.bin").size() == 4"#,
+            &result(200, ""),
+            ctx,
+        );
+        assert!(
+            a.passed,
+            "/root.bin should resolve from suite_dir even with a spec_file set"
+        );
     }
 
     #[test]
@@ -291,22 +298,40 @@ mod tests {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
-        let a = eval_with_ctx(r#"fileBytes("payload.bin").size() == 7"#, &result(200, ""), ctx);
-        assert!(a.passed, "spec-relative path should resolve from the spec file's directory");
+        let a = eval_with_ctx(
+            r#"fileBytes("payload.bin").size() == 7"#,
+            &result(200, ""),
+            ctx,
+        );
+        assert!(
+            a.passed,
+            "spec-relative path should resolve from the spec file's directory"
+        );
     }
 
     #[test]
     fn file_bytes_missing_file_fails_with_error() {
         let dir = tempfile::tempdir().unwrap();
 
-        let a = eval_with_ctx(r#"fileBytes("/missing.bin")"#, &result(200, ""), suite_ctx(&dir));
+        let a = eval_with_ctx(
+            r#"fileBytes("/missing.bin")"#,
+            &result(200, ""),
+            suite_ctx(&dir),
+        );
         assert!(!a.passed);
-        assert!(!a.error.is_empty(), "missing file should populate the error field");
+        assert!(
+            !a.error.is_empty(),
+            "missing file should populate the error field"
+        );
     }
 
     #[test]
     fn file_bytes_empty_path_fails_with_error() {
-        let a = eval_with_ctx(r#"fileBytes("")"#, &result(200, ""), AssertionContext::default());
+        let a = eval_with_ctx(
+            r#"fileBytes("")"#,
+            &result(200, ""),
+            AssertionContext::default(),
+        );
         assert!(!a.passed);
         assert!(!a.error.is_empty());
     }
@@ -321,7 +346,10 @@ mod tests {
             suite_ctx(&dir),
         );
         assert!(!a.passed);
-        assert!(!a.error.is_empty(), "traversal escaping suite_dir should be rejected");
+        assert!(
+            !a.error.is_empty(),
+            "traversal escaping suite_dir should be rejected"
+        );
     }
 
     #[test]

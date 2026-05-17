@@ -1,3 +1,6 @@
+
+retries: 2
+
 reports:
   - console
   - json

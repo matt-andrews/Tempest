@@ -320,6 +320,7 @@ mod tests {
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         };
 
         let result = discover(dir.path(), Some(vec![inherited]), &mut HashMap::new()).unwrap();
