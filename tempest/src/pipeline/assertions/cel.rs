@@ -1,8 +1,9 @@
+use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
 use anyhow::anyhow;
 use cel_interpreter::objects::Key;
-use cel_interpreter::{Context, Program, Value};
+use cel_interpreter::{Context, FunctionContext, Program, Value};
 use reqwest::header::HeaderMap;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
@@ -12,8 +13,9 @@ pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
-    fn evaluate(&self, data: &TestResult) -> Assertion {
-        let result = Self::evaluate_assertion(&self.assertion, data).map_err(|e| e.to_string());
+    fn evaluate(&self, data: &TestResult, context: &AssertionContext) -> Assertion {
+        let result = Self::evaluate_assertion(&self.assertion, data, context.to_owned())
+            .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -58,7 +60,11 @@ impl CelAssertionEvaluator {
         }
     }
 
-    fn evaluate_assertion(expr: &str, response: &TestResult) -> anyhow::Result<bool> {
+    fn evaluate_assertion(
+        expr: &str,
+        response: &TestResult,
+        context: AssertionContext,
+    ) -> anyhow::Result<bool> {
         let program = match Program::compile(expr) {
             Ok(p) => p,
             Err(e) => return Err(anyhow!("{}", e)),
@@ -74,9 +80,24 @@ impl CelAssertionEvaluator {
 
         ctx.add_variable("body", &response.body)?;
 
-        ctx.add_variable("bytes", &response.bytes)?;
+        ctx.add_variable_from_value("bytes", response.bytes.clone());
 
         ctx.add_variable("headers", Self::headers_to_cel(&response.headers))?;
+
+        ctx.add_function(
+            "fileBytes",
+            move |ftx: &FunctionContext, path: Arc<String>| {
+                let resolved = context
+                    .resolve_file(path.as_str())
+                    .map_err(|e| ftx.error(e.to_string()))?;
+
+                let bytes = std::fs::read(&resolved).map_err(|e| {
+                    ftx.error(format!("could not read {}: {e}", resolved.display()))
+                })?;
+
+                Ok(Value::Bytes(Arc::new(bytes)))
+            },
+        );
 
         match program.execute(&ctx)? {
             Value::Bool(b) => Ok(b),
@@ -135,7 +156,7 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r)
+        CelAssertionEvaluator::new(expr).evaluate(r, &AssertionContext::default())
     }
 
     #[test]

@@ -103,6 +103,7 @@ fn build_descriptor_globals(
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
     use super::*;
     use crate::models::descriptor::Descriptor;
     use crate::models::report_template::ReportTemplate;

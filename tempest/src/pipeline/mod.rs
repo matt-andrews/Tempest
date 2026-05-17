@@ -14,7 +14,11 @@ pub async fn execute(
     discovery_result: &DiscoveryResult,
     default_options: &RunOptions,
 ) -> anyhow::Result<()> {
-    let mut run = PipelineRunner::new(discovery_result, default_options.clone());
+    let mut run = PipelineRunner::new(
+        discovery_result,
+        default_options.clone(),
+        discovery_result.directory.dir.as_path(),
+    );
 
     run.title();
     run.walk().await;

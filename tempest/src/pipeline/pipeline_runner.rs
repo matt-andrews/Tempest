@@ -4,6 +4,7 @@ use crate::models::summary_result::SummaryResult;
 use crate::pipeline::directory_runner::DirectoryRunner;
 use crate::pipeline::reporting::{AnyReporter, Reporter, reporter_for};
 use crate::pipeline::templating::liquid::LiquidEngine;
+use std::path::Path;
 
 pub struct PipelineRunner<'a> {
     reporter: AnyReporter,
@@ -11,10 +12,15 @@ pub struct PipelineRunner<'a> {
     discovered: &'a DiscoveryResult,
     summary: Vec<SummaryResult>,
     template_engine: LiquidEngine,
+    top_path: &'a Path,
 }
 
 impl<'a> PipelineRunner<'a> {
-    pub fn new(discovery_result: &'a DiscoveryResult, default_options: RunOptions) -> Self {
+    pub fn new(
+        discovery_result: &'a DiscoveryResult,
+        default_options: RunOptions,
+        top_path: &'a Path,
+    ) -> Self {
         let options = merge_option_chain(&default_options, &discovery_result.directory.options);
         Self {
             reporter: reporter_for(),
@@ -22,6 +28,7 @@ impl<'a> PipelineRunner<'a> {
             discovered: discovery_result,
             summary: Vec::new(),
             template_engine: LiquidEngine,
+            top_path,
         }
     }
     pub fn title(&self) {
@@ -47,6 +54,7 @@ impl<'a> PipelineRunner<'a> {
                 &self.template_engine,
                 &self.discovered.templates,
                 &self.reporter,
+                self.top_path,
             );
 
             run.execute_dir(&mut self.summary).await;

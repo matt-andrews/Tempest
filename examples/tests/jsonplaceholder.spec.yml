@@ -184,3 +184,11 @@ describe:
             - "json[\"albumId\"] == 1"
             - "json[\"id\"] == 1"
             - "body.contains(\"thumbnailUrl\")"
+
+      - name: "file assertion from child level"
+        options:
+          base_uri: "http://matthew.andrews.gg"
+        test:
+          route: "/img.jpg"
+          assert:
+            - 'bytes == fileBytes("./misc/img.webp")'
