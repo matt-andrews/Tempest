@@ -73,6 +73,7 @@ mod tests {
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         }
     }
 
@@ -197,6 +198,7 @@ mod tests {
                 debug: Some(true),
                 reports: None,
                 start_time: None,
+                retries: Some(0),
             }),
             vec![group(
                 "a",

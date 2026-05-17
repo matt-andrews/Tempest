@@ -141,6 +141,7 @@ mod tests {
             debug: None,
             reports: Some(reports.iter().map(|r| r.to_string()).collect()),
             start_time: None,
+            retries: Some(0),
         }
     }
 
@@ -173,6 +174,7 @@ mod tests {
             debug: None,
             reports: None,
             start_time: None,
+            retries: Some(0),
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -203,6 +205,7 @@ mod tests {
             debug: None,
             reports: Some(vec!["file".to_string()]),
             start_time: None,
+            retries: Some(0),
         };
 
         TemplateReporter::new().title(&options, &templates, 1);
