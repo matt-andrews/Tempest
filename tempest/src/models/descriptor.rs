@@ -4,6 +4,7 @@ use crate::pipeline::templating::TemplateEngine;
 use crate::pipeline::templating::liquid::LiquidEngine;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Descriptor {
@@ -16,7 +17,8 @@ pub struct Descriptor {
 
     pub options: Option<RunOptions>,
 
-    pub file: Option<String>,
+    #[serde(skip)]
+    pub file: Option<PathBuf>,
 }
 
 pub struct DescriptorIter<'a> {
@@ -57,7 +59,6 @@ impl Descriptor {
         self.name = engine.render_option_string_or_self(&self.name, obj);
         self.description = engine.render_option_string_or_self(&self.description, obj);
         self.tags = engine.render_vec_string_or_self(&self.tags, obj);
-        self.file = engine.render_option_string_or_self(&self.file, obj);
     }
 }
 

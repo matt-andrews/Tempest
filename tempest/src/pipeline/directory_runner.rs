@@ -1,3 +1,4 @@
+use crate::models::assertion_context::AssertionContext;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::report_template::ReportTemplate;
@@ -10,10 +11,10 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{AnyReporter, Reporter};
 use crate::pipeline::runners::TestRunner;
 use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::templating::TemplateEngine;
 use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use std::collections::HashMap;
+use std::path::Path;
 
 pub struct DirectoryRunner<'a> {
     reporter: &'a AnyReporter,
@@ -21,6 +22,7 @@ pub struct DirectoryRunner<'a> {
     template_engine: &'a LiquidEngine,
     templates: &'a HashMap<String, ReportTemplate>,
     base_options: RunOptions,
+    top_path: &'a Path,
 }
 
 impl<'a> DirectoryRunner<'a> {
@@ -30,6 +32,7 @@ impl<'a> DirectoryRunner<'a> {
         template_engine: &'a LiquidEngine,
         templates: &'a HashMap<String, ReportTemplate>,
         reporter: &'a AnyReporter,
+        top_path: &'a Path,
     ) -> Self {
         Self {
             reporter,
@@ -37,6 +40,7 @@ impl<'a> DirectoryRunner<'a> {
             directory,
             templates,
             template_engine,
+            top_path,
         }
     }
     pub async fn execute_dir(&self, summary: &mut Vec<SummaryResult>) {
@@ -101,7 +105,7 @@ impl<'a> DirectoryRunner<'a> {
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
 
-        let assertions = self.evaluate_assertions(&test, &test_result);
+        let assertions = self.evaluate_assertions(&test, &test_result, descriptor);
         self.assign_variables(&test, &test_result, context);
 
         let summary_result = if assertions.iter().any(|a| !a.passed) {
@@ -117,11 +121,20 @@ impl<'a> DirectoryRunner<'a> {
         }
     }
 
-    fn evaluate_assertions(&self, test: &TestSpec, test_result: &TestResult) -> Vec<Assertion> {
+    fn evaluate_assertions(
+        &self,
+        test: &TestSpec,
+        test_result: &TestResult,
+        descriptor: &Descriptor,
+    ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
+            let assertion_context = AssertionContext {
+                suite_dir: self.top_path.to_path_buf(),
+                spec_file: descriptor.file.clone(),
+            };
             let assert_evaluator = assertion_evaluator_for(assert);
-            let result = assert_evaluator.evaluate(test_result);
+            let result = assert_evaluator.evaluate(test_result, &assertion_context);
             assert_result.push(result.clone());
         }
         assert_result
@@ -140,12 +153,11 @@ impl<'a> DirectoryRunner<'a> {
 
     fn apply_file_context(&self, descriptor: &mut Descriptor, context: &mut RunContext) {
         if let Some(file_name) = descriptor.file.clone() {
-            let file_name = self
-                .template_engine
-                .render_string_or_self(&file_name, &liquid::object!(&context));
-
             if file_name != context.file_name {
-                *context = RunContext::new(&file_name, &self.directory.envs);
+                *context = RunContext::new(
+                    file_name.to_str().unwrap_or_default(),
+                    &self.directory.envs,
+                );
             }
 
             descriptor.file = Some(file_name);
@@ -242,7 +254,14 @@ mod tests {
         reporter: &'a AnyReporter,
         base_options: RunOptions,
     ) -> DirectoryRunner<'a> {
-        DirectoryRunner::new(base_options, directory, engine, templates, reporter)
+        DirectoryRunner::new(
+            base_options,
+            directory,
+            engine,
+            templates,
+            reporter,
+            Path::new("./"),
+        )
     }
 
     fn get_descriptor(route: &str, assertions: Option<Vec<&str>>) -> Descriptor {
@@ -506,7 +525,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: Some("shared.yaml".to_string()),
+            file: None,
         };
         let consumer = Descriptor {
             name: Some("consumer".to_string()),
@@ -520,7 +539,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: Some("shared.yaml".to_string()),
+            file: None,
         };
 
         let dir = dir_node(vec![seed, consumer]);
@@ -563,7 +582,7 @@ mod tests {
                 }),
                 describe: None,
                 options: None,
-                file: Some("myfile.yaml".to_string()),
+                file: None,
             }],
             envs,
         );
@@ -614,7 +633,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: Some("file-a.yaml".to_string()),
+            file: Some(PathBuf::from("file-a.yaml")),
         };
         let file_b = Descriptor {
             name: Some("file-b".to_string()),
@@ -628,7 +647,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: Some("file-b.yaml".to_string()),
+            file: Some(PathBuf::from("file-b.yaml")),
         };
 
         let dir = dir_node(vec![file_a, file_b]);

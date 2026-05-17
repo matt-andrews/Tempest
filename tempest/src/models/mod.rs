@@ -1,3 +1,4 @@
+pub mod assertion_context;
 pub mod descriptor;
 pub mod directory_node;
 pub mod report_template;

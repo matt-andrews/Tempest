@@ -1,8 +1,9 @@
+use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
 use anyhow::anyhow;
 use cel_interpreter::objects::Key;
-use cel_interpreter::{Context, Program, Value};
+use cel_interpreter::{Context, FunctionContext, Program, Value};
 use reqwest::header::HeaderMap;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
@@ -12,8 +13,9 @@ pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
-    fn evaluate(&self, data: &TestResult) -> Assertion {
-        let result = Self::evaluate_assertion(&self.assertion, data).map_err(|e| e.to_string());
+    fn evaluate(&self, data: &TestResult, context: &AssertionContext) -> Assertion {
+        let result = Self::evaluate_assertion(&self.assertion, data, context.to_owned())
+            .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -58,7 +60,11 @@ impl CelAssertionEvaluator {
         }
     }
 
-    fn evaluate_assertion(expr: &str, response: &TestResult) -> anyhow::Result<bool> {
+    fn evaluate_assertion(
+        expr: &str,
+        response: &TestResult,
+        context: AssertionContext,
+    ) -> anyhow::Result<bool> {
         let program = match Program::compile(expr) {
             Ok(p) => p,
             Err(e) => return Err(anyhow!("{}", e)),
@@ -74,9 +80,24 @@ impl CelAssertionEvaluator {
 
         ctx.add_variable("body", &response.body)?;
 
-        ctx.add_variable("bytes", &response.bytes)?;
+        ctx.add_variable_from_value("bytes", response.bytes.clone());
 
         ctx.add_variable("headers", Self::headers_to_cel(&response.headers))?;
+
+        ctx.add_function(
+            "fileBytes",
+            move |ftx: &FunctionContext, path: Arc<String>| {
+                let resolved = context
+                    .resolve_file(path.as_str())
+                    .map_err(|e| ftx.error(e.to_string()))?;
+
+                let bytes = std::fs::read(&resolved).map_err(|e| {
+                    ftx.error(format!("could not read {}: {e}", resolved.display()))
+                })?;
+
+                Ok(Value::Bytes(Arc::new(bytes)))
+            },
+        );
 
         match program.execute(&ctx)? {
             Value::Bool(b) => Ok(b),
@@ -135,7 +156,7 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r)
+        CelAssertionEvaluator::new(expr).evaluate(r, &AssertionContext::default())
     }
 
     #[test]
@@ -198,5 +219,121 @@ mod tests {
         let a = eval("status + 1u", &result(200, ""));
         assert!(!a.passed);
         assert!(!a.error.is_empty());
+    }
+
+    // --- fileBytes ---
+
+    fn eval_with_ctx(expr: &str, r: &TestResult, ctx: AssertionContext) -> Assertion {
+        CelAssertionEvaluator::new(expr).evaluate(r, &ctx)
+    }
+
+    fn suite_ctx(dir: &tempfile::TempDir) -> AssertionContext {
+        AssertionContext {
+            suite_dir: dir.path().to_path_buf(),
+            spec_file: None,
+        }
+    }
+
+    fn write_file(dir: &tempfile::TempDir, name: &str, contents: &[u8]) {
+        std::fs::write(dir.path().join(name), contents).unwrap();
+    }
+
+    #[test]
+    fn file_bytes_size_matches_file_length() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir, "data.bin", b"hello");
+
+        let a = eval_with_ctx(
+            r#"fileBytes("/data.bin").size() == 5"#,
+            &result(200, ""),
+            suite_ctx(&dir),
+        );
+        assert!(a.passed);
+        assert!(a.error.is_empty());
+    }
+
+    #[test]
+    fn file_bytes_content_equals_known_bytes() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir, "data.bin", b"hi");
+
+        let a = eval_with_ctx(
+            r#"fileBytes("/data.bin") == b"hi""#,
+            &result(200, ""),
+            suite_ctx(&dir),
+        );
+        assert!(a.passed, "fileBytes should return the exact file contents");
+    }
+
+    #[test]
+    fn file_bytes_root_relative_resolves_from_suite_dir_regardless_of_spec() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("specs");
+        std::fs::create_dir(&sub).unwrap();
+        write_file(&dir, "root.bin", b"root");
+
+        let ctx = AssertionContext {
+            suite_dir: dir.path().to_path_buf(),
+            spec_file: Some(sub.join("test.spec.yml")),
+        };
+        let a = eval_with_ctx(r#"fileBytes("/root.bin").size() == 4"#, &result(200, ""), ctx);
+        assert!(a.passed, "/root.bin should resolve from suite_dir even with a spec_file set");
+    }
+
+    #[test]
+    fn file_bytes_spec_relative_resolves_from_spec_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let sub = dir.path().join("specs");
+        std::fs::create_dir(&sub).unwrap();
+        std::fs::write(sub.join("payload.bin"), b"payload").unwrap();
+
+        let ctx = AssertionContext {
+            suite_dir: dir.path().to_path_buf(),
+            spec_file: Some(sub.join("test.spec.yml")),
+        };
+        let a = eval_with_ctx(r#"fileBytes("payload.bin").size() == 7"#, &result(200, ""), ctx);
+        assert!(a.passed, "spec-relative path should resolve from the spec file's directory");
+    }
+
+    #[test]
+    fn file_bytes_missing_file_fails_with_error() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let a = eval_with_ctx(r#"fileBytes("/missing.bin")"#, &result(200, ""), suite_ctx(&dir));
+        assert!(!a.passed);
+        assert!(!a.error.is_empty(), "missing file should populate the error field");
+    }
+
+    #[test]
+    fn file_bytes_empty_path_fails_with_error() {
+        let a = eval_with_ctx(r#"fileBytes("")"#, &result(200, ""), AssertionContext::default());
+        assert!(!a.passed);
+        assert!(!a.error.is_empty());
+    }
+
+    #[test]
+    fn file_bytes_path_traversal_fails_with_error() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let a = eval_with_ctx(
+            r#"fileBytes("/../etc/passwd")"#,
+            &result(200, ""),
+            suite_ctx(&dir),
+        );
+        assert!(!a.passed);
+        assert!(!a.error.is_empty(), "traversal escaping suite_dir should be rejected");
+    }
+
+    #[test]
+    fn file_bytes_can_be_used_in_compound_assertion() {
+        let dir = tempfile::tempdir().unwrap();
+        write_file(&dir, "token.bin", b"secret");
+
+        let a = eval_with_ctx(
+            r#"status == 200u && fileBytes("/token.bin") == b"secret""#,
+            &result(200, ""),
+            suite_ctx(&dir),
+        );
+        assert!(a.passed);
     }
 }

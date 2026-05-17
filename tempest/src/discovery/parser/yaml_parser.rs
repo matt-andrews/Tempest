@@ -12,7 +12,7 @@ impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
         let contents = fs::read_to_string(path)?;
         let mut result: Descriptor = serde_yml::from_str(&contents)?;
-        result.file = Some(path.to_str().unwrap_or_default().to_owned());
+        Self::assign_file(&mut result, path);
         Ok(result)
     }
 
@@ -56,6 +56,14 @@ impl FileParser for YamlFileParser {
 }
 
 impl YamlFileParser {
+    fn assign_file(descriptor: &mut Descriptor, path: &Path) {
+        descriptor.file = Some(path.to_path_buf());
+
+        for child in descriptor.describe.iter_mut().flatten() {
+            Self::assign_file(child, path);
+        }
+    }
+
     fn resolve_liquid_ref(value: Option<String>, base_dir: &Path) -> Option<String> {
         value.map(|v| {
             let trimmed = v.trim();
