@@ -3,7 +3,7 @@ title_template: |
   { "tests": [
 
 test_template: |
-  {% if test_count > 1 %},{%endif%}
+  {% if test_count > '0' or retry_count > '0' %},{%endif%}
     {
       "name": {{ name | json }},
       "status": {{ status }},
