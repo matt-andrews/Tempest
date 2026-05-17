@@ -122,7 +122,12 @@ impl<'a> DirectoryRunner<'a> {
         }
     }
 
-    fn evaluate_assertions(&self, test: &TestSpec, test_result: &TestResult, descriptor: &Descriptor) -> Vec<Assertion> {
+    fn evaluate_assertions(
+        &self,
+        test: &TestSpec,
+        test_result: &TestResult,
+        descriptor: &Descriptor,
+    ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
             let assertion_context = AssertionContext {

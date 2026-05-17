@@ -17,6 +17,7 @@ pub struct Descriptor {
 
     pub options: Option<RunOptions>,
 
+    #[serde(skip)]
     pub file: Option<PathBuf>,
 }
 

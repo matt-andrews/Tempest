@@ -38,11 +38,11 @@ impl<'a> ReportEvent<'a> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
     use super::*;
     use crate::models::descriptor::Descriptor;
     use crate::models::report_template::ReportTemplate;
     use crate::models::test_spec::TestSpec;
+    use std::path::PathBuf;
 
     fn template() -> ReportTemplate {
         ReportTemplate {
