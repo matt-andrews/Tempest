@@ -633,7 +633,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: None,
+            file: Some(PathBuf::from("file-a.yaml")),
         };
         let file_b = Descriptor {
             name: Some("file-b".to_string()),
@@ -647,7 +647,7 @@ mod tests {
             }),
             describe: None,
             options: None,
-            file: None,
+            file: Some(PathBuf::from("file-b.yaml")),
         };
 
         let dir = dir_node(vec![file_a, file_b]);

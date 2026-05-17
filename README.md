@@ -53,13 +53,14 @@ To learn more about how you can use templates currently, please view the built-i
 ## Assertions
 There are several expressions and functions that you can use to assert.
 
-| Name      | Description                       | Example Usage                                     |
-|-----------|-----------------------------------|---------------------------------------------------|
-| `status`  | The response status code          | `"status == 200"`                                 |
-| `json`    | The json response object          | `'json.name == "myObj"'`                          |
-| `body`    | The stringified response body     | `'body == "hello"'`                               |
-| `headers` | The hashmap headers collection    | `'headers["content-type"] == "application/json"'` |
-| `bytes`   | The response body as a byte array | `'bytes == fileBytes("img.jpg")'`                 |
+| Name              | Description                                                                                                                              | Example Usage                                       |
+|-------------------|------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|
+| `status`          | The response status code                                                                                                                 | `"status == 200"`                                   |
+| `json`            | The json response object                                                                                                                 | `'json.name == "myObj"'`                            |
+| `body`            | The stringified response body                                                                                                            | `'body == "hello"'`                                 |
+| `headers`         | The hashmap headers collection                                                                                                           | `'headers["content-type"] == "application/json"'`   |
+| `bytes`           | The response body as a byte array                                                                                                        | `'bytes == fileBytes("img.jpg")'`                   |
+| `fileBytes(path)` | Reads a file as bytes for comparison. Relative paths resolve from the current spec file; paths beginning with `/` resolve from the root. | `'fileBytes("img.jpg")'`, `'fileBytes("/img.jpg")'` |
 
 ## License
 
@@ -69,7 +70,3 @@ This project is licensed under either of
 
 - [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([`LICENSE-APACHE`](LICENSE-APACHE))
 - [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT))
-
-at your option.
-
-The [SPDX](https://spdx.dev) license identifier for this project is `MIT OR Apache-2.0`.
