@@ -35,6 +35,8 @@ docker run --rm -v $PWD:/etc/tests mattisthegreatest/tempest test
 
 Once you run the tests, you will get an output in the console window that describes the results.
 
+you can also specify a test or subdirectory to run only those tests using `--run`
+
 ## Options
 There are a few options that you can use to configure your tests (more on the way!):
 
