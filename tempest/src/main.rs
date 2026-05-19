@@ -18,6 +18,8 @@ enum Commands {
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
+        #[arg(long, default_value = "/")]
+        run: PathBuf,
     },
 }
 
@@ -27,11 +29,15 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
     match args.command {
-        Commands::Test { path } => {
+        Commands::Test { path, run } => {
             let mut options = RunOptions::default_debug_false();
             options.reports = Some(vec!["console".to_string()]);
 
-            let discovery = &discovery::discover(&path, None, &mut HashMap::new())?;
+            let discovery = &discovery::discover(
+                &path,
+                None, &mut HashMap::new(),
+                &path.join(&run)
+            )?;
             pipeline::execute(discovery, &options).await?;
         }
     }
