@@ -112,19 +112,18 @@ pub fn discover(
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
         } else if stem.ends_with(".spec") {
-            match run_path_is_dir{
+            match run_path_is_dir {
                 true => {
                     if path.starts_with(run_path) {
                         tests.push(parser.parse_descriptor(path)?);
                     }
-                },
+                }
                 false => {
-                    if path == run_path{
+                    if path == run_path {
                         tests.push(parser.parse_descriptor(path)?);
                     }
-                },
+                }
             };
-
         } else if stem.ends_with(".template") {
             let template = parser.parse_report_template(path)?;
             let key = stem.trim_end_matches(".template").to_lowercase();
@@ -134,7 +133,12 @@ pub fn discover(
 
     let mut children = Vec::new();
     for entry in dirs {
-        let sub = discover(&entry.path(), Some(options.clone()), inherited_envs, run_path)?;
+        let sub = discover(
+            &entry.path(),
+            Some(options.clone()),
+            inherited_envs,
+            run_path,
+        )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
     }
@@ -303,7 +307,7 @@ mod tests {
             sub.join("test.spec.yml"),
             "name: SubTest\ntest:\n  route: /sub\n",
         )
-            .unwrap();
+        .unwrap();
 
         let result = discover(dir.path(), None, &mut HashMap::new(), &sub).unwrap();
         assert_eq!(result.directory.children.len(), 1);
@@ -320,13 +324,19 @@ mod tests {
         let sub = dir.path().join("subdir");
         fs::create_dir(&sub).unwrap();
         fs::write(
-            sub.join("test.spec.yml"), "name: SubTest\ntest:\n  route: /sub\n",
-        ).unwrap();
-        fs::write(
-            sub.join("a.spec.yml"), "test:\n  route: /a\n"
-        ).unwrap();
+            sub.join("test.spec.yml"),
+            "name: SubTest\ntest:\n  route: /sub\n",
+        )
+        .unwrap();
+        fs::write(sub.join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), &sub.join("test.spec.yml")).unwrap();
+        let result = discover(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            &sub.join("test.spec.yml"),
+        )
+        .unwrap();
         assert_eq!(result.directory.children.len(), 1);
         assert_eq!(result.directory.children[0].files.len(), 1);
         assert_eq!(
@@ -380,7 +390,13 @@ mod tests {
             retries: Some(0),
         };
 
-        let result = discover(dir.path(), Some(vec![inherited]), &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover(
+            dir.path(),
+            Some(vec![inherited]),
+            &mut HashMap::new(),
+            dir.path(),
+        )
+        .unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -412,7 +428,7 @@ mod tests {
             &PathBuf::from("/no/such/directory/exists"),
             None,
             &mut HashMap::new(),
-            &PathBuf::new()
+            &PathBuf::new(),
         );
         assert!(result.is_err());
     }

@@ -20,6 +20,10 @@ enum Commands {
         path: PathBuf,
         #[arg(long, default_value = "/")]
         run: PathBuf,
+        #[arg(short, long, default_value = "false")]
+        debug: bool,
+        #[arg(long, default_value = "0")]
+        retries: u8,
     },
 }
 
@@ -29,15 +33,16 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
     match args.command {
-        Commands::Test { path, run } => {
-            let mut options = RunOptions::default_debug_false();
-            options.reports = Some(vec!["console".to_string()]);
+        Commands::Test {
+            path,
+            run,
+            debug,
+            retries,
+        } => {
+            let options = RunOptions::default_from_args(debug, retries);
 
-            let discovery = &discovery::discover(
-                &path,
-                None, &mut HashMap::new(),
-                &path.join(&run)
-            )?;
+            let discovery =
+                &discovery::discover(&path, None, &mut HashMap::new(), &path.join(&run))?;
             pipeline::execute(discovery, &options).await?;
         }
     }
