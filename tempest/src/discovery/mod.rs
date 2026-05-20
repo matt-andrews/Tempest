@@ -79,7 +79,7 @@ pub fn discover(
     inherited_envs: &mut HashMap<String, String>,
     run_path: &Path,
 ) -> anyhow::Result<DiscoveryResult> {
-    let run_path_is_dir = &run_path.is_dir();
+    let run_path_is_dir = run_path.is_dir();
 
     let (dirs, files): (Vec<_>, Vec<_>) = fs::read_dir(dir)?
         .filter_map(|e| e.ok())
