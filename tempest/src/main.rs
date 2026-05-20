@@ -6,7 +6,7 @@ mod utils;
 use crate::models::run_options::RunOptions;
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 struct Cli {
@@ -18,6 +18,12 @@ enum Commands {
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
+        #[arg(long, default_value = "/")]
+        run: PathBuf,
+        #[arg(short, long, default_value = "false")]
+        debug: bool,
+        #[arg(long, default_value = "0")]
+        retries: u8,
     },
 }
 
@@ -27,14 +33,40 @@ async fn main() -> anyhow::Result<()> {
 
     let args = Cli::parse();
     match args.command {
-        Commands::Test { path } => {
-            let mut options = RunOptions::default_debug_false();
-            options.reports = Some(vec!["console".to_string()]);
+        Commands::Test {
+            path,
+            run,
+            debug,
+            retries,
+        } => {
+            let options = RunOptions::default_from_args(debug, retries);
+            let run_path = &resolve_run_path(&path, &run)?;
 
-            let discovery = &discovery::discover(&path, None, &mut HashMap::new())?;
+            let discovery = &discovery::discover(
+                &dunce::canonicalize(&path)?,
+                None,
+                &mut HashMap::new(),
+                run_path,
+            )?;
             pipeline::execute(discovery, &options).await?;
         }
     }
 
     Ok(())
+}
+
+fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
+    let root = dunce::canonicalize(project_dir)?;
+
+    let sanitized: PathBuf = run
+        .components()
+        .filter(|c| {
+            matches!(
+                c,
+                std::path::Component::Normal(_) | std::path::Component::CurDir
+            )
+        })
+        .collect();
+
+    Ok(root.join(sanitized))
 }

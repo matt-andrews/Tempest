@@ -15,13 +15,13 @@ pub struct RunOptions {
 }
 
 impl RunOptions {
-    pub fn default_debug_false() -> Self {
+    pub fn default_from_args(debug: bool, retries: u8) -> Self {
         Self {
             base_uri: None,
-            debug: Some(false),
-            reports: None,
+            debug: Some(debug),
+            reports: Some(vec!["console".to_string()]),
             start_time: Some(DateTime::now()),
-            retries: Some(0),
+            retries: Some(retries),
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -43,11 +43,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_debug_false_has_debug_false_and_no_other_fields() {
-        let d = RunOptions::default_debug_false();
+    fn default_debug_false_has_specific_fields_and_no_other_fields() {
+        let d = RunOptions::default_from_args(false, 33);
         assert_eq!(d.base_uri, None);
         assert_eq!(d.debug, Some(false));
-        assert_eq!(d.reports, None);
+        assert_eq!(d.reports, Some(vec!["console".to_string()]));
+        assert_eq!(d.retries, Some(33));
+    }
+
+    #[test]
+    fn default_debug_true_has_specific_fields_and_no_other_fields() {
+        let d = RunOptions::default_from_args(true, 12);
+        assert_eq!(d.base_uri, None);
+        assert_eq!(d.debug, Some(true));
+        assert_eq!(d.reports, Some(vec!["console".to_string()]));
+        assert_eq!(d.retries, Some(12));
     }
 
     #[test]

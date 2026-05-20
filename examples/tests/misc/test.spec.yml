@@ -10,7 +10,6 @@ describe:
   - name: "flaky assertion"
     options:
       base_uri: "https://httpbin.org"
-      retries: 2
     test:
       route: "/status/{% if retry_attempts == 0 %}400{%else%}200{%endif%}"
       assert:
