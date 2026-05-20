@@ -6,7 +6,7 @@ mod utils;
 use crate::models::run_options::RunOptions;
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Parser)]
 struct Cli {
@@ -41,9 +41,13 @@ async fn main() -> anyhow::Result<()> {
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
-            
-            let discovery =
-                &discovery::discover(&dunce::canonicalize(&path)?, None, &mut HashMap::new(), run_path)?;
+
+            let discovery = &discovery::discover(
+                &dunce::canonicalize(&path)?,
+                None,
+                &mut HashMap::new(),
+                run_path,
+            )?;
             pipeline::execute(discovery, &options).await?;
         }
     }
@@ -51,15 +55,17 @@ async fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn resolve_run_path(project_dir: &PathBuf, run: &PathBuf) -> anyhow::Result<PathBuf> {
-    let root = dunce::canonicalize(&project_dir)?;
+fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
+    let root = dunce::canonicalize(project_dir)?;
 
     let sanitized: PathBuf = run
         .components()
-        .filter(|c| matches!(
-            c,
-            std::path::Component::Normal(_) | std::path::Component::CurDir
-        ))
+        .filter(|c| {
+            matches!(
+                c,
+                std::path::Component::Normal(_) | std::path::Component::CurDir
+            )
+        })
         .collect();
 
     Ok(root.join(sanitized))
