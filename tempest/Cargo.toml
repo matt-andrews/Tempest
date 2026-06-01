@@ -11,7 +11,7 @@ serde = { version = "1.0.228", features = ["derive"] }
 colored = "3.1.1"
 enum_dispatch = "0.3.13"
 serde_yml = "0.0.12"
-reqwest = { version = "0.13.3", features = ["json"] }
+reqwest = { version = "0.13.4", features = ["json"] }
 serde_json = "1.0.149"
 cel-interpreter = "0.10.0"
 liquid = "0.26.11"
