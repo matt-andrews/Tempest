@@ -65,11 +65,19 @@ There are several expressions and functions that you can use to assert.
 | `bytes`           | The response body as a byte array                                                                                                        | `'bytes == fileBytes("img.jpg")'`                   |
 | `fileBytes(path)` | Reads a file as bytes for comparison. Relative paths resolve from the current spec file; paths beginning with `/` resolve from the root. | `'fileBytes("img.jpg")'`, `'fileBytes("/img.jpg")'` |
 
-## License
+## Running from repo
+To run the example tests locally directly from the repo
+```bash
+cd tempest
+cargo run -- test --path ../examples/tests
+```
 
-&copy; 2026 Matthew Andrews
+The console will show a bunch of tests running and give you the following summary
 
-This project is licensed under either of
-
-- [Apache License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0) ([`LICENSE-APACHE`](LICENSE-APACHE))
-- [MIT license](https://opensource.org/licenses/MIT) ([`LICENSE-MIT`](LICENSE-MIT))
+```
+- Summary Test Results ❌ ----------
+    Passed: 57
+    Flaky: 1
+    Failed: 2
+------------------------------------
+```
