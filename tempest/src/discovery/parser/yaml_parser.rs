@@ -11,20 +11,20 @@ pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
         let contents = fs::read_to_string(path)?;
-        let mut result: Descriptor = serde_yml::from_str(&contents)?;
+        let mut result: Descriptor = noyalib::from_str(&contents)?;
         Self::assign_file(&mut result, path);
         Ok(result)
     }
 
     fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions> {
         let contents = fs::read_to_string(path)?;
-        let config: RunOptions = serde_yml::from_str(&contents)?;
+        let config: RunOptions = noyalib::from_str(&contents)?;
         Ok(config)
     }
 
     fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplate> {
         let contents = fs::read_to_string(path)?;
-        let mut template: ReportTemplate = serde_yml::from_str(&contents)?;
+        let mut template: ReportTemplate = noyalib::from_str(&contents)?;
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
 
@@ -43,7 +43,7 @@ impl FileParser for YamlFileParser {
         dir: &Dir,
     ) -> anyhow::Result<ReportTemplate> {
         let contents = file.contents_utf8().unwrap_or_default();
-        let mut template = serde_yml::from_str::<ReportTemplate>(contents)?;
+        let mut template = noyalib::from_str::<ReportTemplate>(contents)?;
 
         template.test_template = Self::resolve_embedded_liquid(template.test_template, dir);
         template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);
@@ -155,12 +155,15 @@ mod tests {
     }
 
     #[test]
-    fn parse_descriptor_returns_error_for_invalid_yaml() {
+    fn parse_descriptor_returns_empty_for_invalid_yaml() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("bad.spec.yml");
         fs::write(&path, ":: not valid yaml ::").unwrap();
 
-        assert!(YamlFileParser.parse_descriptor(&path).is_err());
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
+        assert!(result.name.is_none());
+        assert!(result.test.is_none());
+        assert!(result.describe.is_none());
     }
 
     #[test]
@@ -333,12 +336,17 @@ mod tests {
     }
 
     #[test]
-    fn parse_report_template_returns_error_for_invalid_yaml() {
+    fn parse_report_template_returns_empty_for_invalid_yaml() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("bad.template.yml");
         fs::write(&path, ": invalid :").unwrap();
 
-        assert!(YamlFileParser.parse_report_template(&path).is_err());
+        let result = YamlFileParser.parse_report_template(&path).unwrap();
+        assert!(result.test_template.is_none());
+        assert!(result.section_template.is_none());
+        assert!(result.error_template.is_none());
+        assert!(result.title_template.is_none());
+        assert!(result.summary_template.is_none());
     }
 
     #[test]
