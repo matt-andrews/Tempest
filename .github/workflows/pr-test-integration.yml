@@ -38,7 +38,6 @@ jobs:
           compression-level: 0
           if-no-files-found: error
 
-
   integration:
     needs: build
     strategy:
@@ -67,26 +66,26 @@ jobs:
             expect: 0
 
 
-      name: Integration tests - ${{ matrix.name }}
-      runs-on: ubuntu-latest
-      permissions:
-        contents: read
-      defaults:
-        run:
-          working-directory: ./tempest
+    name: Integration tests - ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./tempest
 
-      steps:
-        - uses: actions/checkout@v7
+    steps:
+      - uses: actions/checkout@v7
 
-        - name: Download binary
-          uses: actions/download-artifact@v8
-          with:
-            name: tempest-integration-binary
-            path: ./tempest/bin
+      - name: Download binary
+        uses: actions/download-artifact@v8
+        with:
+          name: tempest-integration-binary
+          path: ./tempest/bin
 
-        - name: Run
-          shell: bash
-          run: |
+      - name: Run
+        shell: bash
+        run: |
             chmod +x ./bin/tempest
             
             args=(
