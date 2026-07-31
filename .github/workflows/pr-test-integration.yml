@@ -1,0 +1,76 @@
+name: PR - integration tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tempest/**"
+      - "examples/**"
+      - ".github/workflows/pr-test-integration.yml"
+
+jobs:
+  integration:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: passing scenario
+            dir: ./pass
+            strict: false
+            retries: 2
+            expect: 0
+          - name: failing scenario
+            dir: ./fail
+            strict: false
+            retries: 2
+            expect: 1
+          - name: flaky scenario (strict)
+            dir: ./flaky
+            strict: true
+            retries: 2
+            expect: 2
+          - name: flaky scenario (non-strict)
+            dir: ./flaky
+            strict: false
+            retries: 2
+            expect: 0
+
+
+    name: Integration tests - ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ./tempest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run
+        shell: bash
+        run: |
+            args=(
+              test
+              --path ../examples/tests
+              --run "${{ matrix.dir }}"
+              --retries "${{ matrix.retries }}"
+            )
+            
+            if [[ "${{ matrix.strict }}" == "true" ]]; then
+              args+=(--strict)
+            fi
+            
+            actual=0
+            cargo run -- "${args[@]}" || actual=$?
+            
+            if [[ "$actual" -ne "${{ matrix.expect }}" ]]; then
+              echo "::error::Expected exit code ${{ matrix.expect }}, got $actual"
+              exit 1
+            fi

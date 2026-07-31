@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
             )?;
 
             let result = pipeline::execute(discovery, &options).await?;
-            let exit = determine_exit_code(result, false, strict);
+            let exit = determine_exit_code(result, strict, false);
             process::exit(exit as i32);
         }
     }
