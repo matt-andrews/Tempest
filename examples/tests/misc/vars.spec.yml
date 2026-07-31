@@ -1,0 +1,81 @@
+name: "VARS mechanics"
+description: "test the various mechanics surrounding `vars`"
+
+describe:
+  - name: "Flat objects"
+    description: "tests with  flat object variables such as status and body"
+    options:
+      base_uri: "{{ env.HTTPBIN_BASE_URI }}"
+    describe:
+      - name: "Base64 decode roundtrip"
+        description: "httpbin can decode base64 — 'SFRUUEJJTg==' decodes to 'HTTPBIN'"
+        test:
+          route: "/base64/SFRUUEJJTg=="
+          assert:
+            - "status == 200"
+            - "body == \"HTTPBIN\""
+          vars:
+            - "var_status={{ status }}"
+            - "var_body={{ body }}"
+
+      - name: "Variable reading experiment"
+        description: "we can read variables published by other tests"
+        test:
+          route: "/status/{{ file.var_status }}"
+          assert:
+            - "status == {{ file.var_status }}"
+            - "'{{ file.var_body }}' == 'HTTPBIN'"
+
+  - name: "Headers as vars"
+    description: "Tests saving response headers to variables"
+    options:
+      base_uri: "{{ env.HTTPBIN_BASE_URI }}"
+    describe:
+      - name: "Accept header is respected"
+        test:
+          route: "/get"
+          headers:
+            Accept: "application/json"
+          assert:
+            - "status == 200"
+            - 'headers["content-type"] == "application/json"'
+          vars:
+            - 'fwdContentType={{ headers["content-type"] }}'
+      - name: "Custom header is echoed"
+        test:
+          route: "/get"
+          headers:
+            X-Tempest-Test: "{{ file.fwdContentType }}"
+          assert:
+            - "status == 200"
+            - "body.contains(\"application/json\")"
+            - '"{{ file.fwdContentType }}" == "application/json"'
+
+  - name: "Json objects"
+    description: "tests saving variables from complex json objects"
+    options:
+      base_uri: "{{ env.GITHUB_BASE_URI }}"
+      debug: true
+    describe:
+      - name: "Fetch the octocat/Hello-World repo"
+        test:
+          route: "/repos/octocat/Hello-World"
+          headers:
+            Accept: "application/vnd.github.v3+json"
+          assert:
+            - "status == 200"
+            - 'json.name == "Hello-World"'
+            - 'json.owner.login == "octocat"'
+          vars:
+            - "github_user={{ json.owner.login }}"
+            - "github_repo={{ json.name }}"
+
+      - name: "Fetch the octocat/Hello-World repo dynamically"
+        test:
+          route: "/repos/{{ file.github_user }}/{{ file.github_repo }}"
+          headers:
+            Accept: "application/vnd.github.v3+json"
+          assert:
+            - "status == 200"
+            - 'json.name == "Hello-World"'
+            - 'json.owner.login == "octocat"'

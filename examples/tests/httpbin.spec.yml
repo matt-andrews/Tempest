@@ -194,20 +194,3 @@ describe:
           route: "/delay/1"
           assert:
             - "status == 200"
-
-      - name: "Base64 decode roundtrip"
-        description: "httpbin can decode base64 — 'SFRUUEJJTg==' decodes to 'HTTPBIN'"
-        test:
-          route: "/base64/SFRUUEJJTg=="
-          assert:
-            - "status == 200"
-            - "body == \"HTTPBIN\""
-          vars:
-            - "var_status={{ status }}"
-
-      - name: "Variable reading experiment"
-        description: "we can read variables published by other tests"
-        test:
-          route: "/status/{{ file.var_status }}"
-          assert:
-            - "status == {{ file.var_status }}"

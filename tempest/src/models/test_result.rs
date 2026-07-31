@@ -1,6 +1,7 @@
 use crate::utils::header_map_converter::header_map_serde;
+use liquid::model::Value;
 use reqwest::StatusCode;
-use reqwest::header::HeaderMap;
+use reqwest::header::{HeaderMap, ToStrError};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 
@@ -19,13 +20,41 @@ pub struct TestResult {
 
 impl TestResult {
     pub fn to_liquid_template(&self) -> liquid::Object {
+        let headers = match headers_to_liquid(&self.headers) {
+            Ok(val) => val,
+            Err(_) => liquid::Object::new(),
+        };
         liquid::object!({
             "status": self.status.code as i64,
             "status_message": self.status.message.clone(),
             "body": self.body.clone(),
             "duration_ms": self.duration.as_secs_f64() * 1000.0,
+            "json": self.json.clone(),
+            "headers": headers,
         })
     }
+}
+
+pub fn headers_to_liquid(headers: &HeaderMap) -> anyhow::Result<liquid::Object> {
+    let mut object = liquid::Object::new();
+
+    for name in headers.keys() {
+        let mut values = headers
+            .get_all(name)
+            .iter()
+            .map(|value| value.to_str().map(|text| Value::scalar(text.to_owned())))
+            .collect::<Result<Vec<Value>, ToStrError>>()?;
+
+        let liquid_value = if values.len() == 1 {
+            values.pop().expect("HeaderMap key must have a value")
+        } else {
+            Value::array(values)
+        };
+
+        object.insert(name.as_str().to_owned().into(), liquid_value);
+    }
+
+    Ok(object)
 }
 
 #[derive(Clone, Debug, Default)]
