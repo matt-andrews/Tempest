@@ -84,11 +84,11 @@ You can see some working examples [here](examples/tests/misc/vars.spec.yml)
 
 ## Exit codes
 
-| Code | Description                                                  |
-|------|--------------------------------------------------------------|
-| 0    | Success                                                      |
-| 1    | One or more tests failed                                     |
-| 2    | One or more tests was flaky AND the `--strict` flag was used | 
+| Code | Description                                                   |
+|------|---------------------------------------------------------------|
+| 0    | Success                                                       |
+| 1    | One or more tests failed                                      |
+| 2    | One or more tests were flaky AND the `--strict` flag was used | 
 
 ## Running from repo
 To run the example tests locally directly from the repo
