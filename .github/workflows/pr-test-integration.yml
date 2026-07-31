@@ -11,7 +11,36 @@ on:
       - ".github/workflows/pr-test-integration.yml"
 
 jobs:
+  build:
+    name: Build integration test binary
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./tempest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --locked
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: tempest-integration-binary
+          path: ./tempest/target/debug/tempest
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+
   integration:
+    needs: build
     strategy:
       fail-fast: false
       matrix:
@@ -38,24 +67,28 @@ jobs:
             expect: 0
 
 
-    name: Integration tests - ${{ matrix.name }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-    defaults:
-      run:
-        working-directory: ./tempest
+      name: Integration tests - ${{ matrix.name }}
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+      defaults:
+        run:
+          working-directory: ./tempest
 
-    steps:
-      - uses: actions/checkout@v7
+      steps:
+        - uses: actions/checkout@v7
 
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        - name: Download binary
+          uses: actions/download-artifact@v8
+          with:
+            name: tempest-integration-binary
+            path: ./tempest/bin
 
-      - name: Run
-        shell: bash
-        run: |
+        - name: Run
+          shell: bash
+          run: |
+            chmod +x ./bin/tempest
+            
             args=(
               test
               --path ../examples/tests
@@ -68,7 +101,7 @@ jobs:
             fi
             
             actual=0
-            cargo run -- "${args[@]}" || actual=$?
+            ./bin/tempest "${args[@]}" || actual=$?
             
             if [[ "$actual" -ne "${{ matrix.expect }}" ]]; then
               echo "::error::Expected exit code ${{ matrix.expect }}, got $actual"
