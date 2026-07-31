@@ -1,0 +1,179 @@
+name: PR - all tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches: [main]
+    paths:
+      - "tempest/**"
+      - "examples/**"
+      - ".github/workflows/pr-test.yml"
+
+
+jobs:
+  rust-checks:
+    name: Rust Test + Clippy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ./tempest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Clippy
+        run: cargo clippy --locked --all-targets --all-features -- -D warnings
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          cargo test --locked 2>&1 | tee cargo-test-output.txt
+          
+          python3 - << 'EOF'
+          import re, json
+          passed = failed = ignored = 0
+          with open("cargo-test-output.txt") as f:
+              for line in f:
+                  match = re.search(
+                      r"(\d+) passed; (\d+) failed; (\d+) ignored",
+                      line
+                  )
+                  if match:
+                      passed += int(match.group(1))
+                      failed += int(match.group(2))
+                      ignored += int(match.group(3))
+          
+          with open("unit-test-results.json", "w") as output:
+              json.dump({
+                  "passed": passed,
+                  "failed": failed,
+                  "ignored": ignored
+              }, output)
+          EOF
+          
+      - name: Generate CTRF report
+        if: always()
+        run: |
+          python3 - << 'EOF'
+          import json
+          try:
+              data = json.load(open("unit-test-results.json"))
+              passed = data.get("passed", 0)
+              failed = data.get("failed", 0)
+              ignored = data.get("ignored", 0)
+          except (FileNotFoundError, json.JSONDecodeError):
+              passed, failed, ignored = 0, 1, 0
+          ctrf = {"results": {"tool": {"name": "cargo"}, "summary": {
+              "tests": passed + failed + ignored, "passed": passed,
+              "failed": failed, "pending": 0, "skipped": ignored,
+              "other": 0, "start": 0, "stop": 0}, "tests": []}}
+          json.dump(ctrf, open("ctrf-report.json", "w"))
+          EOF
+
+      - name: Publish test report
+        uses: ctrf-io/github-test-reporter@v1
+        if: always() && github.event_name == 'pull_request'
+        with:
+          report-path: ./tempest/ctrf-report.json
+          pull-request-report: "true"
+          overwrite-comment: "true"
+          title: "Rust Unit Tests"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: unit-test-results
+          path: ./tempest/unit-test-results.json
+          retention-days: 30
+
+      - name: Build integration binary
+        run: cargo build --locked
+
+      - name: Upload integration binary
+        uses: actions/upload-artifact@v7
+        with:
+          name: tempest-integration-binary
+          path: ./tempest/target/debug/tempest
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
+  integration:
+    needs: rust-checks
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: passing scenario
+            dir: ./pass
+            strict: false
+            retries: 2
+            expect: 0
+          - name: failing scenario
+            dir: ./fail
+            strict: false
+            retries: 2
+            expect: 1
+          - name: flaky scenario (strict)
+            dir: ./flaky
+            strict: true
+            retries: 2
+            expect: 2
+          - name: flaky scenario (non-strict)
+            dir: ./flaky
+            strict: false
+            retries: 2
+            expect: 0
+
+
+    name: Integration tests - ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ./tempest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Download binary
+        uses: actions/download-artifact@v8
+        with:
+          name: tempest-integration-binary
+          path: ./tempest/bin
+
+      - name: Run
+        shell: bash
+        run: |
+              chmod +x ./bin/tempest
+              
+              args=(
+                test
+                --path ../examples/tests
+                --run "${{ matrix.dir }}"
+                --retries "${{ matrix.retries }}"
+              )
+              
+              if [[ "${{ matrix.strict }}" == "true" ]]; then
+                args+=(--strict)
+              fi
+              
+              actual=0
+              ./bin/tempest "${args[@]}" || actual=$?
+              
+              if [[ "$actual" -ne "${{ matrix.expect }}" ]]; then
+                echo "::error::Expected exit code ${{ matrix.expect }}, got $actual"
+                exit 1
+              fi

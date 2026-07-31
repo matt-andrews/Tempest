@@ -9,20 +9,15 @@ permissions:
   contents: read
 
 jobs:
-  unit-test:
+  pr-test:
     permissions:
       contents: read
       pull-requests: write
-    uses: ./.github/workflows/pr-test-unit.yml
-  integration-test:
-    permissions:
-      contents: read
-    uses: ./.github/workflows/pr-test-integration.yml
+    uses: ./.github/workflows/pr-test.yml
 
   publish-app:
     needs:
-      - unit-test
-      - integration-test
+      - pr-test
 
     runs-on: ubuntu-latest
     permissions:
