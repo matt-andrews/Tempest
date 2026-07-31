@@ -80,7 +80,7 @@ assert:
   - '"body" == {{ file.body }}'
 ```
 
-You can see some working examples [here](examples/tests/misc/vars.spec.yml)
+You can see some working examples [here](examples/tests/pass/misc/vars.spec.yml)
 
 ## Exit codes
 
