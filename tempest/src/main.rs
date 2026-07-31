@@ -55,7 +55,7 @@ async fn main() -> anyhow::Result<()> {
             )?;
 
             let result = pipeline::execute(discovery, &options).await?;
-            let exit = determine_exit_code(result, strict, false);
+            let exit = determine_exit_code(result, strict);
             process::exit(exit as i32);
         }
     }
@@ -88,12 +88,8 @@ enum ExitCode {
 fn determine_exit_code(
     result: SummaryResult,
     strict: bool,
-    //todo
-    runner_error: bool,
 ) -> ExitCode {
-    if runner_error {
-        ExitCode::RunnerError
-    } else if result == SummaryResult::Failed {
+    if result == SummaryResult::Failed {
         ExitCode::TestsFailed
     } else if result == SummaryResult::Flaky && strict {
         ExitCode::FlakyTests
