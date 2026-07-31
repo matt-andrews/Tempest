@@ -82,13 +82,9 @@ enum ExitCode {
     Success = 0,
     TestsFailed = 1,
     FlakyTests = 2,
-    RunnerError = 3,
 }
 
-fn determine_exit_code(
-    result: SummaryResult,
-    strict: bool,
-) -> ExitCode {
+fn determine_exit_code(result: SummaryResult, strict: bool) -> ExitCode {
     if result == SummaryResult::Failed {
         ExitCode::TestsFailed
     } else if result == SummaryResult::Flaky && strict {
