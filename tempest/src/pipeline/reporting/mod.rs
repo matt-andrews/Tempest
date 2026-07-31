@@ -31,7 +31,7 @@ pub trait Reporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
-    );
+    ) -> SummaryResult;
     fn title(
         &self,
         options: &RunOptions,

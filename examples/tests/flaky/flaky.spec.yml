@@ -1,12 +1,5 @@
-name: "Misc tests"
-
+name: "Intentionally Flaky tests"
 describe:
-  - name: "file assertion from same level"
-    test:
-      route: "http://matthew.andrews.gg/img.jpg"
-      assert:
-        - 'bytes == fileBytes("img.jpg")'
-
   - name: "flaky assertion"
     options:
       base_uri: "https://httpbin.org"

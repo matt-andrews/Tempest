@@ -8,12 +8,13 @@ pub mod variables;
 
 use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;
+use crate::models::summary_result::SummaryResult;
 use crate::pipeline::pipeline_runner::PipelineRunner;
 
 pub async fn execute(
     discovery_result: &DiscoveryResult,
     default_options: &RunOptions,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<SummaryResult> {
     let mut run = PipelineRunner::new(
         discovery_result,
         default_options.clone(),
@@ -22,7 +23,7 @@ pub async fn execute(
 
     run.title();
     run.walk().await;
-    run.summary();
+    let result = run.summary();
 
-    Ok(())
+    Ok(result)
 }

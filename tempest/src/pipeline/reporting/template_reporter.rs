@@ -77,7 +77,7 @@ impl Reporter for TemplateReporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
-    ) {
+    ) -> SummaryResult {
         let passed = results
             .iter()
             .filter(|f| matches!(f, SummaryResult::Passed))
@@ -99,6 +99,14 @@ impl Reporter for TemplateReporter {
             options,
             templates,
         );
+
+        if failed > 0 {
+            SummaryResult::Failed
+        } else if flaky > 0 {
+            SummaryResult::Flaky
+        } else {
+            SummaryResult::Passed
+        }
     }
 
     fn title(

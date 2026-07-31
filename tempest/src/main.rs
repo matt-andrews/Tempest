@@ -4,9 +4,11 @@ pub mod pipeline;
 mod utils;
 
 use crate::models::run_options::RunOptions;
+use crate::models::summary_result::SummaryResult;
 use clap::{Parser, Subcommand};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::process;
 
 #[derive(Parser)]
 struct Cli {
@@ -24,6 +26,8 @@ enum Commands {
         debug: bool,
         #[arg(long, default_value = "0")]
         retries: u8,
+        #[arg(short, long, default_value = "false")]
+        strict: bool,
     },
 }
 
@@ -38,6 +42,7 @@ async fn main() -> anyhow::Result<()> {
             run,
             debug,
             retries,
+            strict,
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
@@ -48,11 +53,12 @@ async fn main() -> anyhow::Result<()> {
                 &mut HashMap::new(),
                 run_path,
             )?;
-            pipeline::execute(discovery, &options).await?;
+
+            let result = pipeline::execute(discovery, &options).await?;
+            let exit = determine_exit_code(result, strict);
+            process::exit(exit as i32);
         }
     }
-
-    Ok(())
 }
 
 fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
@@ -69,4 +75,21 @@ fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf
         .collect();
 
     Ok(root.join(sanitized))
+}
+
+#[repr(i32)]
+enum ExitCode {
+    Success = 0,
+    TestsFailed = 1,
+    FlakyTests = 2,
+}
+
+fn determine_exit_code(result: SummaryResult, strict: bool) -> ExitCode {
+    if result == SummaryResult::Failed {
+        ExitCode::TestsFailed
+    } else if result == SummaryResult::Flaky && strict {
+        ExitCode::FlakyTests
+    } else {
+        ExitCode::Success
+    }
 }
