@@ -39,9 +39,9 @@ impl<'a> PipelineRunner<'a> {
         );
     }
 
-    pub fn summary(&self) {
+    pub fn summary(&self) -> SummaryResult {
         self.reporter
-            .summary(&self.options, &self.discovered.templates, &self.summary);
+            .summary(&self.options, &self.discovered.templates, &self.summary)
     }
 
     pub async fn walk(&mut self) {
