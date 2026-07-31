@@ -1,0 +1,8 @@
+name: "Misc tests"
+
+describe:
+  - name: "file assertion from same level"
+    test:
+      route: "http://matthew.andrews.gg/img.jpg"
+      assert:
+        - 'bytes == fileBytes("img.jpg")'
