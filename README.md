@@ -65,6 +65,23 @@ There are several expressions and functions that you can use to assert.
 | `bytes`           | The response body as a byte array                                                                                                        | `'bytes == fileBytes("img.jpg")'`                   |
 | `fileBytes(path)` | Reads a file as bytes for comparison. Relative paths resolve from the current spec file; paths beginning with `/` resolve from the root. | `'fileBytes("img.jpg")'`, `'fileBytes("/img.jpg")'` |
 
+## Variables
+You can specify outputs as variables to be used downstream tests. Downstream tests are tests that reside in the same spec file, and are defined after the test declaring the variable.
+
+Example:
+```yml
+vars:
+  - 'my_var={{ body }}'
+```
+
+Once a variable has been declared it can be used with liquid templates in the file scope:
+```yml
+assert:
+  - '"body" == {{ file.body }}'
+```
+
+You can see some working examples [here](examples/tests/misc/vars.spec.yml)
+
 ## Running from repo
 To run the example tests locally directly from the repo
 ```bash
@@ -76,7 +93,7 @@ The console will show a bunch of tests running and give you the following summar
 
 ```
 - Summary Test Results ❌ ----------
-    Passed: 57
+    Passed: 61
     Flaky: 1
     Failed: 2
 ------------------------------------
