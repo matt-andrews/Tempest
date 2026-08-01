@@ -96,7 +96,7 @@ describe:
             - status == 200
             - body.json().octocat.contains("https://")
           vars:
-            - "emoji_octocat={{ json.octocat }}"
+            emoji_octocat: body.json().octocat
 
       - name: "Download emoji and compare to pre-downloaded copy"
         description: "This test downloads the octocat emoji defined in the previous test, and then compares it to the local copy"

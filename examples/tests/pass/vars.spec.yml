@@ -15,8 +15,8 @@ describe:
             - status == 200
             - body == "HTTPBIN"
           vars:
-            - var_status={{ status }}
-            - var_body={{ body }}
+            var_status: status
+            var_body: body
 
       - name: "Variable reading experiment"
         description: "we can read variables published by other tests"
@@ -40,7 +40,7 @@ describe:
             - status == 200
             - headers["content-type"] == "application/json"
           vars:
-            - fwdContentType={{ headers["content-type"] }}
+            fwdContentType: headers["content-type"]
       - name: "Custom header is echoed"
         test:
           route: "/get"
@@ -67,8 +67,8 @@ describe:
             - body.json().name == "Hello-World"
             - body.json().owner.login == "octocat"
           vars:
-            - github_user={{ json.owner.login }}
-            - github_repo={{ json.name }}
+            github_user: body.json().owner.login
+            github_repo: body.json().name
 
       - name: "Fetch the octocat/Hello-World repo dynamically"
         test:
