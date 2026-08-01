@@ -2,7 +2,7 @@ use anyhow::{Context, Result, bail};
 use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Clone, Default)]
-pub struct AssertionContext {
+pub struct EvaluationContext {
     /// Root directory passed to `tempest test`.
     pub suite_dir: PathBuf,
 
@@ -10,7 +10,7 @@ pub struct AssertionContext {
     pub spec_file: Option<PathBuf>,
 }
 
-impl AssertionContext {
+impl EvaluationContext {
     pub fn resolve_file(&self, raw: &str) -> Result<PathBuf> {
         let raw = raw.trim();
 
@@ -77,8 +77,8 @@ mod tests {
         path
     }
 
-    fn suite(dir: &TempDir) -> AssertionContext {
-        AssertionContext {
+    fn suite(dir: &TempDir) -> EvaluationContext {
+        EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: None,
         }
@@ -86,13 +86,13 @@ mod tests {
 
     #[test]
     fn empty_path_returns_error() {
-        let err = AssertionContext::default().resolve_file("").unwrap_err();
+        let err = EvaluationContext::default().resolve_file("").unwrap_err();
         assert!(err.to_string().contains("empty"));
     }
 
     #[test]
     fn whitespace_only_path_returns_error() {
-        assert!(AssertionContext::default().resolve_file("   ").is_err());
+        assert!(EvaluationContext::default().resolve_file("   ").is_err());
     }
 
     #[test]
@@ -110,7 +110,7 @@ mod tests {
         let file = sub.join("data.bin");
         std::fs::write(&file, b"y").unwrap();
 
-        let ctx = AssertionContext {
+        let ctx = EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };

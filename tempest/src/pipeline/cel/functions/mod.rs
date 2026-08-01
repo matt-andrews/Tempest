@@ -1,10 +1,10 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use cel_interpreter::Context;
 
 pub mod file_bytes;
 pub mod json;
 
-pub fn register_all(context: &mut Context, assertion_context: &AssertionContext) {
+pub fn register_all(context: &mut Context, evaluation_context: &EvaluationContext) {
     json::register(context);
-    file_bytes::register(context, assertion_context.clone())
+    file_bytes::register(context, evaluation_context.clone())
 }

@@ -1,4 +1,4 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::report_template::ReportTemplate;
@@ -171,7 +171,7 @@ impl<'a> DirectoryRunner<'a> {
     ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
-            let assertion_context = AssertionContext {
+            let assertion_context = EvaluationContext {
                 suite_dir: self.top_path.to_path_buf(),
                 spec_file: descriptor.file.clone(),
             };

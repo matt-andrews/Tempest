@@ -1,12 +1,12 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use cel_interpreter::{Context, FunctionContext, Value};
 use std::sync::Arc;
 
-pub fn register(context: &mut Context, assertion_context: AssertionContext) {
+pub fn register(context: &mut Context, evaluation_context: EvaluationContext) {
     context.add_function(
         "fileBytes",
         move |ftx: &FunctionContext, path: Arc<String>| {
-            let resolved = assertion_context
+            let resolved = evaluation_context
                 .resolve_file(path.as_str())
                 .map_err(|e| ftx.error(e.to_string()))?;
 

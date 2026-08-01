@@ -1,4 +1,4 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use crate::models::test_result::TestResult;
 use crate::pipeline::cel::functions;
 use crate::pipeline::warnings;
@@ -11,13 +11,13 @@ use std::sync::Arc;
 
 pub fn for_response<'a>(
     response: &TestResult,
-    assertion_context: &AssertionContext,
+    evaluation_context: &EvaluationContext,
     refs: &ExpressionReferences,
 ) -> anyhow::Result<Context<'a>> {
     let mut context = Context::default();
     check_for_warnings(refs);
     add_response_variables(&mut context, response)?;
-    functions::register_all(&mut context, assertion_context);
+    functions::register_all(&mut context, evaluation_context);
 
     Ok(context)
 }

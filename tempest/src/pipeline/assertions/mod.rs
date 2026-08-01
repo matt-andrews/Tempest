@@ -1,4 +1,4 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::cel::CelAssertionEvaluator;
 use enum_dispatch::enum_dispatch;
@@ -7,7 +7,7 @@ pub mod cel;
 
 #[enum_dispatch]
 pub trait AssertionEvaluator {
-    fn evaluate(&self, data: &TestResult, context: &AssertionContext) -> Assertion;
+    fn evaluate(&self, data: &TestResult, context: &EvaluationContext) -> Assertion;
 }
 
 #[enum_dispatch(AssertionEvaluator)]

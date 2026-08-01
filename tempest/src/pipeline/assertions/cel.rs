@@ -1,16 +1,17 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::models::assertion_context::EvaluationContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
 use anyhow::anyhow;
 use cel_interpreter::{Program, Value};
+use crate::pipeline::cel;
 use crate::pipeline::cel::context;
 
 pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
-    fn evaluate(&self, data: &TestResult, context: &AssertionContext) -> Assertion {
-        let result = Self::evaluate_assertion(&self.assertion, data, context.to_owned())
+    fn evaluate(&self, data: &TestResult, context: &EvaluationContext) -> Assertion {
+        let result = Self::evaluate_assertion(&self.assertion, data, context)
             .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
@@ -33,17 +34,9 @@ impl CelAssertionEvaluator {
     fn evaluate_assertion(
         expr: &str,
         response: &TestResult,
-        context: AssertionContext,
+        context: &EvaluationContext,
     ) -> anyhow::Result<bool> {
-        let program = match Program::compile(expr) {
-            Ok(p) => p,
-            Err(e) => return Err(anyhow!("{}", e)),
-        };
-
-        let refs = program.references();
-        let ctx = context::for_response(response, &context, &refs)?;
-
-        match program.execute(&ctx)? {
+        match cel::evaluate(expr, response, context)? {
             Value::Bool(b) => Ok(b),
             other => anyhow::bail!("Assertion did not return a bool, got: {:?}", other),
         }
@@ -79,7 +72,7 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &AssertionContext::default())
+        CelAssertionEvaluator::new(expr).evaluate(r, &EvaluationContext::default())
     }
 
     #[test]
@@ -153,12 +146,12 @@ mod tests {
 
     // --- fileBytes ---
 
-    fn eval_with_ctx(expr: &str, r: &TestResult, ctx: AssertionContext) -> Assertion {
+    fn eval_with_ctx(expr: &str, r: &TestResult, ctx: EvaluationContext) -> Assertion {
         CelAssertionEvaluator::new(expr).evaluate(r, &ctx)
     }
 
-    fn suite_ctx(dir: &tempfile::TempDir) -> AssertionContext {
-        AssertionContext {
+    fn suite_ctx(dir: &tempfile::TempDir) -> EvaluationContext {
+        EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: None,
         }
@@ -202,7 +195,7 @@ mod tests {
         std::fs::create_dir(&sub).unwrap();
         write_file(&dir, "root.bin", b"root");
 
-        let ctx = AssertionContext {
+        let ctx = EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
@@ -224,7 +217,7 @@ mod tests {
         std::fs::create_dir(&sub).unwrap();
         std::fs::write(sub.join("payload.bin"), b"payload").unwrap();
 
-        let ctx = AssertionContext {
+        let ctx = EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
@@ -260,7 +253,7 @@ mod tests {
         let a = eval_with_ctx(
             r#"fileBytes("")"#,
             &result(200, ""),
-            AssertionContext::default(),
+            EvaluationContext::default(),
         );
         assert!(!a.passed);
         assert!(!a.error.is_empty());
