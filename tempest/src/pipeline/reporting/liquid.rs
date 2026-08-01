@@ -162,7 +162,6 @@ mod tests {
             },
             headers: reqwest::header::HeaderMap::new(),
             body: "missing".to_string(),
-            json: None,
             bytes: vec![],
             duration: Duration::from_millis(250),
         }
