@@ -63,19 +63,21 @@ There are several expressions and functions that you can use to assert.
 | `bytes`           | The response body as a byte array                                                                                                        | `'bytes == fileBytes("img.jpg")'`                   |
 | `fileBytes(path)` | Reads a file as bytes for comparison. Relative paths resolve from the current spec file; paths beginning with `/` resolve from the root. | `'fileBytes("img.jpg")'`, `'fileBytes("/img.jpg")'` |
 
+You can also extend the `body` field with `body.json()` to get a json object from the result body.
+
 ## Variables
 You can specify outputs as variables to be used downstream tests. Downstream tests are tests that reside in the same spec file, and are defined after the test declaring the variable.
 
 Example:
 ```yml
 vars:
-  - 'my_var={{ body }}'
+  my_var: body
 ```
 
-Once a variable has been declared it can be used with liquid templates in the file scope:
+Once a variable has been declared it can be used with liquid templates in a subsequent test with the file scope:
 ```yml
 assert:
-  - '"body" == {{ file.body }}'
+  - 'body == {{ file.my_var }}'
 ```
 
 You can see some working examples [here](https://github.com/matt-andrews/Tempest/tree/main/examples/tests/pass/misc/vars.spec.yml)
