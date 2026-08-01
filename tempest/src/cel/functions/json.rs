@@ -1,7 +1,7 @@
 use crate::content;
 use crate::models::response_content_cache::ResponseContentCache;
 use cel_interpreter::extractors::This;
-use cel_interpreter::{Context, ExecutionError, FunctionContext, Value};
+use cel_interpreter::{Context, FunctionContext};
 use std::sync::Arc;
 
 pub fn register(ctx: &mut Context, cache: ResponseContentCache) {

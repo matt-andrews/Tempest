@@ -1,4 +1,4 @@
-use cel_interpreter::{ExecutionError, Value};
+use cel_interpreter::Value;
 use std::sync::{Arc, OnceLock};
 
 #[derive(Clone, Debug, Default)]
