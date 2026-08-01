@@ -1,0 +1,43 @@
+name: "Structured content selectors"
+description: "Tests XPath assertions against XML and CSS selector assertions against HTML"
+options:
+  base_uri: "{{ env.HTTPBIN_BASE_URI }}"
+
+describe:
+  - name: "XML with xpath interactions"
+    description: ""
+    describe:
+      - name: "basic xpath navigation"
+        test:
+          route: "/xml"
+          headers:
+            Accept: "application/xml"
+          assert:
+            - status == 200
+            - headers["content-type"].startsWith("application/xml")
+            - body.xpath("string(/slideshow/@title)") == "Sample Slide Show"
+            - body.xpath("count(/slideshow/slide)") == 2.0
+            - body.xpath("boolean(/slideshow/slide[@type='all'])")
+            - body.xpath("count(/slideshow/slide[2]/item)") == 3.0
+            - body.xpath("string(/slideshow/slide[2]/item[1]/em)") == "WonderWidgets"
+            - body.xpath("/slideshow/slide/title") == ["Wake up to WonderWidgets!", "Overview"]
+
+  - name: "HTML with css interactions"
+    description: ""
+    describe:
+      - name: "basic css navigation"
+        test:
+          route: "https://example.com/"
+          headers:
+            Accept: "text/html"
+          assert:
+            - status == 200
+            - headers["content-type"].startsWith("text/html")
+            - body.css("html[lang='en']").size() == 1
+            - body.css("title").exists(el, el.text == "Example Domain")
+            - body.css("body > div > h1").exists(el, el.text == "Example Domain")
+            - body.css("body > div > p").size() == 2
+            - body.css("a[href]").size() > 0
+            - body.css("a[href]").all(el, el.attrs.href.startsWith("https://"))
+            - body.css("a[href]").map(el, el.attrs.href) == ["https://iana.org/domains/example"]
+            - body.css("link[rel='icon']").exists(el, el.attrs.href == "data:,")
