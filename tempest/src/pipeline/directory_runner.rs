@@ -570,6 +570,7 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
+                vars: Some(HashMap::from([("id".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -832,6 +833,7 @@ mod tests {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -846,6 +848,7 @@ mod tests {
                 route: format!("{}/unstable/{{{{ file.token }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -920,6 +923,7 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/file-a", server.url()),
                 verb: Some("GET".to_string()),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
