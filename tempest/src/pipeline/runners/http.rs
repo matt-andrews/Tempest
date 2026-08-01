@@ -76,14 +76,12 @@ impl TestRunner for HttpTestRunner {
                     let bytes = response.bytes().await.unwrap_or_default().to_vec();
                     let duration = start.elapsed();
                     let body = String::from_utf8_lossy(&bytes).to_string();
-                    let json = serde_json::from_slice(&bytes).ok();
 
                     TestResult {
                         status: TempestStatusCode::from_status(status),
                         headers,
                         bytes,
                         body,
-                        json,
                         duration,
                     }
                 }
@@ -94,7 +92,6 @@ impl TestRunner for HttpTestRunner {
                         headers: HeaderMap::new(),
                         bytes: Vec::new(),
                         body: String::new(),
-                        json: None,
                         duration,
                     }
                 }
@@ -284,74 +281,6 @@ mod tests {
 
         assert_eq!(result.status.code, 200);
         mock.assert_async().await;
-    }
-
-    // --- response parsing ---
-
-    #[tokio::test]
-    async fn json_response_is_parsed_into_json_field() {
-        let mut server = Server::new_async().await;
-        server
-            .mock("GET", "/data")
-            .with_status(200)
-            .with_header("content-type", "application/json")
-            .with_body(r#"{"key":"value"}"#)
-            .create_async()
-            .await;
-
-        let result = test_runner(
-            &format!("{}/data", server.url()),
-            &test_model("/data", Some("GET")),
-        )
-        .run()
-        .await;
-
-        assert!(
-            result.json.is_some(),
-            "json field should be populated for valid JSON bodies"
-        );
-        assert_eq!(result.json.unwrap()["key"], "value");
-    }
-
-    #[tokio::test]
-    async fn non_json_response_leaves_json_field_none() {
-        let mut server = Server::new_async().await;
-        server
-            .mock("GET", "/text")
-            .with_status(200)
-            .with_body("plain text")
-            .create_async()
-            .await;
-
-        let result = test_runner(
-            &format!("{}/text", server.url()),
-            &test_model("/text", Some("GET")),
-        )
-        .run()
-        .await;
-
-        assert!(result.json.is_none());
-        assert_eq!(result.body, "plain text");
-    }
-
-    #[tokio::test]
-    async fn response_headers_are_captured() {
-        let mut server = Server::new_async().await;
-        server
-            .mock("GET", "/hdr")
-            .with_status(200)
-            .with_header("x-custom", "tempest")
-            .create_async()
-            .await;
-
-        let result = test_runner(
-            &format!("{}/hdr", server.url()),
-            &test_model("/hdr", Some("GET")),
-        )
-        .run()
-        .await;
-
-        assert!(result.headers.contains_key("x-custom"));
     }
 
     // --- error handling ---

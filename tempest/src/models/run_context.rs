@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RunContext {
     pub file_name: String,
-    pub file: HashMap<String, String>,
+    pub file: HashMap<String, JsonValue>,
     pub env: HashMap<String, String>,
     pub retry_attempts: usize,
 }

@@ -1,8 +1,8 @@
 use crate::models::report_template::ReportFile;
 use crate::models::run_options::RunOptions;
 use crate::pipeline::reporting::sinks::OutputSink;
-use crate::pipeline::templating::TemplateEngine;
-use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;

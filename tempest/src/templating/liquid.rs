@@ -1,9 +1,9 @@
-use crate::pipeline::templating::TemplateEngine;
+use crate::templating::TemplateEngine;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
-    use crate::pipeline::templating::liquid_filters::*;
+    use crate::templating::liquid_filters::*;
     liquid::ParserBuilder::with_stdlib()
         .filter(RedFilter)
         .filter(GreenFilter)

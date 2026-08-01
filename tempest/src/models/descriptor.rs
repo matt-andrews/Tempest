@@ -1,7 +1,7 @@
 use crate::models::run_options::RunOptions;
 use crate::models::test_spec::TestSpec;
-use crate::pipeline::templating::TemplateEngine;
-use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;

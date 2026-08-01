@@ -1,20 +1,26 @@
 # Tempest LLM Guide
 
-Tempest is a small HTTP API test runner. It discovers YAML files, executes HTTP requests, evaluates CEL assertions against each response, and renders reports with Liquid templates.
+Tempest is a YAML-based HTTP API test runner. It recursively discovers test-project files, sends HTTP requests, evaluates response assertions and saved-variable expressions with CEL, and renders output with Liquid report templates.
 
-Use this file when helping someone write Tempest tests, configs, custom reporters, examples, docs, or code changes.
+Use this file when helping someone write Tempest tests, configs, custom reporters, examples, documentation, or code changes. Describe only behavior implemented in the repository.
+
+Keep these expression systems distinct:
+
+- CEL is used for response assertions and for the expressions on the right-hand side of `vars:`.
+- Liquid is used to interpolate spec inputs such as routes, headers, bodies, assertions, and options. It is also used for custom report templates.
+- Parse JSON response content with `body.json()`. The old assertion variable `json` is obsolete and does not work.
 
 ## Quick Start
 
 Minimal test file:
 
 ```yaml
-# test.spec.yml
+# health.spec.yml
 name: "Health check"
 test:
   route: "https://httpbin.org/status/200"
   assert:
-    - "status == 200"
+    - status == 200
 ```
 
 Run with Docker from a directory containing test files:
@@ -30,33 +36,69 @@ cd tempest
 cargo run -- test --path ../examples/tests
 ```
 
-The CLI currently has one subcommand:
+## CLI
+
+Tempest currently has one subcommand:
 
 ```bash
-tempest test --path ./path/to/tests
+tempest test \
+  [--path ./path/to/project] \
+  [--run ./relative/spec-or-directory] \
+  [--debug] \
+  [--retries 2] \
+  [--strict] \
+  [--warn-as-err]
 ```
 
-If `--path` is omitted, Tempest uses `/etc/tests`, which is meant for Docker volume mounts.
+CLI behavior:
+
+- `--path` is the test-project root. It defaults to `/etc/tests` for Docker volume mounts.
+- `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project.
+- `--debug` prints each resolved request URL.
+- `--retries N` sets the default number of additional attempts after a failed test.
+- `--strict` makes an otherwise non-failing run containing flaky tests exit with code 2.
+- `--warn-as-err` makes any collected warning cause exit code 1. `--warn-as-err` also has the short form `-w`.
+- `--debug` and `--strict` have the short forms `-d` and `-s`.
 
 ## File Discovery
 
-Tempest recursively scans the selected directory for YAML files.
+Tempest recursively scans the project selected by `--path`.
 
-Recognized files:
+Recognized YAML files:
 
-- `*.spec.yml` or `*.spec.yaml`: test descriptors.
-- `*.config.yml` or `*.config.yaml`: run options.
+- `*.spec.yml` or `*.spec.yaml`: test descriptor trees.
+- `*.config.yml` or `*.config.yaml`: cascading run options.
 - `*.template.yml` or `*.template.yaml`: custom report templates.
 
-Other files are ignored. File names matter: the file stem must end with `.spec`, `.config`, or `.template`. For example, `users.spec.yml` is recognized, but `users.yml` is ignored.
+File names matter. The YAML file stem must end with `.spec`, `.config`, or `.template`. For example, `users.spec.yml` is recognized, but `users.yml` is ignored.
 
-Prefer one config file per directory. Multiple config files may work, but filesystem iteration order is not a good user-facing contract.
+Files whose names end in `.env` provide Liquid input variables. Use simple `KEY=value` lines; blank lines and comments beginning with `#` are ignored.
+
+```dotenv
+API_BASE_URI=https://api.example.com
+API_TOKEN=secret
+```
+
+Reference these values through the Liquid `env` object:
+
+```yaml
+options:
+  base_uri: "{{ env.API_BASE_URI }}"
+test:
+  route: /users
+  headers:
+    Authorization: "Bearer {{ env.API_TOKEN }}"
+```
+
+Environment values and config options flow into descendant directories. Prefer one config and one environment file at the relevant project or directory level. Do not depend on iteration order between multiple config files in the same directory.
+
+`--run` filters which specs execute; ancestor config and environment context is still discovered and applied.
 
 ## Test Spec Shape
 
-A spec file is a descriptor tree. Descriptors can be sections, tests, or both.
+A spec file contains a descriptor tree. A descriptor can define a test, nested descriptors, or both.
 
-Top-level descriptor fields:
+Descriptor fields:
 
 ```yaml
 name: "Display name"
@@ -67,21 +109,23 @@ tags:
 options:
   base_uri: "https://api.example.com"
   debug: true
+  retries: 1
   reports:
     - console
 describe:
   - name: "Nested section"
     test:
-      route: "/health"
+      route: /health
 test:
-  route: "/status"
+  route: /status
 ```
 
-Common pattern:
+Nested `describe` blocks are traversed depth-first in source order. A section is reported immediately before its own tests. Options on a descriptor are inherited by its descendants, while options on sibling branches do not leak into one another.
+
+Common nested example:
 
 ```yaml
 name: "Example API"
-description: "Tests for public API endpoints"
 options:
   base_uri: "https://api.example.com"
 
@@ -90,23 +134,20 @@ describe:
     describe:
       - name: "Get user"
         test:
-          route: "/users/1"
+          route: /users/1
           assert:
-            - "status == 200"
-            - "json[\"id\"] == 1"
+            - status == 200
+            - body.json().id == 1
 ```
 
-Nested `describe` blocks preserve source order. Section descriptors are reported before their child tests.
+## Run Options and Retries
 
-## Run Options
-
-Options can appear in `.config.yml` files or inside any descriptor under `options:`.
-
-Supported options:
+Options can appear in `.config.yml` files or under `options:` on any descriptor.
 
 ```yaml
 base_uri: "https://api.example.com"
-debug: true
+debug: false
+retries: 1
 reports:
   - console
   - json
@@ -114,69 +155,179 @@ reports:
 
 Option behavior:
 
-- `base_uri` is prepended to relative routes. `base_uri: "https://api.example.com"` plus `route: "/users"` becomes `https://api.example.com/users`.
+- `base_uri` is prepended to a route that does not start with `http://` or `https://`. Slashes at the join are normalized.
+- `debug` enables resolved-URL logging.
+- `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
 - `reports` selects report templates by name.
-- The CLI starts with `reports: ["console"]`.
-- If a config or descriptor sets `reports`, it replaces the default. Include `console` explicitly if console output should remain enabled.
-- Options cascade from parent directories and parent descriptors to children. More local options override inherited options.
+- The CLI starts with `reports: ["console"]`, `debug: false`, and `retries: 0`.
+- When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
+- Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
+
+A test that fails and later passes during its retries is `flaky`. Each attempt is reported, but the final summary counts the descriptor once. The file-variable context is restored before each retry, so values assigned by a failed attempt do not leak into the next attempt.
+
+The zero-based Liquid input variable `retry_attempts` is available while rendering a retried test:
+
+```yaml
+options:
+  retries: 1
+test:
+  route: "/status/{% if retry_attempts == 0 %}500{% else %}200{% endif %}"
+  assert:
+    - status == 200
+```
 
 ## HTTP Test Fields
 
-Inside `test:`, supported fields are:
+Supported fields inside `test:` are:
 
 ```yaml
 test:
-  route: "/posts/1"
-  verb: "GET"
+  route: /posts/1
+  verb: GET
   body: '{"title": "Hello"}'
   headers:
-    Content-Type: "application/json"
-    Accept: "application/json"
+    Content-Type: application/json
+    Accept: application/json
   assert:
-    - "status == 200"
+    - status == 200
+  vars:
+    post_id: body.json().id
 ```
 
 HTTP behavior:
 
-- `route` is required for a test.
-- `verb` defaults to `GET`.
+- `route` is required.
+- `verb` defaults to `GET` and is case-insensitive.
 - Supported verbs are `GET`, `POST`, `PUT`, `PATCH`, `DELETE`, and `HEAD`.
 - `body` is sent for `POST`, `PUT`, and `PATCH`.
-- `headers` is a map of header names to values.
-- Query strings should currently be written directly in `route`, for example `/comments?postId=1`.
-- A `query` field exists in the Rust model, but it is not implemented by the HTTP runner yet. Do not generate docs or examples that rely on `query:`.
+- `headers` maps request header names to string values.
+- Query strings must currently be written directly in `route`, such as `/comments?postId=1`.
+- A `query` field exists in the Rust model but is not implemented by the HTTP runner. Do not generate examples that rely on `query:`.
+- HTTP transport errors produce an empty response with status `504` and the error text in `status_message`.
 
-## Assertions
+An HTTP status does not fail a test by itself. Tests pass or fail according to their CEL assertions; a test with no assertions is considered passed.
 
-Assertions are CEL expressions evaluated against the HTTP response. Each assertion must evaluate to a boolean. If an assertion returns a non-boolean value or cannot be parsed, it fails and stores an error message.
+## Liquid Input Interpolation
 
-Available assertion variables:
+Before a request is sent, Tempest renders spec strings with Liquid. This includes descriptor metadata, `base_uri`, and test fields such as `route`, `verb`, `body`, `headers`, `assert`, and `vars`.
 
-- `status`: numeric HTTP status as an unsigned integer in the CEL context. Existing examples often compare with plain integers such as `status == 200`; `status == 200u` is also valid in CEL-style unsigned comparisons.
-- `body`: response body as a string.
-- `json`: parsed JSON response body, only present when the body is valid JSON.
-- `headers`: map of response headers.
+Useful Liquid input globals:
+
+- `env`: values loaded from discovered `.env` files.
+- `file`: values saved by earlier tests in the same spec file.
+- `retry_attempts`: zero-based attempt number; `0` is the initial attempt.
+- `file_name`: the current spec-file path as a string.
+
+Liquid input interpolation and Liquid report rendering use the same Liquid engine, but they run with different globals.
+
+When interpolating a string into a CEL assertion, include CEL string quotes around the rendered value:
+
+```yaml
+assert:
+  - '"{{ file.expected_name }}" == "octocat"'
+```
+
+Numeric and boolean values can normally be interpolated without quotes:
+
+```yaml
+assert:
+  - status == {{ file.expected_status }}
+```
+
+## CEL Assertions
+
+Each item under `assert:` is a CEL expression evaluated against the HTTP response. It must return a boolean. A false result fails the assertion without an evaluation error. A parse error, execution error, or non-boolean result also fails the assertion and records an error message.
+
+Available CEL response variables:
+
+- `status`: HTTP status code as a CEL unsigned integer.
+- `status_message`: canonical HTTP status text, or transport error text.
+- `body`: response body decoded lossily as a string.
 - `bytes`: raw response body bytes.
+- `headers`: response-header map. Header names should normally be accessed in lowercase.
+- `duration`: request duration in whole milliseconds as an unsigned integer.
+
+Available Tempest CEL functions:
+
+- `body.json()`: parses the response body and returns CEL-compatible JSON data.
+- `fileBytes(path)`: reads a file and returns bytes. Relative paths resolve from the current spec file's directory. Paths beginning with `/` resolve from the suite root selected by `--path`. Paths may not escape that root.
+
+The old standalone `json` variable is obsolete and unavailable. Referencing it emits a warning explaining that `body.json()` must be used. Do not generate `json.id`, `json["id"]`, or similar expressions.
 
 Examples:
 
 ```yaml
 assert:
-  - "status == 200"
-  - "body.contains(\"octocat\")"
-  - "json[\"id\"] == 1"
-  - "json[\"name\"] != \"\""
-  - "headers[\"content-type\"] == \"application/json\""
+  - status == 200
+  - status == 200u
+  - body.contains("octocat")
+  - body.json().id == 1
+  - body.json()["display-name"] != ""
+  - body.json()[0].id == 1
+  - body.json().all(item, item.id > 0)
+  - headers["content-type"].contains("application/json")
+  - duration < 1000u
+  - bytes == fileBytes("fixtures/avatar.png")
 ```
 
-For JSON, prefer bracket access such as `json["id"]` in generated examples. Some existing tests also use dotted access in Rust unit tests, but bracket access is clear and robust in YAML strings.
+Both dotted JSON field access and bracket access work. Prefer dotted access for ordinary identifier-like keys and brackets for keys containing punctuation or other characters that are not valid CEL identifiers.
+
+`body.json()` parses when the CEL expression is evaluated. Invalid JSON causes that assertion or variable expression to error; there is no separate parsed-JSON response variable.
+
+Normal CEL operators, string/list/map methods, macros, and literals supported by the bundled CEL interpreter can be used. Existing examples use methods and macros such as `contains`, `startsWith`, `endsWith`, `matches`, `size`, `all`, `exists`, `exists_one`, `filter`, and `map`.
+
+## Saved Variables
+
+Use `vars:` to save response-derived values for later tests. `vars` is a YAML mapping, and every value is a CEL expression evaluated against the current HTTP response with the same variables and functions available to assertions.
+
+```yaml
+name: "Save a user"
+test:
+  route: /users/1
+  assert:
+    - status == 200
+  vars:
+    user_id: body.json().id
+    user_name: body.json().name
+    response_type: headers["content-type"]
+```
+
+Do not use Liquid to extract the current response:
+
+```yaml
+# Incorrect: response extraction is not a Liquid expression.
+vars:
+  user_id: "{{ body.json().id }}"
+```
+
+Saved values are exposed to subsequent tests through the Liquid `file` object:
+
+```yaml
+name: "Use the saved user"
+test:
+  route: "/users/{{ file.user_id }}"
+  headers:
+    X-Expected-Name: "{{ file.user_name }}"
+  assert:
+    - status == 200
+    - 'body.json().name == "{{ file.user_name }}"'
+```
+
+Variable scope and behavior:
+
+- A saved variable is available only to later descriptors from the same spec file.
+- The variable context resets when execution moves to another spec file.
+- Define a producer before its consumer; do not rely on ordering across different spec files.
+- CEL values are converted to JSON-compatible values before being placed in `file`.
+- If a variable expression cannot be evaluated or converted, Tempest stores `null`. A variable-assignment error does not itself fail the test.
+- Failed retry attempts have their variable mutations rolled back before the next attempt.
 
 ## Reporters
 
-Tempest has built-in report templates:
+Tempest includes these built-in report templates:
 
 - `console`: default console output.
-- `json`: writes JSON output to `./tempest-reports/report-{{start_timestamp}}.json`.
+- `json`: appends JSON output to `./tempest-reports/report-{{start_timestamp}}.json`.
 
 Enable reports with options:
 
@@ -186,20 +337,18 @@ reports:
   - json
 ```
 
-Report names are derived from template file names. A file named `myreport.template.yml` is selected with:
+Report names come from template file names. `myreport.template.yml` is registered as lower-case `myreport` and selected with:
 
 ```yaml
 reports:
   - myreport
 ```
 
-Template names are lowercased and stripped of `.template`.
+A user template with the same registered name can replace a built-in template. Unknown names are ignored.
 
 ## Custom Report Templates
 
-Custom reporters use Liquid templates. Put a `*.template.yml` file in the test tree.
-
-Template fields:
+Custom reporters use Liquid, not CEL. Put a `*.template.yml` or `*.template.yaml` file in the test tree.
 
 ```yaml
 title_template: |
@@ -222,9 +371,9 @@ file:
   file_name: report-{{start_timestamp}}.txt
 ```
 
-If `file:` is omitted, rendered output is printed to the console. If `file:` is present, output is appended to that file. The file directory is created if needed.
+If `file:` is omitted, rendered output is printed to the console. If `file:` is present, output is appended to the configured file and the directory is created if necessary. Existing report files are not truncated. `start_timestamp` is a Unix timestamp available when rendering `file_name`.
 
-Template values can be inline strings or references to `.liquid` files in the same directory:
+Template fields may contain inline Liquid or refer to a `.liquid` file in the same directory:
 
 ```yaml
 test_template: my-test-template.liquid
@@ -235,28 +384,26 @@ Liquid globals by event:
 
 Title template:
 
-- `test_count`
+- `test_count`: total number of discovered tests.
 
-Section template:
+Section and test templates:
 
 - `name`
 - `description`
 - `passed`
+- `test_count`: number of previously completed tests already counted in the run summary, represented as a string.
+- `retry_count`: zero-based attempt number, represented as a string.
 - `assertions`
 
-Test template:
+Test templates additionally receive response fields:
 
-- `name`
-- `description`
-- `passed`
 - `status`
 - `status_message`
 - `body`
 - `duration_ms`
-- `test_count`
-- `assertions`
+- `headers`
 
-Each item in `assertions` has:
+Each item in `assertions` contains:
 
 - `expr`
 - `passed`
@@ -272,15 +419,21 @@ Error template:
 
 - `liquid_error_message`
 
-The custom Liquid environment includes standard Liquid features plus Tempest color and JSON filters. Existing built-in templates use filters such as `json`, `round`, `green`, `red`, `bright_green`, `bright_red`, `bright_purple`, `color_status`, and `color_duration`.
+The Liquid engine includes its standard library plus Tempest filters. Tempest filters include `json`, `red`, `green`, `yellow`, `bright_red`, `bright_green`, `bright_blue`, `bright_purple`, their `on_*` background variants, `color_status`, and `color_duration`. Standard filters used by built-in templates include `round`.
 
-## Good Generated Examples
+The Liquid `json` filter serializes a report value and remains valid. It is unrelated to the obsolete `json` variable in CEL assertions.
 
-Simple base URI config plus tests:
+## Complete Generated Example
+
+```dotenv
+# api.env
+API_BASE_URI=https://jsonplaceholder.typicode.com
+```
 
 ```yaml
 # api.config.yml
-base_uri: "https://jsonplaceholder.typicode.com"
+base_uri: "{{ env.API_BASE_URI }}"
+retries: 1
 reports:
   - console
   - json
@@ -290,70 +443,78 @@ reports:
 # posts.spec.yml
 name: "Posts"
 describe:
-  - name: "List posts"
-    test:
-      route: "/posts"
-      assert:
-        - "status == 200"
-        - "body.contains(\"userId\")"
-
   - name: "Get one post"
     test:
-      route: "/posts/1"
+      route: /posts/1
       assert:
-        - "status == 200"
-        - "json[\"id\"] == 1"
+        - status == 200
+        - body.json().id == 1
+        - body.json().title.size() > 0
+      vars:
+        post_id: body.json().id
+        post_title: body.json().title
+
+  - name: "Use the saved post"
+    test:
+      route: "/posts/{{ file.post_id }}"
+      assert:
+        - status == 200
+        - 'body.json().title == "{{ file.post_title }}"'
+
+  - name: "Create a post"
+    test:
+      route: /posts
+      verb: POST
+      body: '{"title": "Tempest", "body": "Hello", "userId": 1}'
+      headers:
+        Content-Type: application/json
+      assert:
+        - status == 201
+        - body.json().title == "Tempest"
+
+  - name: "Filter comments"
+    test:
+      route: /comments?postId=1
+      assert:
+        - status == 200
+        - body.json().all(comment, comment.postId == 1)
 ```
 
-POST with JSON:
+## Exit Codes
 
-```yaml
-name: "Create post"
-test:
-  route: "/posts"
-  verb: "POST"
-  body: '{"title": "Tempest", "body": "Hello from Tempest", "userId": 1}'
-  headers:
-    Content-Type: "application/json"
-  assert:
-    - "status == 201"
-    - "body.contains(\"Tempest\")"
-```
+- `0`: no failed tests; flaky tests also return 0 unless `--strict` is used.
+- `1`: one or more tests failed, or warnings exist while `--warn-as-err` is enabled.
+- `2`: one or more tests were flaky, none failed, and `--strict` was enabled.
 
-Query string:
-
-```yaml
-name: "Filter comments"
-test:
-  route: "/comments?postId=1"
-  assert:
-    - "status == 200"
-    - "body.contains(\"postId\")"
-```
+Warning-as-error handling takes precedence over the flaky exit code.
 
 ## Current Limitations and Gotchas
 
 - Tempest currently runs HTTP tests only.
-- The `query` field exists in the model but is not implemented. Use query strings in `route`.
-- Assertions are CEL expressions, not JavaScript.
-- Unknown HTTP verbs currently produce a default empty result rather than a user-friendly parse error.
+- The `query` field is modeled but not implemented. Put query strings in `route`.
+- Assertions and saved-variable expressions are CEL, not JavaScript or Liquid.
+- The old CEL `json` variable is obsolete and does not work; always use `body.json()`.
+- Unknown HTTP verbs return a default empty result with status `0` rather than a parse error.
 - The HTTP client follows reqwest defaults, including redirect behavior.
-- JSON assertions require the response body to parse as JSON; otherwise `json` is not available.
-- Generated JSON report files under `tempest-reports/` are runtime artifacts unless intentionally committed as examples.
+- Request status alone does not determine success; write an assertion such as `status == 200`.
+- JSON report files and other file-backed reports are appended runtime artifacts unless intentionally committed as examples.
 
 ## Repository Layout for Contributors
 
 Important source areas:
 
-- `tempest/src/main.rs`: CLI entry point.
-- `tempest/src/discovery`: recursive YAML discovery and parsing.
-- `tempest/src/models`: YAML/data model types.
-- `tempest/src/pipeline`: execution pipeline.
-- `tempest/src/pipeline/runners`: HTTP test execution.
-- `tempest/src/pipeline/assertions`: CEL assertion evaluation.
-- `tempest/src/pipeline/reporting`: report events, Liquid rendering, template reporter, and output sinks.
+- `tempest/src/main.rs`: CLI flags, path selection, warnings, and exit codes.
+- `tempest/src/discovery`: recursive discovery and YAML/environment parsing.
+- `tempest/src/models`: YAML and runtime data models.
+- `tempest/src/content`: response-content parsing.
+- `tempest/src/pipeline/runners`: HTTP request execution.
+- `tempest/src/cel`: shared CEL context and Tempest CEL functions.
+- `tempest/src/pipeline/assertions`: assertion evaluation.
+- `tempest/src/pipeline/variables`: saved-variable evaluation and assignment.
+- `tempest/src/templating`: Liquid input engine and custom filters.
+- `tempest/src/pipeline/reporting`: report events, Liquid rendering, reporters, and output sinks.
 - `tempest/src/builtin_reporters`: built-in console and JSON report templates.
-- `examples/tests`: realistic public API examples.
+- `examples/tests`: executable examples of current behavior.
 
 Common verification commands:
 
@@ -364,4 +525,4 @@ cargo clippy --all-targets --all-features -- -D warnings
 cargo run -- test --path ../examples/tests
 ```
 
-When changing docs or examples, keep examples aligned with the current implemented fields. Do not document planned features as usable unless the runner actually supports them.
+When changing docs or examples, keep them aligned with the current models, runner, CEL context, and examples. Do not document planned fields as usable until the execution path implements them.

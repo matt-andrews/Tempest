@@ -1,7 +1,8 @@
-use crate::models::assertion_context::AssertionContext;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::report_template::ReportTemplate;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
@@ -11,8 +12,8 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{AnyReporter, Reporter};
 use crate::pipeline::runners::TestRunner;
 use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
+use crate::templating::liquid::LiquidEngine;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -147,8 +148,16 @@ impl<'a> DirectoryRunner<'a> {
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
 
-        let assertions = self.evaluate_assertions(&test, &test_result, descriptor);
-        self.assign_variables(&test, &test_result, context);
+        let response_content_cache = ResponseContentCache::default();
+        let assertions =
+            self.evaluate_assertions(&test, &test_result, descriptor, &response_content_cache);
+        self.assign_variables(
+            &test,
+            &test_result,
+            context,
+            descriptor,
+            &response_content_cache,
+        );
 
         let summary_result = if assertions.iter().any(|a| !a.passed) {
             SummaryResult::Failed
@@ -168,25 +177,42 @@ impl<'a> DirectoryRunner<'a> {
         test: &TestSpec,
         test_result: &TestResult,
         descriptor: &Descriptor,
+        response_content_cache: &ResponseContentCache,
     ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
-            let assertion_context = AssertionContext {
+            let evaluation_context = EvaluationContext {
                 suite_dir: self.top_path.to_path_buf(),
                 spec_file: descriptor.file.clone(),
             };
             let assert_evaluator = assertion_evaluator_for(assert);
-            let result = assert_evaluator.evaluate(test_result, &assertion_context);
+            let result =
+                assert_evaluator.evaluate(test_result, &evaluation_context, response_content_cache);
             assert_result.push(result.clone());
         }
         assert_result
     }
 
-    fn assign_variables(&self, test: &TestSpec, result: &TestResult, context: &mut RunContext) {
-        for var in test.vars.as_deref().unwrap_or_default() {
-            let assign_var = variable_assignment_for(var);
-            assign_var.set(result, &mut *context);
-        }
+    fn assign_variables(
+        &self,
+        test: &TestSpec,
+        result: &TestResult,
+        context: &mut RunContext,
+        descriptor: &Descriptor,
+        response_content_cache: &ResponseContentCache,
+    ) {
+        let evaluation_context = EvaluationContext {
+            suite_dir: self.top_path.to_path_buf(),
+            spec_file: descriptor.file.clone(),
+        };
+        let vars = test.vars.clone().unwrap_or_default();
+        let assign_var = variable_assignment_for(&vars);
+        assign_var.set(
+            result,
+            &mut *context,
+            &evaluation_context,
+            response_content_cache,
+        );
     }
 
     fn descriptors(&self) -> impl Iterator<Item = (&Descriptor, RunOptions)> {
@@ -263,7 +289,7 @@ mod tests {
     use crate::models::summary_result::SummaryResult;
     use crate::models::test_spec::TestSpec;
     use crate::pipeline::reporting::reporter_for;
-    use crate::pipeline::templating::liquid::LiquidEngine;
+    use crate::templating::liquid::LiquidEngine;
     use mockito::Server;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -561,7 +587,7 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
-                vars: Some(vec!["id={{ body }}".to_string()]),
+                vars: Some(HashMap::from([("id".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -824,7 +850,7 @@ mod tests {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
-                vars: Some(vec!["token={{ body }}".to_string()]),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -839,7 +865,7 @@ mod tests {
                 route: format!("{}/unstable/{{{{ file.token }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
-                vars: Some(vec!["token={{ body }}".to_string()]),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,
@@ -914,7 +940,7 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/file-a", server.url()),
                 verb: Some("GET".to_string()),
-                vars: Some(vec!["token={{ body }}".to_string()]),
+                vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
                 ..Default::default()
             }),
             describe: None,

@@ -1,5 +1,5 @@
-use crate::pipeline::templating::TemplateEngine;
-use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
 

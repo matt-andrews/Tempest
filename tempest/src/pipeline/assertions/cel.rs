@@ -1,21 +1,23 @@
-use crate::models::assertion_context::AssertionContext;
+use crate::cel;
+use crate::models::evaluation_context::EvaluationContext;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
-use anyhow::anyhow;
-use cel_interpreter::objects::Key;
-use cel_interpreter::{Context, FunctionContext, Program, Value};
-use reqwest::header::HeaderMap;
-use serde_json::Value as JsonValue;
-use std::collections::HashMap;
-use std::sync::Arc;
+use cel_interpreter::Value;
 
 pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
-    fn evaluate(&self, data: &TestResult, context: &AssertionContext) -> Assertion {
-        let result = Self::evaluate_assertion(&self.assertion, data, context.to_owned())
-            .map_err(|e| e.to_string());
+    fn evaluate(
+        &self,
+        data: &TestResult,
+        context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
+    ) -> Assertion {
+        let result =
+            Self::evaluate_assertion(&self.assertion, data, context, response_content_cache)
+                .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -33,88 +35,17 @@ impl CelAssertionEvaluator {
             assertion: assertion.to_string(),
         }
     }
-    fn json_to_cel(val: &JsonValue) -> Value {
-        match val {
-            JsonValue::Null => Value::Null,
-            JsonValue::Bool(b) => Value::Bool(*b),
-            JsonValue::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Value::Int(i)
-                } else if let Some(f) = n.as_f64() {
-                    Value::Float(f)
-                } else {
-                    Value::Null
-                }
-            }
-            JsonValue::String(s) => Value::String(s.clone().into()),
-            JsonValue::Array(arr) => {
-                Value::List(arr.iter().map(Self::json_to_cel).collect::<Vec<_>>().into())
-            }
-            JsonValue::Object(map) => {
-                let cel_map = map
-                    .iter()
-                    .map(|(k, v)| (Key::String(Arc::new(k.clone())), Self::json_to_cel(v)))
-                    .collect::<HashMap<Key, Value>>();
-                Value::Map(cel_map.into())
-            }
-        }
-    }
 
     fn evaluate_assertion(
         expr: &str,
         response: &TestResult,
-        context: AssertionContext,
+        context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
     ) -> anyhow::Result<bool> {
-        let program = match Program::compile(expr) {
-            Ok(p) => p,
-            Err(e) => return Err(anyhow!("{}", e)),
-        };
-
-        let mut ctx = Context::default();
-
-        ctx.add_variable("status", Value::UInt(response.status.code as u64))?;
-
-        if let Some(json) = &response.json {
-            ctx.add_variable("json", Self::json_to_cel(json))?;
-        }
-
-        ctx.add_variable("body", &response.body)?;
-
-        ctx.add_variable_from_value("bytes", response.bytes.clone());
-
-        ctx.add_variable("headers", Self::headers_to_cel(&response.headers))?;
-
-        ctx.add_function(
-            "fileBytes",
-            move |ftx: &FunctionContext, path: Arc<String>| {
-                let resolved = context
-                    .resolve_file(path.as_str())
-                    .map_err(|e| ftx.error(e.to_string()))?;
-
-                let bytes = std::fs::read(&resolved).map_err(|e| {
-                    ftx.error(format!("could not read {}: {e}", resolved.display()))
-                })?;
-
-                Ok(Value::Bytes(Arc::new(bytes)))
-            },
-        );
-
-        match program.execute(&ctx)? {
+        match cel::evaluate(expr, response, context, response_content_cache)? {
             Value::Bool(b) => Ok(b),
             other => anyhow::bail!("Assertion did not return a bool, got: {:?}", other),
         }
-    }
-
-    fn headers_to_cel(headers: &HeaderMap) -> Value {
-        let cel_map = headers
-            .iter()
-            .map(|(k, v)| {
-                let key = Key::String(Arc::new(k.as_str().to_string()));
-                let val = Value::String(Arc::new(v.to_str().unwrap_or("").to_string()));
-                (key, val)
-            })
-            .collect::<HashMap<Key, Value>>();
-        Value::Map(cel_map.into())
     }
 }
 
@@ -122,7 +53,7 @@ impl CelAssertionEvaluator {
 mod tests {
     use super::*;
     use crate::models::test_result::{TempestStatusCode, TestResult};
-    use serde_json::json;
+    use cel_interpreter::Program;
     use std::time::Duration;
 
     fn result(status: u16, body: &str) -> TestResult {
@@ -133,16 +64,8 @@ mod tests {
             },
             headers: reqwest::header::HeaderMap::new(),
             body: body.to_string(),
-            json: None,
             bytes: vec![],
             duration: Duration::ZERO,
-        }
-    }
-
-    fn with_json(r: TestResult, json: serde_json::Value) -> TestResult {
-        TestResult {
-            json: Some(json),
-            ..r
         }
     }
 
@@ -156,7 +79,11 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &AssertionContext::default())
+        CelAssertionEvaluator::new(expr).evaluate(
+            r,
+            &EvaluationContext::default(),
+            &ResponseContentCache::default(),
+        )
     }
 
     #[test]
@@ -187,18 +114,6 @@ mod tests {
     }
 
     #[test]
-    fn json_top_level_field_access() {
-        let r = with_json(result(200, ""), json!({"name": "Alice"}));
-        assert!(eval(r#"json.name == "Alice""#, &r).passed);
-    }
-
-    #[test]
-    fn json_nested_field_and_integer_value() {
-        let r = with_json(result(200, ""), json!({"user": {"age": 30}}));
-        assert!(eval("json.user.age == 30", &r).passed);
-    }
-
-    #[test]
     fn header_value_comparison() {
         let r = with_header(result(200, ""), "x-request-id", "abc-123");
         assert!(eval(r#"headers["x-request-id"] == "abc-123""#, &r).passed);
@@ -215,6 +130,25 @@ mod tests {
     }
 
     #[test]
+    fn deprecated_variables_are_identified_from_program_references() {
+        let program = Program::compile("json.name == 'Alice' && bytes.size() > 0").unwrap();
+        let references = program.references();
+
+        assert!(references.has_variable("json"));
+        assert!(references.has_variable("bytes"));
+    }
+
+    #[test]
+    fn deprecated_names_in_strings_or_fields_are_not_variable_references() {
+        let program =
+            Program::compile(r#"payload.json == "json" && payload.bytes == "bytes""#).unwrap();
+        let references = program.references();
+
+        assert!(!references.has_variable("json"));
+        assert!(!references.has_variable("bytes"));
+    }
+
+    #[test]
     fn non_bool_expression_populates_error_and_sets_passed_false() {
         let a = eval("status + 1u", &result(200, ""));
         assert!(!a.passed);
@@ -223,12 +157,12 @@ mod tests {
 
     // --- fileBytes ---
 
-    fn eval_with_ctx(expr: &str, r: &TestResult, ctx: AssertionContext) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &ctx)
+    fn eval_with_ctx(expr: &str, r: &TestResult, ctx: EvaluationContext) -> Assertion {
+        CelAssertionEvaluator::new(expr).evaluate(r, &ctx, &ResponseContentCache::default())
     }
 
-    fn suite_ctx(dir: &tempfile::TempDir) -> AssertionContext {
-        AssertionContext {
+    fn suite_ctx(dir: &tempfile::TempDir) -> EvaluationContext {
+        EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: None,
         }
@@ -272,7 +206,7 @@ mod tests {
         std::fs::create_dir(&sub).unwrap();
         write_file(&dir, "root.bin", b"root");
 
-        let ctx = AssertionContext {
+        let ctx = EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
@@ -294,7 +228,7 @@ mod tests {
         std::fs::create_dir(&sub).unwrap();
         std::fs::write(sub.join("payload.bin"), b"payload").unwrap();
 
-        let ctx = AssertionContext {
+        let ctx = EvaluationContext {
             suite_dir: dir.path().to_path_buf(),
             spec_file: Some(sub.join("test.spec.yml")),
         };
@@ -330,7 +264,7 @@ mod tests {
         let a = eval_with_ctx(
             r#"fileBytes("")"#,
             &result(200, ""),
-            AssertionContext::default(),
+            EvaluationContext::default(),
         );
         assert!(!a.passed);
         assert!(!a.error.is_empty());

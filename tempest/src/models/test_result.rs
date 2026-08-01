@@ -12,8 +12,6 @@ pub struct TestResult {
     pub headers: HeaderMap,
     pub body: String,
     #[serde(skip)]
-    pub json: Option<serde_json::Value>,
-    #[serde(skip)]
     pub bytes: Vec<u8>,
     pub duration: Duration,
 }
@@ -29,7 +27,6 @@ impl TestResult {
             "status_message": self.status.message.clone(),
             "body": self.body.clone(),
             "duration_ms": self.duration.as_secs_f64() * 1000.0,
-            "json": self.json.clone(),
             "headers": headers,
         })
     }

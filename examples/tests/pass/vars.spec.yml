@@ -12,18 +12,18 @@ describe:
         test:
           route: "/base64/SFRUUEJJTg=="
           assert:
-            - "status == 200"
-            - "body == \"HTTPBIN\""
+            - status == 200
+            - body == "HTTPBIN"
           vars:
-            - "var_status={{ status }}"
-            - "var_body={{ body }}"
+            var_status: status
+            var_body: body
 
       - name: "Variable reading experiment"
         description: "we can read variables published by other tests"
         test:
           route: "/status/{{ file.var_status }}"
           assert:
-            - "status == {{ file.var_status }}"
+            - status == {{ file.var_status }}
             - "'{{ file.var_body }}' == 'HTTPBIN'"
 
   - name: "Headers as vars"
@@ -37,18 +37,18 @@ describe:
           headers:
             Accept: "application/json"
           assert:
-            - "status == 200"
-            - 'headers["content-type"] == "application/json"'
+            - status == 200
+            - headers["content-type"] == "application/json"
           vars:
-            - 'fwdContentType={{ headers["content-type"] }}'
+            fwdContentType: headers["content-type"]
       - name: "Custom header is echoed"
         test:
           route: "/get"
           headers:
             X-Tempest-Test: "{{ file.fwdContentType }}"
           assert:
-            - "status == 200"
-            - "body.contains(\"application/json\")"
+            - status == 200
+            - body.contains("application/json")
             - '"{{ file.fwdContentType }}" == "application/json"'
 
   - name: "Json objects"
@@ -63,12 +63,12 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - 'json.name == "Hello-World"'
-            - 'json.owner.login == "octocat"'
+            - status == 200
+            - body.json().name == "Hello-World"
+            - body.json().owner.login == "octocat"
           vars:
-            - "github_user={{ json.owner.login }}"
-            - "github_repo={{ json.name }}"
+            github_user: body.json().owner.login
+            github_repo: body.json().name
 
       - name: "Fetch the octocat/Hello-World repo dynamically"
         test:
@@ -76,6 +76,6 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - 'json.name == "Hello-World"'
-            - 'json.owner.login == "octocat"'
+            - status == 200
+            - body.json().name == "Hello-World"
+            - body.json().owner.login == "octocat"
