@@ -1,8 +1,8 @@
+pub mod content;
 pub mod discovery;
 mod models;
 pub mod pipeline;
 mod utils;
-pub mod content;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
@@ -88,7 +88,7 @@ fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf
 
 fn print_warnings() {
     let warning_count = warnings::get_warning_count();
-    if warning_count > 0  {
+    if warning_count > 0 {
         println!(
             "{}{}",
             "Total Warnings: ".yellow(),

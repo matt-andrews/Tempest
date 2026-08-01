@@ -4,14 +4,8 @@ pub mod functions;
 use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
-use crate::pipeline::warnings;
 use anyhow::anyhow;
-use cel_interpreter::objects::Key;
-use cel_interpreter::{Context, FunctionContext, Program, Value};
-use reqwest::header::HeaderMap;
-use serde_json::Value as JsonValue;
-use std::collections::HashMap;
-use std::sync::Arc;
+use cel_interpreter::{Program, Value};
 
 pub struct CelAssertionEvaluator {
     assertion: String,
@@ -56,14 +50,12 @@ impl CelAssertionEvaluator {
             other => anyhow::bail!("Assertion did not return a bool, got: {:?}", other),
         }
     }
-
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::models::test_result::{TempestStatusCode, TestResult};
-    use serde_json::json;
     use std::time::Duration;
 
     fn result(status: u16, body: &str) -> TestResult {
@@ -76,12 +68,6 @@ mod tests {
             body: body.to_string(),
             bytes: vec![],
             duration: Duration::ZERO,
-        }
-    }
-
-    fn with_json(r: TestResult, json: serde_json::Value) -> TestResult {
-        TestResult {
-            ..r
         }
     }
 
@@ -123,18 +109,6 @@ mod tests {
     fn body_contains_method() {
         let a = eval(r#"body.contains("ell")"#, &result(200, "hello"));
         assert!(a.passed);
-    }
-
-    #[test]
-    fn json_top_level_field_access() {
-        let r = with_json(result(200, ""), json!({"name": "Alice"}));
-        assert!(eval(r#"json.name == "Alice""#, &r).passed);
-    }
-
-    #[test]
-    fn json_nested_field_and_integer_value() {
-        let r = with_json(result(200, ""), json!({"user": {"age": 30}}));
-        assert!(eval("json.user.age == 30", &r).passed);
     }
 
     #[test]
