@@ -1,5 +1,6 @@
 use crate::cel;
 use crate::models::evaluation_context::EvaluationContext;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
 use cel_interpreter::Value;
@@ -8,9 +9,15 @@ pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
-    fn evaluate(&self, data: &TestResult, context: &EvaluationContext) -> Assertion {
+    fn evaluate(
+        &self,
+        data: &TestResult,
+        context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
+    ) -> Assertion {
         let result =
-            Self::evaluate_assertion(&self.assertion, data, context).map_err(|e| e.to_string());
+            Self::evaluate_assertion(&self.assertion, data, context, response_content_cache)
+                .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -33,8 +40,9 @@ impl CelAssertionEvaluator {
         expr: &str,
         response: &TestResult,
         context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
     ) -> anyhow::Result<bool> {
-        match cel::evaluate(expr, response, context)? {
+        match cel::evaluate(expr, response, context, response_content_cache)? {
             Value::Bool(b) => Ok(b),
             other => anyhow::bail!("Assertion did not return a bool, got: {:?}", other),
         }
@@ -71,7 +79,11 @@ mod tests {
     }
 
     fn eval(expr: &str, r: &TestResult) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &EvaluationContext::default())
+        CelAssertionEvaluator::new(expr).evaluate(
+            r,
+            &EvaluationContext::default(),
+            &ResponseContentCache::default(),
+        )
     }
 
     #[test]
@@ -146,7 +158,7 @@ mod tests {
     // --- fileBytes ---
 
     fn eval_with_ctx(expr: &str, r: &TestResult, ctx: EvaluationContext) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &ctx)
+        CelAssertionEvaluator::new(expr).evaluate(r, &ctx, &ResponseContentCache::default())
     }
 
     fn suite_ctx(dir: &tempfile::TempDir) -> EvaluationContext {

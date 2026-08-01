@@ -2,6 +2,7 @@ use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::report_template::ReportTemplate;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
@@ -147,8 +148,16 @@ impl<'a> DirectoryRunner<'a> {
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
 
-        let assertions = self.evaluate_assertions(&test, &test_result, descriptor);
-        self.assign_variables(&test, &test_result, context, descriptor);
+        let response_content_cache = ResponseContentCache::default();
+        let assertions =
+            self.evaluate_assertions(&test, &test_result, descriptor, &response_content_cache);
+        self.assign_variables(
+            &test,
+            &test_result,
+            context,
+            descriptor,
+            &response_content_cache,
+        );
 
         let summary_result = if assertions.iter().any(|a| !a.passed) {
             SummaryResult::Failed
@@ -168,6 +177,7 @@ impl<'a> DirectoryRunner<'a> {
         test: &TestSpec,
         test_result: &TestResult,
         descriptor: &Descriptor,
+        response_content_cache: &ResponseContentCache,
     ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
@@ -176,7 +186,8 @@ impl<'a> DirectoryRunner<'a> {
                 spec_file: descriptor.file.clone(),
             };
             let assert_evaluator = assertion_evaluator_for(assert);
-            let result = assert_evaluator.evaluate(test_result, &evaluation_context);
+            let result =
+                assert_evaluator.evaluate(test_result, &evaluation_context, response_content_cache);
             assert_result.push(result.clone());
         }
         assert_result
@@ -188,6 +199,7 @@ impl<'a> DirectoryRunner<'a> {
         result: &TestResult,
         context: &mut RunContext,
         descriptor: &Descriptor,
+        response_content_cache: &ResponseContentCache,
     ) {
         let evaluation_context = EvaluationContext {
             suite_dir: self.top_path.to_path_buf(),
@@ -195,7 +207,12 @@ impl<'a> DirectoryRunner<'a> {
         };
         let vars = test.vars.clone().unwrap_or_default();
         let assign_var = variable_assignment_for(&vars);
-        assign_var.set(result, &mut *context, &evaluation_context);
+        assign_var.set(
+            result,
+            &mut *context,
+            &evaluation_context,
+            response_content_cache,
+        );
     }
 
     fn descriptors(&self) -> impl Iterator<Item = (&Descriptor, RunOptions)> {

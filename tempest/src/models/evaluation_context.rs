@@ -1,3 +1,4 @@
+use crate::models::response_content_cache::ResponseContentCache;
 use anyhow::{Context, Result, bail};
 use std::path::{Component, Path, PathBuf};
 

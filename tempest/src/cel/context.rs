@@ -1,5 +1,6 @@
 use crate::cel::functions;
 use crate::models::evaluation_context::EvaluationContext;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::test_result::TestResult;
 use crate::pipeline::warnings;
 use cel_interpreter::objects::Key;
@@ -13,11 +14,12 @@ pub fn for_response<'a>(
     response: &TestResult,
     evaluation_context: &EvaluationContext,
     refs: &ExpressionReferences,
+    response_content_cache: &ResponseContentCache,
 ) -> anyhow::Result<Context<'a>> {
     let mut context = Context::default();
     check_for_warnings(refs);
     add_response_variables(&mut context, response)?;
-    functions::register_all(&mut context, evaluation_context);
+    functions::register_all(&mut context, evaluation_context, response_content_cache);
 
     Ok(context)
 }

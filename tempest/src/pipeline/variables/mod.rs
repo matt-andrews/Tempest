@@ -1,4 +1,5 @@
 use crate::models::evaluation_context::EvaluationContext;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
 use crate::models::test_result::TestResult;
 use crate::pipeline::variables::default_var::DefaultVariableAssignment;
@@ -14,6 +15,7 @@ pub trait VariableAssignment {
         data: &TestResult,
         context: &mut RunContext,
         evaluation_context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
     );
 }
 

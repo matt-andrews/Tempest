@@ -1,5 +1,6 @@
 use crate::cel;
 use crate::models::evaluation_context::EvaluationContext;
+use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
 use crate::models::test_result::TestResult;
 use crate::pipeline::variables::VariableAssignment;
@@ -23,9 +24,10 @@ impl VariableAssignment for DefaultVariableAssignment {
         data: &TestResult,
         context: &mut RunContext,
         evaluation_context: &EvaluationContext,
+        response_content_cache: &ResponseContentCache,
     ) {
         for (k, v) in &self.vars {
-            let val = match cel::evaluate(v, data, evaluation_context) {
+            let val = match cel::evaluate(v, data, evaluation_context, response_content_cache) {
                 Ok(v) => v.json().unwrap_or_default(),
                 _ => JsonValue::Null,
             };
