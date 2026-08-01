@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use cel_interpreter::{Program, Value};
-use crate::models::assertion_context::EvaluationContext;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::TestResult;
 
 pub mod context;

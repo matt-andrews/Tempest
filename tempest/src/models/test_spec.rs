@@ -10,7 +10,7 @@ pub struct TestSpec {
     pub verb: Option<String>,
     pub body: Option<String>,
     pub assert: Option<Vec<String>>,
-    pub vars: Option<Vec<String>>,
+    pub vars: Option<HashMap<String, String>>,
     pub query: Option<HashMap<String, String>>, //todo implement
     pub headers: Option<HashMap<String, String>>,
 }
@@ -22,7 +22,7 @@ impl TestSpec {
         self.verb = engine.render_option_string_or_self(&self.verb, obj);
         self.body = engine.render_option_string_or_self(&self.body, obj);
         self.assert = engine.render_vec_string_or_self(&self.assert, obj);
-        self.vars = engine.render_vec_string_or_self(&self.vars, obj);
+        self.vars = engine.render_hashmap_string_or_self(&self.vars, obj);
         self.query = engine.render_hashmap_string_or_self(&self.query, obj);
         self.headers = engine.render_hashmap_string_or_self(&self.headers, obj);
     }

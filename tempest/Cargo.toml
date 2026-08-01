@@ -13,7 +13,7 @@ enum_dispatch = "0.3.13"
 noyalib = { version = "0.0.17", features = ["compat-serde-yaml"] }
 reqwest = { version = "0.13.4", features = ["json"] }
 serde_json = "1.0.150"
-cel-interpreter = "0.10.0"
+cel-interpreter = { version = "0.10.0", features = ["json"] }
 liquid = "0.26.11"
 liquid-core = "0.26.11"
 include_dir = "0.7"

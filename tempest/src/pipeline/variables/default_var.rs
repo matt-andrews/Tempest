@@ -1,29 +1,35 @@
+use std::collections::HashMap;
+use cel_interpreter::Value;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::run_context::RunContext;
 use crate::models::test_result::TestResult;
+use crate::pipeline::cel;
 use crate::pipeline::templating::TemplateEngine;
 use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::VariableAssignment;
+use serde_json::Value as JsonValue;
 
 pub struct DefaultVariableAssignment {
-    var: String,
+    vars: HashMap<String, String>,
     liquid: LiquidEngine,
 }
+
 impl DefaultVariableAssignment {
-    pub fn new(var: &str) -> Self {
+    pub fn new(vars: &HashMap<String, String>) -> Self {
         Self {
-            var: var.to_string(),
+            vars: vars.to_owned(),
             liquid: LiquidEngine,
         }
     }
 }
 impl VariableAssignment for DefaultVariableAssignment {
-    fn set(&self, data: &TestResult, context: &mut RunContext) {
-        if let Some((key, value)) = self.var.split_once('=') {
-            let value = self
-                .liquid
-                .render(value, &data.to_liquid_template())
-                .unwrap_or_else(|e| e.to_string());
-            context.file.insert(key.to_string(), value.to_string());
+    fn set(&self, data: &TestResult, context: &mut RunContext, evaluation_context: &EvaluationContext) {
+        for (k, v) in &self.vars {
+            let val = match cel::evaluate(v, data, evaluation_context){
+                Ok(v) => v.json().unwrap_or_default(),
+                _ => JsonValue::Null
+            };
+            context.file.insert(k.clone(), val);
         }
     }
 }

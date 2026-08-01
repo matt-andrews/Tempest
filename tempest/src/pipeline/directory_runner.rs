@@ -1,4 +1,4 @@
-use crate::models::assertion_context::EvaluationContext;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::report_template::ReportTemplate;
@@ -148,7 +148,7 @@ impl<'a> DirectoryRunner<'a> {
         let test_result = runner.run().await;
 
         let assertions = self.evaluate_assertions(&test, &test_result, descriptor);
-        self.assign_variables(&test, &test_result, context);
+        self.assign_variables(&test, &test_result, context, descriptor);
 
         let summary_result = if assertions.iter().any(|a| !a.passed) {
             SummaryResult::Failed
@@ -171,22 +171,25 @@ impl<'a> DirectoryRunner<'a> {
     ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
-            let assertion_context = EvaluationContext {
+            let evaluation_context = EvaluationContext {
                 suite_dir: self.top_path.to_path_buf(),
                 spec_file: descriptor.file.clone(),
             };
             let assert_evaluator = assertion_evaluator_for(assert);
-            let result = assert_evaluator.evaluate(test_result, &assertion_context);
+            let result = assert_evaluator.evaluate(test_result, &evaluation_context);
             assert_result.push(result.clone());
         }
         assert_result
     }
 
-    fn assign_variables(&self, test: &TestSpec, result: &TestResult, context: &mut RunContext) {
-        for var in test.vars.as_deref().unwrap_or_default() {
-            let assign_var = variable_assignment_for(var);
-            assign_var.set(result, &mut *context);
-        }
+    fn assign_variables(&self, test: &TestSpec, result: &TestResult, context: &mut RunContext, descriptor: &Descriptor) {
+        let evaluation_context = EvaluationContext {
+            suite_dir: self.top_path.to_path_buf(),
+            spec_file: descriptor.file.clone(),
+        };
+        let vars = test.vars.clone().unwrap_or_default();
+        let assign_var = variable_assignment_for(&vars);
+        assign_var.set(result, &mut *context, &evaluation_context);
     }
 
     fn descriptors(&self) -> impl Iterator<Item = (&Descriptor, RunOptions)> {
@@ -561,7 +564,6 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
-                vars: Some(vec!["id={{ body }}".to_string()]),
                 ..Default::default()
             }),
             describe: None,
@@ -824,7 +826,6 @@ mod tests {
                 route: format!("{}/seed", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
-                vars: Some(vec!["token={{ body }}".to_string()]),
                 ..Default::default()
             }),
             describe: None,
@@ -839,7 +840,6 @@ mod tests {
                 route: format!("{}/unstable/{{{{ file.token }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
-                vars: Some(vec!["token={{ body }}".to_string()]),
                 ..Default::default()
             }),
             describe: None,
@@ -914,7 +914,6 @@ mod tests {
             test: Some(TestSpec {
                 route: format!("{}/file-a", server.url()),
                 verb: Some("GET".to_string()),
-                vars: Some(vec!["token={{ body }}".to_string()]),
                 ..Default::default()
             }),
             describe: None,

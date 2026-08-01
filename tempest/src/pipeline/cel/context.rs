@@ -1,4 +1,4 @@
-use crate::models::assertion_context::EvaluationContext;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::TestResult;
 use crate::pipeline::cel::functions;
 use crate::pipeline::warnings;
