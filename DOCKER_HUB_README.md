@@ -57,7 +57,6 @@ There are several expressions and functions that you can use to assert.
 | Name              | Description                                                                                                                              | Example Usage                                       |
 |-------------------|------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------------------|
 | `status`          | The response status code                                                                                                                 | `"status == 200"`                                   |
-| `json`            | The json response object                                                                                                                 | `'json.name == "myObj"'`                            |
 | `body`            | The stringified response body                                                                                                            | `'body == "hello"'`                                 |
 | `headers`         | The hashmap headers collection                                                                                                           | `'headers["content-type"] == "application/json"'`   |
 | `bytes`           | The response body as a byte array                                                                                                        | `'bytes == fileBytes("img.jpg")'`                   |
@@ -74,13 +73,13 @@ vars:
   my_var: body
 ```
 
-Once a variable has been declared it can be used with liquid templates in a subsequent test with the file scope:
+Once a variable has been declared it can be used with Liquid templates in a subsequent test with the file scope:
 ```yml
 assert:
-  - 'body == {{ file.my_var }}'
+  - 'body == "{{ file.my_var }}"'
 ```
 
-You can see some working examples [here](https://github.com/matt-andrews/Tempest/tree/main/examples/tests/pass/misc/vars.spec.yml)
+You can see some working examples [here](https://github.com/matt-andrews/Tempest/tree/main/examples/tests/pass/vars.spec.yml)
 
 ## Exit codes
 

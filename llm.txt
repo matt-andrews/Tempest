@@ -508,10 +508,10 @@ Important source areas:
 - `tempest/src/models`: YAML and runtime data models.
 - `tempest/src/content`: response-content parsing.
 - `tempest/src/pipeline/runners`: HTTP request execution.
-- `tempest/src/pipeline/cel`: shared CEL context and Tempest CEL functions.
+- `tempest/src/cel`: shared CEL context and Tempest CEL functions.
 - `tempest/src/pipeline/assertions`: assertion evaluation.
 - `tempest/src/pipeline/variables`: saved-variable evaluation and assignment.
-- `tempest/src/pipeline/templating`: Liquid input engine and custom filters.
+- `tempest/src/templating`: Liquid input engine and custom filters.
 - `tempest/src/pipeline/reporting`: report events, Liquid rendering, reporters, and output sinks.
 - `tempest/src/builtin_reporters`: built-in console and JSON report templates.
 - `examples/tests`: executable examples of current behavior.
