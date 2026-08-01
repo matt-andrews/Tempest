@@ -5,4 +5,4 @@ describe:
     test:
       route: "http://matthew.andrews.gg/img.jpg"
       assert:
-        - 'bytes == fileBytes("img.jpg")'
+        - bytes == fileBytes("img.jpg")

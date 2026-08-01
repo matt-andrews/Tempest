@@ -13,19 +13,19 @@ describe:
             test:
               route: "/status/200"
               assert:
-                - "status == 200"
+                - status == 200
 
           - name: "201 Created"
             test:
               route: "/status/201"
               assert:
-                - "status == 201"
+                - status == 201
 
           - name: "204 No Content"
             test:
               route: "/status/204"
               assert:
-                - "status == 204"
+                - status == 204
 
       - name: "3xx Redirection"
         describe:
@@ -33,13 +33,13 @@ describe:
             test:
               route: "/status/301"
               assert:
-                - "status == 301"
+                - status == 301
 
           - name: "304 Not Modified"
             test:
               route: "/status/304"
               assert:
-                - "status == 304"
+                - status == 304
 
       - name: "4xx Client Errors"
         describe:
@@ -47,25 +47,25 @@ describe:
             test:
               route: "/status/400"
               assert:
-                - "status == 400"
+                - status == 400
 
           - name: "401 Unauthorized"
             test:
               route: "/status/401"
               assert:
-                - "status == 401"
+                - status == 401
 
           - name: "404 Not Found"
             test:
               route: "/status/404"
               assert:
-                - "status == 404"
+                - status == 404
 
           - name: "429 Too Many Requests"
             test:
               route: "/status/429"
               assert:
-                - "status == 429"
+                - status == 429
 
       - name: "5xx Server Errors"
         describe:
@@ -73,13 +73,13 @@ describe:
             test:
               route: "/status/500"
               assert:
-                - "status == 500"
+                - status == 500
 
           - name: "503 Service Unavailable"
             test:
               route: "/status/503"
               assert:
-                - "status == 503"
+                - status == 503
 
   - name: "HTTP Verbs"
     description: "httpbin has dedicated endpoints for each verb that echo request details"
@@ -88,8 +88,8 @@ describe:
         test:
           route: "/get"
           assert:
-            - "status == 200"
-            - "body.contains(\"url\")"
+            - status == 200
+            - body.contains("url")
 
       - name: "POST with JSON body"
         test:
@@ -99,9 +99,9 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 200"
-            - "body.contains(\"Tempest\")"
-            - "body.contains(\"http-test-runner\")"
+            - status == 200
+            - body.contains("Tempest")
+            - body.contains("http-test-runner")
 
       - name: "PUT with JSON body"
         test:
@@ -111,8 +111,8 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 200"
-            - "body.contains(\"replace\")"
+            - status == 200
+            - body.contains("replace")
 
       - name: "PATCH with JSON body"
         test:
@@ -122,15 +122,15 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 200"
-            - "body.contains(\"update\")"
+            - status == 200
+            - body.contains("update")
 
       - name: "DELETE"
         test:
           route: "/delete"
           verb: "DELETE"
           assert:
-            - "status == 200"
+            - status == 200
 
   - name: "Request Headers"
     description: "httpbin echoes your request headers back inside the response JSON"
@@ -141,8 +141,8 @@ describe:
           headers:
             X-Tempest-Test: "hello-from-tempest"
           assert:
-            - "status == 200"
-            - "body.contains(\"hello-from-tempest\")"
+            - status == 200
+            - body.contains("hello-from-tempest")
 
       - name: "Multiple custom headers"
         test:
@@ -151,9 +151,9 @@ describe:
             X-Request-Id: "abc-123"
             X-Client-Name: "Tempest"
           assert:
-            - "status == 200"
-            - "body.contains(\"abc-123\")"
-            - "body.contains(\"Tempest\")"
+            - status == 200
+            - body.contains("abc-123")
+            - body.contains("Tempest")
 
       - name: "Accept header is respected"
         test:
@@ -161,8 +161,8 @@ describe:
           headers:
             Accept: "application/json"
           assert:
-            - "status == 200"
-            - "headers[\"content-type\"] == \"application/json\""
+            - status == 200
+            - headers["content-type"] == "application/json"
 
   - name: "Response Inspection"
     description: "Inspect what httpbin sends back"
@@ -171,26 +171,26 @@ describe:
         test:
           route: "/uuid"
           assert:
-            - "status == 200"
-            - "body.contains(\"uuid\")"
+            - status == 200
+            - body.contains("uuid")
 
       - name: "IP address endpoint returns origin"
         test:
           route: "/ip"
           assert:
-            - "status == 200"
-            - "body.contains(\"origin\")"
+            - status == 200
+            - body.contains("origin")
 
       - name: "User-agent endpoint echoes the client"
         test:
           route: "/user-agent"
           assert:
-            - "status == 200"
-            - "body.contains(\"user-agent\")"
+            - status == 200
+            - body.contains("user-agent")
 
       - name: "Delay endpoint (simulates a slow API)"
         description: "Useful for testing timeout behavior"
         test:
           route: "/delay/1"
           assert:
-            - "status == 200"
+            - status == 200

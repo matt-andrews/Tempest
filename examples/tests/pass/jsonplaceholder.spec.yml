@@ -11,24 +11,24 @@ describe:
         test:
           route: "/posts"
           assert:
-            - "status == 200"
-            - "body.contains(\"userId\")"
-            - "body.contains(\"title\")"
+            - status == 200u
+            - body.json().size() == 100
+            - body.json().all(post, post.id >= 1 && post.id <= 100 && post.userId >= 1 && post.userId <= 10)
+            - body.json().filter(post, post.userId == 7).size() == 10
+            - body.json().exists_one(post, post.id == 1 && post.title.startsWith("sunt aut facere"))
 
       - name: "Get post by ID"
         test:
           route: "/posts/1"
           assert:
-            - "status == 200"
-            - "json[\"id\"] == 1"
-            - "json[\"userId\"] == 1"
-            - "json[\"title\"] != \"\""
+            - status == 200u
+            - 'body.json() == {"userId": 1, "id": 1, "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit", "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"}'
 
       - name: "Non-existent post returns 404"
         test:
           route: "/posts/99999"
           assert:
-            - "status == 404"
+            - status == 404u && body.json() == {} && body == "{}"
 
       - name: "Create a post"
         description: "JSONPlaceholder fakes the write — responds 201 with the new resource"
@@ -39,9 +39,9 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 201"
-            - "body.contains(\"Tempest Test Post\")"
-            - "body.contains(\"id\")"
+            - status == 201u
+            - 'body.json() == {"title": "Tempest Test Post", "body": "Posted via Tempest HTTP test runner", "userId": 42, "id": 101}'
+            - 'headers["content-type"].startsWith("application/json")'
 
       - name: "Full update (PUT)"
         test:
@@ -51,8 +51,8 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 200"
-            - "body.contains(\"Updated by Tempest\")"
+            - status == 200u
+            - 'body.json() == {"id": 1, "title": "Updated by Tempest", "body": "Replaced content", "userId": 1}'
 
       - name: "Partial update (PATCH)"
         test:
@@ -62,15 +62,16 @@ describe:
           headers:
             Content-Type: "application/json"
           assert:
-            - "status == 200"
-            - "body.contains(\"Patched Title\")"
+            - status == 200u
+            - body.json().size() == 4 && body.json().title == "Patched Title" && body.json().id == 1 && body.json().userId == 1
+            - body.json().body.startsWith("quia et suscipit") && body.json().body.endsWith("architecto")
 
       - name: "Delete a post"
         test:
           route: "/posts/1"
           verb: "DELETE"
           assert:
-            - "status == 200"
+            - status == 200u && body.json() == {} && body.json().size() == 0
 
   - name: "Comments"
     describe:
@@ -79,17 +80,20 @@ describe:
         test:
           route: "/posts/1/comments"
           assert:
-            - "status == 200"
-            - "body.contains(\"postId\")"
-            - "body.contains(\"email\")"
+            - status == 200u && body.json().size() == 5
+            - body.json().map(comment, comment.id) == [1, 2, 3, 4, 5]
+            - body.json().all(comment, comment.postId == 1 && comment.name.size() > 0 && comment.body.size() > 0)
+            - body.json().all(comment, comment.email.matches("^[^@ ]+@[^@ ]+\\.[^@ ]+$"))
 
       - name: "Filter comments by postId query param"
         description: "Same data, different URL style — both are valid REST patterns"
         test:
           route: "/comments?postId=1"
           assert:
-            - "status == 200"
-            - "body.contains(\"postId\")"
+            - status == 200u
+            - body.json().all(comment, comment.postId == 1)
+            - body.json().exists_one(comment, comment.email == "Eliseo@gardner.biz")
+            - body.json().map(comment, comment.id) == [1, 2, 3, 4, 5]
 
   - name: "Users"
     describe:
@@ -97,34 +101,37 @@ describe:
         test:
           route: "/users"
           assert:
-            - "status == 200"
-            - "body.contains(\"username\")"
-            - "body.contains(\"address\")"
+            - status == 200u && body.json().size() == 10
+            - body.json().all(user, has(user.address.geo.lat) && has(user.address.geo.lng) && has(user.company.catchPhrase))
+            - body.json().map(user, user.username).contains("Bret")
+            - 'body.json().exists_one(user, user.id == 1 && user.address.geo == {"lat": "-37.3159", "lng": "81.1496"})'
 
       - name: "Get Leanne Graham"
         description: "User #1 is a fixed fixture — useful for deterministic assertions"
         test:
           route: "/users/1"
           assert:
-            - "status == 200"
-            - "json[\"name\"] != \"\""
-            - "json[\"email\"] != \"\""
-            - "body.contains(\"Leanne Graham\")"
-            - "body.contains(\"Sincere@april.biz\")"
+            - status == 200u && body.json().id == 1 && body.json().name == "Leanne Graham"
+            - 'body.json().address == {"street": "Kulas Light", "suite": "Apt. 556", "city": "Gwenborough", "zipcode": "92998-3874", "geo": {"lat": "-37.3159", "lng": "81.1496"}}'
+            - 'body.json().company == {"name": "Romaguera-Crona", "catchPhrase": "Multi-layered client-server neural-net", "bs": "harness real-time e-markets"}'
+            - body.json().email.matches("^[A-Za-z]+@[A-Za-z]+\\.biz$") && body.json().website.endsWith(".org")
 
       - name: "Get all posts by a user"
         test:
           route: "/users/1/posts"
           assert:
-            - "status == 200"
-            - "body.contains(\"userId\")"
+            - status == 200u && body.json().size() == 10
+            - body.json().all(post, post.userId == 1)
+            - body.json().map(post, post.id) == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+            - 'body.json().all(post, ["userId", "id", "title", "body"].all(field, field in post))'
 
       - name: "Get all todos by a user"
         test:
           route: "/users/1/todos"
           assert:
-            - "status == 200"
-            - "body.contains(\"completed\")"
+            - status == 200u && body.json().size() == 20
+            - body.json().all(todo, todo.userId == 1)
+            - body.json().exists(todo, todo.completed) && body.json().exists(todo, !todo.completed)
 
   - name: "Todos"
     describe:
@@ -132,31 +139,34 @@ describe:
         test:
           route: "/todos"
           assert:
-            - "status == 200"
-            - "body.contains(\"completed\")"
-            - "body.contains(\"title\")"
+            - status == 200u && body.json().size() == 200
+            - body.json().all(todo, todo.id >= 1 && todo.id <= 200 && todo.userId >= 1 && todo.userId <= 10)
+            - body.json().all(todo, todo.title.size() > 0)
+            - body.json().filter(todo, todo.completed).size() == 90
 
       - name: "Get a specific todo"
         test:
           route: "/todos/1"
           assert:
-            - "status == 200"
-            - "json[\"userId\"] == 1"
-            - "json[\"id\"] == 1"
+            - status == 200u
+            - 'body.json() == {"userId": 1, "id": 1, "title": "delectus aut autem", "completed": false}'
 
       - name: "Filter completed todos"
         description: "Query params in the route string — the query field is an alternative"
         test:
           route: "/todos?completed=true"
           assert:
-            - "status == 200"
-            - "body.contains(\"completed\")"
+            - status == 200u && body.json().size() == 90
+            - body.json().all(todo, todo.completed)
+            - body.json().map(todo, todo.id).contains(4)
 
       - name: "Filter incomplete todos"
         test:
           route: "/todos?completed=false"
           assert:
-            - "status == 200"
+            - status == 200u && body.json().size() == 110
+            - body.json().all(todo, !todo.completed)
+            - body.json().exists_one(todo, todo.id == 1 && todo.title == "delectus aut autem")
 
   - name: "Albums and Photos"
     describe:
@@ -164,26 +174,27 @@ describe:
         test:
           route: "/albums"
           assert:
-            - "status == 200"
-            - "body.contains(\"title\")"
+            - status == 200u && body.json().size() == 100
+            - body.json().all(album, album.title.size() > 0 && album.id >= 1 && album.id <= 100)
+            - body.json().filter(album, album.userId == 10).map(album, album.id) == [91, 92, 93, 94, 95, 96, 97, 98, 99, 100]
 
       - name: "Get photos in an album"
         test:
           route: "/albums/1/photos"
           assert:
-            - "status == 200"
-            - "body.contains(\"thumbnailUrl\")"
-            - "body.contains(\"url\")"
+            - status == 200u && body.json().size() == 50
+            - body.json()[0].id == 1 && body.json()[49].id == 50
+            - 'body.json().all(photo, photo.albumId == 1 && photo.url.startsWith("https://") && photo.thumbnailUrl.startsWith("https://"))'
+            - body.json().all(photo, photo.url != photo.thumbnailUrl)
 
       - name: "Get a specific photo"
         description: "Each photo has a title, URL, and thumbnail URL"
         test:
           route: "/photos/1"
           assert:
-            - "status == 200"
-            - "json[\"albumId\"] == 1"
-            - "json[\"id\"] == 1"
-            - "body.contains(\"thumbnailUrl\")"
+            - status == 200u
+            - 'body.json() == {"albumId": 1, "id": 1, "title": "accusamus beatae ad facilis cum similique qui sunt", "url": "https://via.placeholder.com/600/92c952", "thumbnailUrl": "https://via.placeholder.com/150/92c952"}'
+            - body.json().url.endsWith("92c952") && body.json().thumbnailUrl.endsWith("92c952")
 
       - name: "file assertion from child level"
         options:
@@ -191,4 +202,5 @@ describe:
         test:
           route: "/img.jpg"
           assert:
+            - status == 200u && bytes.size() > 0
             - 'bytes == fileBytes("./misc/img.webp")'

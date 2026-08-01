@@ -13,10 +13,10 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "json[\"login\"] != \"\""
-            - "body.contains(\"octocat\")"
-            - "body.contains(\"San Francisco\")"
+            - status == 200
+            - body.json()["login"] != ""
+            - body.contains("octocat")
+            - body.contains("San Francisco")
 
       - name: "Non-existent user returns 404"
         test:
@@ -24,7 +24,7 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 404"
+            - status == 404
 
       - name: "List octocat's public repos"
         description: "Includes Hello-World, the canonical first repo"
@@ -33,8 +33,8 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "body.contains(\"Hello-World\")"
+            - status == 200
+            - body.json().filter(item, item.name == "Hello-World").size() == 1
 
       - name: "List octocat's followers"
         test:
@@ -42,7 +42,7 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
+            - status == 200
 
   - name: "Public Repositories"
     describe:
@@ -52,10 +52,9 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "json[\"name\"] != \"\""
-            - "body.contains(\"Hello-World\")"
-            - "body.contains(\"octocat\")"
+            - status == 200
+            - body.json().full_name == "octocat/Hello-World"
+            - body.json().owner.login == "octocat"
 
       - name: "List commits on Hello-World"
         description: "Every repo has at least one commit — a safe collection to assert on"
@@ -64,9 +63,9 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "body.contains(\"commit\")"
-            - "body.contains(\"author\")"
+            - status == 200
+            - body.contains("commit")
+            - body.contains("author")
 
       - name: "Non-existent repo returns 404"
         test:
@@ -74,16 +73,18 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 404"
+            - status == 404
 
   - name: "Fun Endpoints"
+    options:
+      debug: true
     describe:
       - name: "GitHub Zen"
         description: "Returns a random GitHub design principle as plain text"
         test:
           route: "/zen"
           assert:
-            - "status == 200"
+            - status == 200
 
       - name: "GitHub emoji list contains octocat"
         description: "GitHub maintains a full list of supported emoji — octocat is in there"
@@ -92,8 +93,18 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "body.contains(\"octocat\")"
+            - status == 200
+            - body.json().octocat.contains("https://")
+          vars:
+            - "emoji_octocat={{ json.octocat }}"
+
+      - name: "Download emoji and compare to pre-downloaded copy"
+        description: "This test downloads the octocat emoji defined in the previous test, and then compares it to the local copy"
+        test:
+          route: "{{ file.emoji_octocat }}"
+          assert:
+            - status == 200
+            - bytes == fileBytes("octocat.png")
 
       - name: "Gitignore templates list"
         description: "GitHub ships official .gitignore templates for common languages and tools"
@@ -102,10 +113,13 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "body.contains(\"Rust\")"
-            - "body.contains(\"Python\")"
-            - "body.contains(\"Node\")"
+            - status == 200
+            - body.json().exists_one(item, item == "Rust")
+            - body.json().exists_one(item, item == "Python")
+            - body.json().exists_one(item, item == "Node")
+            - body.contains("Rust")
+            - body.contains("Python")
+            - body.contains("Node")
 
       - name: "Rust .gitignore template"
         description: "Fetch the actual Rust gitignore content — assert it includes target/"
@@ -114,9 +128,9 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "json[\"name\"] != \"\""
-            - "body.contains(\"target\")"
+            - status == 200
+            - body.json()["name"] != ""
+            - body.contains("target")
 
   - name: "API Meta"
     describe:
@@ -127,7 +141,7 @@ describe:
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
-            - "status == 200"
-            - "body.contains(\"rate\")"
-            - "body.contains(\"limit\")"
-            - "body.contains(\"remaining\")"
+            - status == 200
+            - body.json().rate.limit == 60
+            - body.contains("limit")
+            - body.contains("remaining")

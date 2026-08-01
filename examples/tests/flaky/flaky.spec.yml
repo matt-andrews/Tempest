@@ -6,4 +6,4 @@ describe:
     test:
       route: "/status/{% if retry_attempts == 0 %}400{%else%}200{%endif%}"
       assert:
-        - 'status == 200'
+        - status == 200
