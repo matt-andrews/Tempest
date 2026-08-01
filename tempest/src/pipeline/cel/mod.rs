@@ -1,7 +1,7 @@
-use anyhow::anyhow;
-use cel_interpreter::{Program, Value};
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::TestResult;
+use anyhow::anyhow;
+use cel_interpreter::{Program, Value};
 
 pub mod context;
 pub mod functions;

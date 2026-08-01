@@ -1,15 +1,20 @@
-use std::collections::HashMap;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::run_context::RunContext;
 use crate::models::test_result::TestResult;
 use crate::pipeline::variables::default_var::DefaultVariableAssignment;
 use enum_dispatch::enum_dispatch;
-use crate::models::evaluation_context::EvaluationContext;
+use std::collections::HashMap;
 
 pub mod default_var;
 
 #[enum_dispatch]
 pub trait VariableAssignment {
-    fn set(&self, data: &TestResult, context: &mut RunContext, evaluation_context: &EvaluationContext);
+    fn set(
+        &self,
+        data: &TestResult,
+        context: &mut RunContext,
+        evaluation_context: &EvaluationContext,
+    );
 }
 
 #[enum_dispatch(VariableAssignment)]

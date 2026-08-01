@@ -1,6 +1,6 @@
-use crate::models::evaluation_context::EvaluationContext;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
+use crate::models::evaluation_context::EvaluationContext;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
@@ -182,7 +182,13 @@ impl<'a> DirectoryRunner<'a> {
         assert_result
     }
 
-    fn assign_variables(&self, test: &TestSpec, result: &TestResult, context: &mut RunContext, descriptor: &Descriptor) {
+    fn assign_variables(
+        &self,
+        test: &TestSpec,
+        result: &TestResult,
+        context: &mut RunContext,
+        descriptor: &Descriptor,
+    ) {
         let evaluation_context = EvaluationContext {
             suite_dir: self.top_path.to_path_buf(),
             spec_file: descriptor.file.clone(),

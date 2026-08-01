@@ -1,18 +1,16 @@
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
-use anyhow::anyhow;
-use cel_interpreter::{Program, Value};
 use crate::pipeline::cel;
-use crate::pipeline::cel::context;
+use cel_interpreter::Value;
 
 pub struct CelAssertionEvaluator {
     assertion: String,
 }
 impl AssertionEvaluator for CelAssertionEvaluator {
     fn evaluate(&self, data: &TestResult, context: &EvaluationContext) -> Assertion {
-        let result = Self::evaluate_assertion(&self.assertion, data, context)
-            .map_err(|e| e.to_string());
+        let result =
+            Self::evaluate_assertion(&self.assertion, data, context).map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -47,6 +45,7 @@ impl CelAssertionEvaluator {
 mod tests {
     use super::*;
     use crate::models::test_result::{TempestStatusCode, TestResult};
+    use cel_interpreter::Program;
     use std::time::Duration;
 
     fn result(status: u16, body: &str) -> TestResult {

@@ -21,14 +21,15 @@ pub enum AnyTestRunner {
 pub fn test_runner_for(test: &TestSpec, options: &RunOptions) -> AnyTestRunner {
     let mut url = test.route.trim_start().to_string();
 
-    if !url.starts_with("http://") && !url.starts_with("https://") {
-        if let Some(base_uri) = &options.base_uri {
-            url = format!(
-                "{}/{}",
-                base_uri.trim_end_matches('/'),
-                url.trim_start_matches('/')
-            );
-        }
+    if !url.starts_with("http://")
+        && !url.starts_with("https://")
+        && let Some(base_uri) = &options.base_uri
+    {
+        url = format!(
+            "{}/{}",
+            base_uri.trim_end_matches('/'),
+            url.trim_start_matches('/')
+        );
     }
 
     HttpTestRunner::new(&url, options, test).into()
