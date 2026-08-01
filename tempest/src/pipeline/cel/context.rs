@@ -1,6 +1,6 @@
 use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::TestResult;
-use crate::pipeline::assertions::cel::functions;
+use crate::pipeline::cel::functions;
 use crate::pipeline::warnings;
 use cel_interpreter::objects::Key;
 use cel_interpreter::{Context, Value};

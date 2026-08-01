@@ -6,6 +6,7 @@ pub mod runners;
 pub mod templating;
 pub mod variables;
 pub mod warnings;
+pub mod cel;
 
 use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;

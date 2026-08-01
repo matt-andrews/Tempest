@@ -1,11 +1,9 @@
-pub mod context;
-pub mod functions;
-
 use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
 use anyhow::anyhow;
 use cel_interpreter::{Program, Value};
+use crate::pipeline::cel::context;
 
 pub struct CelAssertionEvaluator {
     assertion: String,
