@@ -1,6 +1,7 @@
 use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
+use crate::pipeline::warnings;
 use anyhow::anyhow;
 use cel_interpreter::objects::Key;
 use cel_interpreter::{Context, FunctionContext, Program, Value};
@@ -69,6 +70,18 @@ impl CelAssertionEvaluator {
             Ok(p) => p,
             Err(e) => return Err(anyhow!("{}", e)),
         };
+
+        let references = program.references();
+        if references.has_variable("json") {
+            warnings::append_warning(
+                "`json` property is obsolete and will be removed soon. Use `body.json()` instead.",
+            );
+        }
+        if references.has_variable("bytes") {
+            warnings::append_warning(
+                "`bytes` property is obsolete and will be removed soon. Use `body.bytes()` instead.",
+            );
+        }
 
         let mut ctx = Context::default();
 
@@ -212,6 +225,25 @@ mod tests {
         let fail = eval(r#"status == 200u && body == "ok""#, &result(200, "bad"));
         assert!(!fail.passed);
         assert!(fail.error.is_empty()); // still a valid CEL expression, just false
+    }
+
+    #[test]
+    fn deprecated_variables_are_identified_from_program_references() {
+        let program = Program::compile("json.name == 'Alice' && bytes.size() > 0").unwrap();
+        let references = program.references();
+
+        assert!(references.has_variable("json"));
+        assert!(references.has_variable("bytes"));
+    }
+
+    #[test]
+    fn deprecated_names_in_strings_or_fields_are_not_variable_references() {
+        let program =
+            Program::compile(r#"payload.json == "json" && payload.bytes == "bytes""#).unwrap();
+        let references = program.references();
+
+        assert!(!references.has_variable("json"));
+        assert!(!references.has_variable("bytes"));
     }
 
     #[test]

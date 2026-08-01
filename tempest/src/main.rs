@@ -5,8 +5,10 @@ mod utils;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
+use crate::pipeline::warnings;
 use clap::{Parser, Subcommand};
-use std::collections::HashMap;
+use colored::Colorize;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -28,6 +30,8 @@ enum Commands {
         retries: u8,
         #[arg(short, long, default_value = "false")]
         strict: bool,
+        #[arg(short, long, default_value = "false")]
+        warn_as_err: bool,
     },
 }
 
@@ -43,6 +47,7 @@ async fn main() -> anyhow::Result<()> {
             debug,
             retries,
             strict,
+            warn_as_err,
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
@@ -55,7 +60,10 @@ async fn main() -> anyhow::Result<()> {
             )?;
 
             let result = pipeline::execute(discovery, &options).await?;
-            let exit = determine_exit_code(result, strict);
+
+            print_warnings();
+
+            let exit = determine_exit_code(result, strict, warn_as_err);
             process::exit(exit as i32);
         }
     }
@@ -77,6 +85,21 @@ fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf
     Ok(root.join(sanitized))
 }
 
+fn print_warnings() {
+    let warning_count = warnings::get_warning_count();
+    if warning_count > 0  {
+        println!(
+            "{}{}",
+            "Total Warnings: ".yellow(),
+            warning_count.to_string().yellow()
+        );
+        let warnings: HashSet<String> = warnings::get_all_warnings();
+        for warning in warnings {
+            println!("{}: {}", "WARN".yellow(), warning.yellow());
+        }
+    }
+}
+
 #[repr(i32)]
 enum ExitCode {
     Success = 0,
@@ -84,7 +107,10 @@ enum ExitCode {
     FlakyTests = 2,
 }
 
-fn determine_exit_code(result: SummaryResult, strict: bool) -> ExitCode {
+fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -> ExitCode {
+    if warn_as_err && warnings::get_warning_count() > 0 {
+        return ExitCode::TestsFailed;
+    }
     if result == SummaryResult::Failed {
         ExitCode::TestsFailed
     } else if result == SummaryResult::Flaky && strict {
