@@ -1875,6 +1875,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "cel-interpreter",
+ "cel-parser",
  "clap",
  "colored",
  "dotenvy",

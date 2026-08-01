@@ -2,6 +2,7 @@ pub mod discovery;
 mod models;
 pub mod pipeline;
 mod utils;
+pub mod content;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;

@@ -1,3 +1,6 @@
+pub mod context;
+pub mod functions;
+
 use crate::models::assertion_context::AssertionContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
@@ -34,32 +37,6 @@ impl CelAssertionEvaluator {
             assertion: assertion.to_string(),
         }
     }
-    fn json_to_cel(val: &JsonValue) -> Value {
-        match val {
-            JsonValue::Null => Value::Null,
-            JsonValue::Bool(b) => Value::Bool(*b),
-            JsonValue::Number(n) => {
-                if let Some(i) = n.as_i64() {
-                    Value::Int(i)
-                } else if let Some(f) = n.as_f64() {
-                    Value::Float(f)
-                } else {
-                    Value::Null
-                }
-            }
-            JsonValue::String(s) => Value::String(s.clone().into()),
-            JsonValue::Array(arr) => {
-                Value::List(arr.iter().map(Self::json_to_cel).collect::<Vec<_>>().into())
-            }
-            JsonValue::Object(map) => {
-                let cel_map = map
-                    .iter()
-                    .map(|(k, v)| (Key::String(Arc::new(k.clone())), Self::json_to_cel(v)))
-                    .collect::<HashMap<Key, Value>>();
-                Value::Map(cel_map.into())
-            }
-        }
-    }
 
     fn evaluate_assertion(
         expr: &str,
@@ -71,46 +48,8 @@ impl CelAssertionEvaluator {
             Err(e) => return Err(anyhow!("{}", e)),
         };
 
-        let references = program.references();
-        if references.has_variable("json") {
-            warnings::append_warning(
-                "`json` property is obsolete and will be removed soon. Use `body.json()` instead.",
-            );
-        }
-        if references.has_variable("bytes") {
-            warnings::append_warning(
-                "`bytes` property is obsolete and will be removed soon. Use `body.bytes()` instead.",
-            );
-        }
-
-        let mut ctx = Context::default();
-
-        ctx.add_variable("status", Value::UInt(response.status.code as u64))?;
-
-        if let Some(json) = &response.json {
-            ctx.add_variable("json", Self::json_to_cel(json))?;
-        }
-
-        ctx.add_variable("body", &response.body)?;
-
-        ctx.add_variable_from_value("bytes", response.bytes.clone());
-
-        ctx.add_variable("headers", Self::headers_to_cel(&response.headers))?;
-
-        ctx.add_function(
-            "fileBytes",
-            move |ftx: &FunctionContext, path: Arc<String>| {
-                let resolved = context
-                    .resolve_file(path.as_str())
-                    .map_err(|e| ftx.error(e.to_string()))?;
-
-                let bytes = std::fs::read(&resolved).map_err(|e| {
-                    ftx.error(format!("could not read {}: {e}", resolved.display()))
-                })?;
-
-                Ok(Value::Bytes(Arc::new(bytes)))
-            },
-        );
+        let refs = program.references();
+        let ctx = context::for_response(response, &context, &refs)?;
 
         match program.execute(&ctx)? {
             Value::Bool(b) => Ok(b),
@@ -118,17 +57,6 @@ impl CelAssertionEvaluator {
         }
     }
 
-    fn headers_to_cel(headers: &HeaderMap) -> Value {
-        let cel_map = headers
-            .iter()
-            .map(|(k, v)| {
-                let key = Key::String(Arc::new(k.as_str().to_string()));
-                let val = Value::String(Arc::new(v.to_str().unwrap_or("").to_string()));
-                (key, val)
-            })
-            .collect::<HashMap<Key, Value>>();
-        Value::Map(cel_map.into())
-    }
 }
 
 #[cfg(test)]
@@ -146,7 +74,6 @@ mod tests {
             },
             headers: reqwest::header::HeaderMap::new(),
             body: body.to_string(),
-            json: None,
             bytes: vec![],
             duration: Duration::ZERO,
         }
@@ -154,7 +81,6 @@ mod tests {
 
     fn with_json(r: TestResult, json: serde_json::Value) -> TestResult {
         TestResult {
-            json: Some(json),
             ..r
         }
     }
