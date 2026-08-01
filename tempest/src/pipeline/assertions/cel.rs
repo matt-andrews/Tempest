@@ -1,7 +1,7 @@
+use crate::cel;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::assertions::AssertionEvaluator;
-use crate::pipeline::cel;
 use cel_interpreter::Value;
 
 pub struct CelAssertionEvaluator {

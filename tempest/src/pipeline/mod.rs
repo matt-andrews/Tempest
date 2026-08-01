@@ -1,10 +1,8 @@
 pub mod assertions;
-pub mod cel;
 mod directory_runner;
 mod pipeline_runner;
 mod reporting;
 pub mod runners;
-pub mod templating;
 pub mod variables;
 pub mod warnings;
 

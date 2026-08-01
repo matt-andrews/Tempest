@@ -2,8 +2,8 @@ use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::pipeline::reporting::event::ReportEvent;
-use crate::pipeline::templating::TemplateEngine;
-use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
 use liquid_core::Value;
 
 pub struct LiquidRenderer {

@@ -1,7 +1,9 @@
+pub mod cel;
 pub mod content;
 pub mod discovery;
 mod models;
 pub mod pipeline;
+pub mod templating;
 mod utils;
 
 use crate::models::run_options::RunOptions;

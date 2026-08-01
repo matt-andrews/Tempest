@@ -11,8 +11,8 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::reporting::{AnyReporter, Reporter};
 use crate::pipeline::runners::TestRunner;
 use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::templating::liquid::LiquidEngine;
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
+use crate::templating::liquid::LiquidEngine;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -272,7 +272,7 @@ mod tests {
     use crate::models::summary_result::SummaryResult;
     use crate::models::test_spec::TestSpec;
     use crate::pipeline::reporting::reporter_for;
-    use crate::pipeline::templating::liquid::LiquidEngine;
+    use crate::templating::liquid::LiquidEngine;
     use mockito::Server;
     use std::collections::HashMap;
     use std::path::PathBuf;

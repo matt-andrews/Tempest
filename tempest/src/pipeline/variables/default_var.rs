@@ -1,7 +1,7 @@
+use crate::cel;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::run_context::RunContext;
 use crate::models::test_result::TestResult;
-use crate::pipeline::cel;
 use crate::pipeline::variables::VariableAssignment;
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;

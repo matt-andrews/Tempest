@@ -3,7 +3,7 @@ use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::directory_runner::DirectoryRunner;
 use crate::pipeline::reporting::{AnyReporter, Reporter, reporter_for};
-use crate::pipeline::templating::liquid::LiquidEngine;
+use crate::templating::liquid::LiquidEngine;
 use std::path::Path;
 
 pub struct PipelineRunner<'a> {

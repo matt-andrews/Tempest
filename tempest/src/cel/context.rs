@@ -1,6 +1,6 @@
+use crate::cel::functions;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::test_result::TestResult;
-use crate::pipeline::cel::functions;
 use crate::pipeline::warnings;
 use cel_interpreter::objects::Key;
 use cel_interpreter::{Context, Value};
