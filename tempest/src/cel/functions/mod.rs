@@ -4,7 +4,9 @@ use cel_interpreter::Context;
 
 pub mod css;
 pub mod file_bytes;
+pub mod from_base64;
 pub mod json;
+pub mod to_base64;
 pub mod xpath;
 
 pub fn register_all(
@@ -16,4 +18,6 @@ pub fn register_all(
     file_bytes::register(context, evaluation_context.clone());
     css::register(context, response_content_cache.clone());
     xpath::register(context);
+    to_base64::register(context);
+    from_base64::register(context);
 }
