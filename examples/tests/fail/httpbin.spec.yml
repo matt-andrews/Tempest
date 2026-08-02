@@ -194,3 +194,9 @@ describe:
           route: "/delay/1"
           assert:
             - status == 200
+
+      - name: "failed conversion fromBase64"
+        test:
+          route: "https://example.com/"
+          assert:
+            - '"bad-base64".fromBase64() == bytes'

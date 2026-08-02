@@ -7,8 +7,10 @@ use std::sync::Arc;
 pub fn register(context: &mut Context) {
     context.add_function(
         "fromBase64",
-        move |_ftx: &FunctionContext, This(source): This<Arc<String>>| {
-            let bytes: Vec<u8> = BASE64_STANDARD.decode(source.as_str()).unwrap_or_default();
+        move |ftx: &FunctionContext, This(source): This<Arc<String>>| {
+            let bytes = BASE64_STANDARD
+                .decode(source.as_str())
+                .map_err(|e| ftx.error(format!("invalid base64: {e}")))?;
             Ok(Value::Bytes(Arc::new(bytes)))
         },
     );
