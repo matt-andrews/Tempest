@@ -1,21 +1,14 @@
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
-use crate::models::evaluation_context::EvaluationContext;
 use crate::models::report_template::ReportTemplate;
-use crate::models::response_content_cache::ResponseContentCache;
-use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
-use crate::models::test_spec::TestSpec;
-use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
+use crate::pipeline::file_runner::FileRunner;
 use crate::pipeline::reporting::{AnyReporter, Reporter};
-use crate::pipeline::runners::TestRunner;
-use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use crate::templating::liquid::LiquidEngine;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct DirectoryRunner<'a> {
     reporter: &'a AnyReporter,
@@ -44,239 +37,64 @@ impl<'a> DirectoryRunner<'a> {
             top_path,
         }
     }
+
     pub async fn execute_dir(&self, summary: &mut Vec<SummaryResult>) {
-        let mut context = RunContext::new("", &self.directory.envs);
-        for (descriptor, ancestor_options) in self.descriptors() {
-            let outcome = self
-                .execute_descriptor_with_retries(
-                    descriptor,
-                    ancestor_options,
-                    &mut context,
-                    summary.len(),
-                )
-                .await;
-
-            if let Some(result) = &outcome.summary_result {
-                summary.push(result.to_owned());
-            }
-        }
-    }
-
-    async fn execute_descriptor_with_retries(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-        context: &mut RunContext,
-        test_count: usize,
-    ) -> DescriptorOutcome {
-        let context_before_descriptor = context.clone();
-        let mut retry_attempts = 0usize;
-        let mut saw_failure = false;
-
-        loop {
-            context.retry_attempts = retry_attempts;
-            let mut outcome = self
-                .execute_descriptor(descriptor, ancestor_options.clone(), context)
-                .await;
-
-            self.report_descriptor(&outcome, test_count, retry_attempts);
-
-            match &outcome.summary_result {
-                Some(SummaryResult::Failed) => {
-                    let max_retries = usize::from(outcome.options.retries.unwrap_or(0));
-                    if retry_attempts < max_retries {
-                        retry_attempts += 1;
-                        saw_failure = true;
-                        *context = context_before_descriptor.clone();
-                        continue;
-                    }
-                }
-                Some(SummaryResult::Passed) if saw_failure => {
-                    outcome.summary_result = Some(SummaryResult::Flaky);
-                }
-                _ => {}
-            }
-
-            return outcome;
-        }
-    }
-
-    async fn execute_descriptor(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-        context: &mut RunContext,
-    ) -> DescriptorOutcome {
-        let mut descriptor = descriptor.to_owned();
-
-        self.apply_file_context(&mut descriptor, context);
-
-        let mut options = self.options_for_descriptor(&descriptor, ancestor_options);
-
-        self.render_inputs(&mut descriptor, &mut options, context);
-
-        let test_run = self
-            .run_test_if_present(&descriptor, &options, context)
+        for root in &self.directory.files {
+            let outcome = FileRunner::new(
+                root,
+                &self.directory.envs,
+                self.base_options.clone(),
+                self.template_engine,
+                self.top_path,
+            )
+            .execute()
             .await;
 
-        DescriptorOutcome {
-            descriptor,
-            options,
-            test_result: test_run.test_result,
-            assertions: test_run.assertions,
-            summary_result: test_run.summary_result,
-        }
-    }
+            for descriptor in outcome.descriptors {
+                let test_count = summary.len();
 
-    async fn run_test_if_present(
-        &self,
-        descriptor: &Descriptor,
-        options: &RunOptions,
-        context: &mut RunContext,
-    ) -> TestRunOutcome {
-        let Some(test) = &descriptor.test else {
-            return TestRunOutcome {
-                test_result: None,
-                assertions: Vec::new(),
-                summary_result: None,
-            };
-        };
+                for (retry_count, attempt) in descriptor.attempts.iter().enumerate() {
+                    self.reporter.report(
+                        &attempt.descriptor,
+                        attempt.test_result.as_ref(),
+                        &attempt.assertions,
+                        &attempt.options,
+                        self.templates,
+                        test_count,
+                        retry_count,
+                    );
+                }
 
-        let mut test = test.to_owned();
-        test.render_template(self.template_engine, &liquid::object!(&context));
-
-        let runner = test_runner_for(&test, options);
-        let test_result = runner.run().await;
-
-        let response_content_cache = ResponseContentCache::default();
-        let assertions =
-            self.evaluate_assertions(&test, &test_result, descriptor, &response_content_cache);
-        self.assign_variables(
-            &test,
-            &test_result,
-            context,
-            descriptor,
-            &response_content_cache,
-        );
-
-        let summary_result = if assertions.iter().any(|a| !a.passed) {
-            SummaryResult::Failed
-        } else {
-            SummaryResult::Passed
-        };
-
-        TestRunOutcome {
-            test_result: Some(test_result),
-            assertions,
-            summary_result: Some(summary_result),
-        }
-    }
-
-    fn evaluate_assertions(
-        &self,
-        test: &TestSpec,
-        test_result: &TestResult,
-        descriptor: &Descriptor,
-        response_content_cache: &ResponseContentCache,
-    ) -> Vec<Assertion> {
-        let mut assert_result: Vec<Assertion> = Vec::new();
-        for assert in test.assert.as_deref().unwrap_or_default() {
-            let evaluation_context = EvaluationContext {
-                suite_dir: self.top_path.to_path_buf(),
-                spec_file: descriptor.file.clone(),
-            };
-            let assert_evaluator = assertion_evaluator_for(assert);
-            let result =
-                assert_evaluator.evaluate(test_result, &evaluation_context, response_content_cache);
-            assert_result.push(result.clone());
-        }
-        assert_result
-    }
-
-    fn assign_variables(
-        &self,
-        test: &TestSpec,
-        result: &TestResult,
-        context: &mut RunContext,
-        descriptor: &Descriptor,
-        response_content_cache: &ResponseContentCache,
-    ) {
-        let evaluation_context = EvaluationContext {
-            suite_dir: self.top_path.to_path_buf(),
-            spec_file: descriptor.file.clone(),
-        };
-        let vars = test.vars.clone().unwrap_or_default();
-        let assign_var = variable_assignment_for(&vars);
-        assign_var.set(
-            result,
-            &mut *context,
-            &evaluation_context,
-            response_content_cache,
-        );
-    }
-
-    fn descriptors(&self) -> impl Iterator<Item = (&Descriptor, RunOptions)> {
-        self.directory.files.iter().flat_map(|m| m.descendants())
-    }
-
-    fn apply_file_context(&self, descriptor: &mut Descriptor, context: &mut RunContext) {
-        if let Some(file_name) = descriptor.file.clone() {
-            if file_name != context.file_name {
-                *context =
-                    RunContext::new(file_name.to_str().unwrap_or_default(), &self.directory.envs);
+                if let Some(result) = descriptor.final_result {
+                    summary.push(result);
+                }
             }
-
-            descriptor.file = Some(file_name);
         }
     }
-
-    fn options_for_descriptor(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-    ) -> RunOptions {
-        self.base_options
-            .clone()
-            .merge(ancestor_options)
-            .merge(descriptor.options.clone().unwrap_or_default())
-    }
-
-    fn render_inputs(
-        &self,
-        descriptor: &mut Descriptor,
-        options: &mut RunOptions,
-        context: &RunContext,
-    ) {
-        let obj = liquid::object!(&context);
-        options.render_template(self.template_engine, &obj);
-        descriptor.render_template(self.template_engine, &obj);
-    }
-
-    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize, retry_count: usize) {
-        self.reporter.report(
-            &outcome.descriptor,
-            outcome.test_result.as_ref(),
-            &outcome.assertions,
-            &outcome.options,
-            self.templates,
-            count,
-            retry_count,
-        );
-    }
 }
 
-struct DescriptorOutcome {
-    descriptor: Descriptor,
-    options: RunOptions,
-    test_result: Option<TestResult>,
-    assertions: Vec<Assertion>,
-    summary_result: Option<SummaryResult>,
+pub struct AttemptOutcome {
+    pub descriptor: Descriptor,
+    pub options: RunOptions,
+    pub test_result: Option<TestResult>,
+    pub assertions: Vec<Assertion>,
+    pub result: Option<SummaryResult>,
 }
 
-struct TestRunOutcome {
-    test_result: Option<TestResult>,
-    assertions: Vec<Assertion>,
-    summary_result: Option<SummaryResult>,
+pub struct DescriptorOutcome {
+    pub attempts: Vec<AttemptOutcome>,
+    pub final_result: Option<SummaryResult>,
+}
+
+pub struct FileOutcome {
+    pub source_file: PathBuf,
+    pub descriptors: Vec<DescriptorOutcome>,
+}
+
+pub struct TestRunOutcome {
+    pub test_result: Option<TestResult>,
+    pub assertions: Vec<Assertion>,
+    pub summary_result: Option<SummaryResult>,
 }
 
 #[cfg(test)]
@@ -561,6 +379,18 @@ mod tests {
         mock.assert_async().await;
     }
 
+    fn spec_file(children: Vec<Descriptor>) -> Descriptor {
+        Descriptor {
+            name: Some("test spec".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(children),
+            options: None,
+            file: Some(PathBuf::from("test.spec.yml")),
+        }
+    }
+
     #[tokio::test]
     async fn variable_set_in_one_test_is_available_in_next() {
         let mut server = Server::new_async().await;
@@ -609,7 +439,7 @@ mod tests {
             file: None,
         };
 
-        let dir = dir_node(vec![seed, consumer]);
+        let dir = dir_node(vec![spec_file(vec![seed, consumer])]);
         let mut summary = Vec::new();
         make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
             .execute_dir(&mut summary)
@@ -887,7 +717,7 @@ mod tests {
             file: None,
         };
 
-        let dir = dir_node(vec![seed, unstable, consumer_descriptor]);
+        let dir = dir_node(vec![spec_file(vec![seed, unstable, consumer_descriptor])]);
         let mut summary = Vec::new();
         make_runner(
             &dir,
