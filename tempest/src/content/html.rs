@@ -10,16 +10,19 @@ pub struct HtmlMatch {
     pub attrs: HashMap<String, String>,
 }
 
-pub fn select(input: &str, selector_text: &str) -> anyhow::Result<Vec<HtmlMatch>> {
+pub fn parse(input: &str) -> Html {
+    Html::parse_document(input)
+}
+
+pub fn select(document: &Html, selector_text: &str) -> anyhow::Result<Vec<HtmlMatch>> {
     let selector = Selector::parse(selector_text)
         .map_err(|error| anyhow!("invalid CSS selector `{selector_text}`: {error}"))?;
-
-    let document = Html::parse_document(input);
 
     Ok(document
         .select(&selector)
         .map(|element| {
-            let raw_text = element.text().collect::<String>();
+            //idk about string join vs straight concatonation. i think join is less buggy?
+            let raw_text = element.text().collect::<Vec<_>>().join(" ");
             let text = raw_text.split_whitespace().collect::<Vec<_>>().join(" ");
 
             let attrs = element

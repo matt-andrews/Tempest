@@ -14,6 +14,6 @@ pub fn register_all(
 ) {
     json::register(context, response_content_cache.clone());
     file_bytes::register(context, evaluation_context.clone());
-    css::register(context);
+    css::register(context, response_content_cache.clone());
     xpath::register(context);
 }
