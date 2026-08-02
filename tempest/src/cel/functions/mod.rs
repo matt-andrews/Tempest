@@ -2,8 +2,10 @@ use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
 use cel_interpreter::Context;
 
+pub mod css;
 pub mod file_bytes;
 pub mod json;
+pub mod xpath;
 
 pub fn register_all(
     context: &mut Context,
@@ -11,5 +13,7 @@ pub fn register_all(
     response_content_cache: &ResponseContentCache,
 ) {
     json::register(context, response_content_cache.clone());
-    file_bytes::register(context, evaluation_context.clone())
+    file_bytes::register(context, evaluation_context.clone());
+    css::register(context);
+    xpath::register(context);
 }
