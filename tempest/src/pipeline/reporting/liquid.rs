@@ -224,7 +224,7 @@ mod tests {
     }
 
     #[test]
-    fn console_title_and_summary_each_use_one_line() {
+    fn console_title_and_summary_have_expected_line_counts() {
         let renderer = LiquidRenderer::new();
         let title = renderer
             .render(
