@@ -433,6 +433,65 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn nested_titles_are_available_to_report_templates() {
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("GET", "/users")
+            .with_status(200)
+            .create_async()
+            .await;
+        let report_dir = tempfile::tempdir().unwrap();
+        let report_path = report_dir.path().join("report.txt");
+        let templates = HashMap::from([(
+            "file".to_string(),
+            ReportTemplate {
+                test_template: Some("{{ full_name }}\n".to_string()),
+                section_template: None,
+                error_template: None,
+                debug_template: None,
+                title_template: None,
+                summary_template: None,
+                file: Some(ReportFile {
+                    dir: Some(report_dir.path().to_path_buf()),
+                    file_name: Some("report.txt".to_string()),
+                }),
+            },
+        )]);
+        let mut test = get_descriptor(&format!("{}/users", server.url()), None);
+        test.name = Some("creates a user".to_string());
+        let section = Descriptor {
+            name: Some("accounts".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(vec![test]),
+            options: None,
+            file: None,
+        };
+        let dir = dir_node(vec![spec_file(vec![section])]);
+        let engine = LiquidEngine;
+
+        execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    reports: Some(vec!["file".to_string()]),
+                    ..Default::default()
+                },
+            ),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(
+            std::fs::read_to_string(report_path).unwrap(),
+            "test spec › accounts › creates a user\n"
+        );
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
     async fn retry_pass_after_failure_yields_single_flaky_summary() {
         let mut server = Server::new_async().await;
         let fail = server

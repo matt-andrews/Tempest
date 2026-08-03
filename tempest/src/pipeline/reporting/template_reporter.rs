@@ -56,6 +56,7 @@ impl Reporter for TemplateReporter {
     fn report(
         &self,
         descriptor: &Descriptor,
+        title_path: &[String],
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,
@@ -66,6 +67,7 @@ impl Reporter for TemplateReporter {
         self.emit(
             ReportEvent::Descriptor {
                 descriptor,
+                title_path,
                 test_result,
                 assertions,
                 test_count,

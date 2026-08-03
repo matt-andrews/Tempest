@@ -8,6 +8,7 @@ pub enum ReportEvent<'a> {
     },
     Descriptor {
         descriptor: &'a Descriptor,
+        title_path: &'a [String],
         test_result: Option<&'a TestResult>,
         assertions: &'a [Assertion],
         test_count: usize,
@@ -83,6 +84,7 @@ mod tests {
         let descriptor = descriptor(true);
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &[],
             test_result: None,
             assertions: &[],
             test_count: 1,
@@ -97,6 +99,7 @@ mod tests {
         let descriptor = descriptor(false);
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &[],
             test_result: None,
             assertions: &[],
             test_count: 0,

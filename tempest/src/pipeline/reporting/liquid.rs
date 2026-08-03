@@ -48,12 +48,14 @@ impl LiquidRenderer {
 
             ReportEvent::Descriptor {
                 descriptor,
+                title_path,
                 test_result,
                 assertions,
                 test_count,
                 retry_count,
             } => build_descriptor_globals(
                 descriptor,
+                title_path,
                 *test_result,
                 assertions,
                 *test_count,
@@ -76,6 +78,7 @@ impl LiquidRenderer {
 }
 fn build_descriptor_globals(
     descriptor: &Descriptor,
+    title_path: &[String],
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
     test_count: usize,
@@ -103,6 +106,24 @@ fn build_descriptor_globals(
     globals.insert(
         "name".into(),
         Value::scalar(descriptor.name.clone().unwrap_or_default()),
+    );
+    let title_path_values = title_path
+        .iter()
+        .cloned()
+        .map(Value::scalar)
+        .collect::<Vec<_>>();
+    let mut full_title_path = title_path.to_vec();
+    if let Some(name) = descriptor
+        .name
+        .as_deref()
+        .filter(|name| !name.trim().is_empty())
+    {
+        full_title_path.push(name.to_owned());
+    }
+    globals.insert("title_path".into(), Value::Array(title_path_values));
+    globals.insert(
+        "full_name".into(),
+        Value::scalar(full_title_path.join(" › ")),
     );
     globals.insert(
         "description".into(),
@@ -203,6 +224,36 @@ mod tests {
     }
 
     #[test]
+    fn console_title_and_summary_each_use_one_line() {
+        let renderer = LiquidRenderer::new();
+        let title = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.title.liquid"
+                )),
+                &ReportEvent::Title { test_count: 12 },
+            )
+            .unwrap();
+        let summary = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.summary.liquid"
+                )),
+                &ReportEvent::Summary {
+                    passed: 10,
+                    failed: 1,
+                    flaky: 1,
+                },
+            )
+            .unwrap();
+
+        assert_eq!(title.lines().count(), 11, "{title:?}");
+        assert_eq!(summary.lines().count(), 2, "{summary:?}");
+        assert!(title.contains("Running 12 tests"));
+        assert!(summary.contains("10 passed · 1 flaky · 1 failed"));
+    }
+
+    #[test]
     fn renders_descriptor_globals_for_test_result() {
         let renderer = LiquidRenderer::new();
         let descriptor = descriptor(true);
@@ -211,9 +262,11 @@ mod tests {
             assertion("status == 404u", true),
             assertion("body.contains(\"ok\")", false),
         ];
+        let title_path = vec!["accounts".to_string(), "authenticated".to_string()];
 
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &title_path,
             test_result: Some(&result),
             assertions: &assertions,
             test_count: 5,
@@ -223,7 +276,7 @@ mod tests {
         let output = renderer
             .render(
                 &template(
-                    "{{ name }}|{{ description }}|{{ passed }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
+                    "{{ name }}|{{ full_name }}|{{ description }}|{{ passed }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
                 ),
                 &event,
             )
@@ -231,7 +284,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "login|login description|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
+            "login|accounts › authenticated › login|login description|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
         );
     }
 
@@ -242,6 +295,7 @@ mod tests {
 
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &[],
             test_result: None,
             assertions: &[],
             test_count: 0,
@@ -256,6 +310,97 @@ mod tests {
             .unwrap();
 
         assert_eq!(output, "login|no-status");
+    }
+
+    #[test]
+    fn console_pass_uses_one_line_and_hides_assertions() {
+        let renderer = LiquidRenderer::new();
+        let descriptor = descriptor(true);
+        let result = test_result();
+        let assertions = vec![assertion("status == 404", true)];
+        let title_path = vec!["accounts".to_string(), "authenticated".to_string()];
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            title_path: &title_path,
+            test_result: Some(&result),
+            assertions: &assertions,
+            test_count: 0,
+            retry_count: 0,
+        };
+
+        let output = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.test.liquid"
+                )),
+                &event,
+            )
+            .unwrap();
+
+        assert_eq!(output.lines().count(), 1, "{output:?}");
+        assert!(output.contains("✓"));
+        assert!(output.contains("accounts › authenticated › login"));
+        assert!(!output.contains("status == 404"));
+    }
+
+    #[test]
+    fn console_failure_shows_only_failed_assertions_below_test() {
+        let renderer = LiquidRenderer::new();
+        let descriptor = descriptor(true);
+        let result = test_result();
+        let assertions = vec![
+            assertion("status == 404", true),
+            assertion("body contains user", false),
+        ];
+        let title_path = vec!["accounts".to_string()];
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            title_path: &title_path,
+            test_result: Some(&result),
+            assertions: &assertions,
+            test_count: 0,
+            retry_count: 1,
+        };
+
+        let output = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.test.liquid"
+                )),
+                &event,
+            )
+            .unwrap();
+
+        assert_eq!(output.lines().count(), 2, "{output:?}");
+        assert!(output.contains("✗ accounts › login"));
+        assert!(output.contains("[retry 1]"));
+        assert!(output.contains("body contains user"));
+        assert!(!output.contains("status == 404"));
+    }
+
+    #[test]
+    fn console_section_emits_no_line() {
+        let renderer = LiquidRenderer::new();
+        let descriptor = descriptor(false);
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            title_path: &[],
+            test_result: None,
+            assertions: &[],
+            test_count: 0,
+            retry_count: 0,
+        };
+
+        let output = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.section.liquid"
+                )),
+                &event,
+            )
+            .unwrap();
+
+        assert!(output.is_empty());
     }
 
     #[test]

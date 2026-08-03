@@ -19,6 +19,7 @@ pub trait Reporter {
     fn report(
         &self,
         descriptor: &Descriptor,
+        title_path: &[String],
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,

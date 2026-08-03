@@ -72,6 +72,7 @@ impl<'a> ReportCoordinator<'a> {
 
                 self.reporter.report(
                     &attempt.descriptor,
+                    &attempt.title_path,
                     attempt.test_result.as_ref(),
                     &attempt.assertions,
                     &attempt.options,
@@ -140,6 +141,7 @@ mod tests {
                 options: None,
                 file: Some(PathBuf::from(format!("{name}.spec.yml"))),
             },
+            title_path: Vec::new(),
             options: options(retry_debug.is_some()),
             test_result: has_test.then(TestResult::default),
             assertions: Vec::new(),

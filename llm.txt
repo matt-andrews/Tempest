@@ -326,7 +326,7 @@ Variable scope and behavior:
 
 Tempest includes these built-in report templates:
 
-- `console`: default console output.
+- `console`: default console output. It prints one line per passing test, combines nested descriptor names with ` › `, and prints only failed assertions beneath failed tests.
 - `json`: appends JSON output to `./tempest-reports/report-{{start_timestamp}}.json`.
 
 Enable reports with options:
@@ -392,6 +392,8 @@ Title template:
 Section and test templates:
 
 - `name`
+- `title_path`: array of rendered ancestor descriptor names.
+- `full_name`: the rendered ancestor names and current descriptor name joined with ` › `.
 - `description`
 - `passed`
 - `test_count`: number of previously completed tests already counted in the run summary, represented as a string.

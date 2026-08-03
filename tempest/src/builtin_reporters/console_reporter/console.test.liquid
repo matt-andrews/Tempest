@@ -1,6 +1,3 @@
-
- - {% if retry_count != '0' %}[{{ "Retry #" | bright_purple }}{{retry_count | bright_purple}}] {%endif%}{{ name | bright_purple }} | {{ status | color_status }} {{ status_message }} | {{ duration_ms | round: 2 | color_duration }}ms
-{%- for assert in assertions %}
-     {% if assert.passed %}✅ {{ assert.expr | green }}{% else %}❌ {{ assert.expr | red }}{% if assert.error != blank %} — {{ assert.error | red }}{% endif %}{% endif %}
-{%- endfor %}
-   {% if passed %}{{ "PASSED" | bright_green }}{% else %}{{ "FAILED" | bright_red }}{% endif %}
+{% if passed %}{{ "✓" | bright_green }}{% else %}{{ "✗" | bright_red }}{% endif %} {{ full_name | bright_blue }}{% if retry_count != '0' %} {{ "[retry " | yellow }}{{ retry_count | yellow }}{{ "]" | yellow }}{% endif %} | {{ status | color_status }} {{ status_message }} | {{ duration_ms | round: 2 | color_duration }}ms
+{% unless passed -%}{% assign failed_assertions = assertions | where: "passed", false %}{% for assert in failed_assertions %}    {{ "✗" | bright_red }} {{ assert.expr | red }}{% if assert.error != blank %} — {{ assert.error | red }}{% endif %}
+{% endfor %}{% endunless -%}

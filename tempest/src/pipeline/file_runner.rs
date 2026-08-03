@@ -9,7 +9,7 @@ use crate::models::test_spec::TestSpec;
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::runners::{TestRunner, resolved_route, test_runner_for};
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
-use crate::templating::liquid::LiquidEngine;
+use crate::templating::{TemplateEngine, liquid::LiquidEngine};
 use reqwest::header::HeaderMap;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -52,9 +52,14 @@ impl<'a> FileRunner<'a> {
         let mut context = RunContext::new(file_name, self.envs);
 
         let mut descriptors: Vec<DescriptorOutcome> = Vec::new();
-        for (descriptor, ancestor_options) in self.root.descendants() {
+        for (descriptor, ancestor_options, ancestor_titles) in self.root.descendants() {
             let outcome = self
-                .execute_descriptor_with_retries(descriptor, ancestor_options, &mut context)
+                .execute_descriptor_with_retries(
+                    descriptor,
+                    ancestor_options,
+                    &ancestor_titles,
+                    &mut context,
+                )
                 .await;
 
             descriptors.push(outcome);
@@ -70,6 +75,7 @@ impl<'a> FileRunner<'a> {
         &self,
         descriptor: &Descriptor,
         ancestor_options: RunOptions,
+        ancestor_titles: &[String],
         context: &mut RunContext,
     ) -> DescriptorOutcome {
         let original_context = context.clone();
@@ -81,7 +87,12 @@ impl<'a> FileRunner<'a> {
             context.retry_attempts = retry_number;
 
             let attempt = self
-                .execute_attempt(descriptor, ancestor_options.clone(), context)
+                .execute_attempt(
+                    descriptor,
+                    ancestor_options.clone(),
+                    ancestor_titles,
+                    context,
+                )
                 .await;
 
             let attempt_result = attempt.result.clone();
@@ -113,6 +124,7 @@ impl<'a> FileRunner<'a> {
         &self,
         descriptor: &Descriptor,
         ancestor_options: RunOptions,
+        ancestor_titles: &[String],
         context: &mut RunContext,
     ) -> AttemptOutcome {
         let mut descriptor = descriptor.to_owned();
@@ -120,6 +132,7 @@ impl<'a> FileRunner<'a> {
         let mut options = self.options_for_descriptor(&descriptor, ancestor_options);
 
         self.render_inputs(&mut descriptor, &mut options, context);
+        let title_path = self.render_title_path(ancestor_titles, context);
 
         let test_run = self
             .run_test_if_present(&descriptor, &options, context)
@@ -127,6 +140,7 @@ impl<'a> FileRunner<'a> {
 
         AttemptOutcome {
             descriptor,
+            title_path,
             options,
             test_result: test_run.test_result,
             assertions: test_run.assertions,
@@ -281,10 +295,19 @@ impl<'a> FileRunner<'a> {
         options.render_template(self.template_engine, &obj);
         descriptor.render_template(self.template_engine, &obj);
     }
+
+    fn render_title_path(&self, titles: &[String], context: &RunContext) -> Vec<String> {
+        let obj = liquid::object!(&context);
+        titles
+            .iter()
+            .map(|title| self.template_engine.render_string_or_self(title, &obj))
+            .collect()
+    }
 }
 
 pub struct AttemptOutcome {
     pub descriptor: Descriptor,
+    pub title_path: Vec<String>,
     pub options: RunOptions,
     pub test_result: Option<TestResult>,
     pub assertions: Vec<Assertion>,

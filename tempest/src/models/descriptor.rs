@@ -22,32 +22,39 @@ pub struct Descriptor {
 }
 
 pub struct DescriptorIter<'a> {
-    // Each stack entry carries the node and its parent's accumulated options,
-    // so the pipeline can merge the full ancestor chain without re-walking the tree.
+    // Each stack entry carries the node, its parent's accumulated options, and
+    // its ancestor titles so execution and reporting can share one traversal.
     // DFS (push_front + rev children) preserves source order: a section header is
     // always yielded immediately before its own tests, not after all sibling sections.
-    stack: VecDeque<(&'a Descriptor, RunOptions)>,
+    stack: VecDeque<(&'a Descriptor, RunOptions, Vec<String>)>,
 }
 
 impl<'a> Iterator for DescriptorIter<'a> {
-    type Item = (&'a Descriptor, RunOptions);
+    type Item = (&'a Descriptor, RunOptions, Vec<String>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (node, parent_options) = self.stack.pop_front()?;
+        let (node, parent_options, ancestor_titles) = self.stack.pop_front()?;
         let node_options = parent_options
             .clone()
             .merge(node.options.clone().unwrap_or_default());
-        for child in node.describe.as_deref().unwrap_or_default().iter().rev() {
-            self.stack.push_front((child, node_options.clone()));
+
+        let mut child_titles = ancestor_titles.clone();
+        if let Some(name) = node.name.as_deref().filter(|name| !name.trim().is_empty()) {
+            child_titles.push(name.to_owned());
         }
-        Some((node, parent_options))
+
+        for child in node.describe.as_deref().unwrap_or_default().iter().rev() {
+            self.stack
+                .push_front((child, node_options.clone(), child_titles.clone()));
+        }
+        Some((node, parent_options, ancestor_titles))
     }
 }
 
 impl Descriptor {
     pub fn descendants(&self) -> DescriptorIter<'_> {
         DescriptorIter {
-            stack: VecDeque::from([(self, RunOptions::default())]),
+            stack: VecDeque::from([(self, RunOptions::default(), Vec::new())]),
         }
     }
     pub fn test_count(&self) -> usize {
@@ -103,7 +110,7 @@ mod tests {
 
     fn collected(root: &Descriptor) -> Vec<(String, Option<String>)> {
         root.descendants()
-            .map(|(d, parent_opts)| (d.name.clone().unwrap_or_default(), parent_opts.base_uri))
+            .map(|(d, parent_opts, _)| (d.name.clone().unwrap_or_default(), parent_opts.base_uri))
             .collect()
     }
 
@@ -209,7 +216,7 @@ mod tests {
 
         let results: Vec<(String, Option<String>, Option<bool>)> = root
             .descendants()
-            .map(|(d, opts)| {
+            .map(|(d, opts, _)| {
                 (
                     d.name.clone().unwrap_or_default(),
                     opts.base_uri,
@@ -240,12 +247,36 @@ mod tests {
 
         let names: Vec<String> = root
             .descendants()
-            .map(|(d, _)| d.name.clone().unwrap_or_default())
+            .map(|(d, _, _)| d.name.clone().unwrap_or_default())
             .collect();
 
         assert_eq!(
             names,
             vec!["root", "section1", "test1", "test2", "section2", "test3"]
+        );
+    }
+
+    #[test]
+    fn traversal_carries_ancestor_title_paths() {
+        let root = group(
+            "root",
+            None,
+            vec![group("accounts", None, vec![leaf("creates a user", None)])],
+        );
+
+        let paths = root
+            .descendants()
+            .map(|(descriptor, _, titles)| (descriptor.name.clone().unwrap_or_default(), titles))
+            .collect::<Vec<_>>();
+
+        assert_eq!(paths[0], ("root".to_string(), vec![]));
+        assert_eq!(paths[1], ("accounts".to_string(), vec!["root".to_string()]));
+        assert_eq!(
+            paths[2],
+            (
+                "creates a user".to_string(),
+                vec!["root".to_string(), "accounts".to_string()]
+            )
         );
     }
 

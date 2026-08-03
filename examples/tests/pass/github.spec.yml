@@ -76,8 +76,6 @@ describe:
             - status == 404
 
   - name: "Fun Endpoints"
-    options:
-      debug: true
     describe:
       - name: "GitHub Zen"
         description: "Returns a random GitHub design principle as plain text"
