@@ -10,7 +10,10 @@ pub fn register(ctx: &mut Context, cache: ResponseContentCache) {
         move |ftx: &FunctionContext, This(source): This<Arc<String>>| {
             cache
                 .json
-                .get_or_init(|| {
+                .lock()
+                .map_err(|_| ftx.error("cached JSON values lock was poisoned"))?
+                .entry(source.clone())
+                .or_insert_with(|| {
                     let parsed = content::json::parse(source.as_bytes())
                         .map_err(|error| error.to_string())?;
 
