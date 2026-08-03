@@ -26,20 +26,25 @@ pub trait Reporter {
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
         retry_count: usize,
-    );
-    fn debug(&self, msg: &str, options: &RunOptions, templates: &HashMap<String, ReportTemplate>);
+    ) -> anyhow::Result<()>;
+    fn debug(
+        &self,
+        msg: &str,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
+    ) -> anyhow::Result<()>;
     fn summary(
         &self,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
-    ) -> SummaryResult;
+    ) -> anyhow::Result<SummaryResult>;
     fn title(
         &self,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
-    );
+    ) -> anyhow::Result<()>;
 }
 
 #[enum_dispatch(Reporter)]

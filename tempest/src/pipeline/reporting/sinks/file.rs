@@ -3,6 +3,7 @@ use crate::models::run_options::RunOptions;
 use crate::pipeline::reporting::sinks::OutputSink;
 use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
+use anyhow::Context;
 use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::PathBuf;
@@ -30,26 +31,60 @@ impl FileSink {
         }
     }
 
-    fn open_append(&self) -> std::fs::File {
+    fn open_append(&self) -> anyhow::Result<std::fs::File> {
         if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir).expect("Failed to create report directory");
+            std::fs::create_dir_all(dir)
+                .with_context(|| format!("failed to create report directory {}", dir.display()))?;
         }
-        OpenOptions::new()
+        let file = OpenOptions::new()
             .create(true)
             .append(true)
             .open(&self.path)
-            .expect("Failed to open report file for appending")
+            .with_context(|| {
+                format!(
+                    "failed to open report file {} for appending",
+                    self.path.display()
+                )
+            })?;
+        Ok(file)
     }
 }
 
 impl OutputSink for FileSink {
-    fn println(&self, msg: &str) {
-        let mut file = self.open_append();
-        _ = writeln!(file, "{}", msg).map_err(|e| println!("{e}"));
+    fn println(&self, msg: &str) -> anyhow::Result<()> {
+        let mut file = self.open_append()?;
+        writeln!(file, "{msg}")
+            .with_context(|| format!("failed to write report file {}", self.path.display()))?;
+        Ok(())
     }
 
-    fn print(&self, msg: &str) {
-        let mut file = self.open_append();
-        _ = write!(file, "{}", msg).map_err(|e| println!("{e}"));
+    fn print(&self, msg: &str) -> anyhow::Result<()> {
+        let mut file = self.open_append()?;
+        write!(file, "{msg}")
+            .with_context(|| format!("failed to write report file {}", self.path.display()))?;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn report_directory_failure_is_returned_instead_of_panicking() {
+        let dir = tempfile::tempdir().unwrap();
+        let blocker = dir.path().join("not-a-directory");
+        std::fs::write(&blocker, "file").unwrap();
+
+        let sink = FileSink::new(
+            &ReportFile {
+                dir: Some(blocker.join("reports")),
+                file_name: Some("report.txt".to_string()),
+            },
+            &RunOptions::default(),
+        );
+
+        let error = sink.print("result").unwrap_err();
+        assert!(format!("{error:#}").contains("failed to create report directory"));
     }
 }

@@ -89,7 +89,7 @@ mod tests {
         let mut reports = ReportCoordinator::new(templates);
         let mut scheduler = FileScheduler::new();
         runner.schedule(&mut scheduler);
-        scheduler.execute(&mut reports, 1).await;
+        scheduler.execute(&mut reports, 1).await.unwrap();
         reports.results().to_vec()
     }
 

@@ -11,10 +11,16 @@ use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
+use futures_util::FutureExt;
 use std::collections::{HashMap, HashSet};
+use std::io::Write;
 use std::num::NonZeroUsize;
+use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::process;
+
+const ERROR_EXIT_CODE: u8 = 1;
+const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
 
 #[derive(Parser)]
 struct Cli {
@@ -43,7 +49,20 @@ enum Commands {
 }
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()> {
+async fn main() -> process::ExitCode {
+    install_panic_hook();
+
+    match AssertUnwindSafe(run()).catch_unwind().await {
+        Ok(Ok(exit)) => process::ExitCode::from(exit as u8),
+        Ok(Err(error)) => {
+            write_stderr(&format_error(&error));
+            process::ExitCode::from(ERROR_EXIT_CODE)
+        }
+        Err(_) => process::ExitCode::from(INTERNAL_ERROR_EXIT_CODE),
+    }
+}
+
+async fn run() -> anyhow::Result<ExitCode> {
     dotenvy::dotenv().ok();
 
     let args = Cli::parse();
@@ -72,9 +91,36 @@ async fn main() -> anyhow::Result<()> {
             print_warnings();
 
             let exit = determine_exit_code(result, strict, warn_as_err);
-            process::exit(exit as i32);
+            Ok(exit)
         }
     }
+}
+
+fn install_panic_hook() {
+    let default_hook = std::panic::take_hook();
+
+    std::panic::set_hook(Box::new(move |panic_info| {
+        if backtrace_requested(std::env::var("RUST_BACKTRACE").ok().as_deref()) {
+            default_hook(panic_info);
+        } else {
+            write_stderr(
+                "fatal: Tempest encountered an unexpected internal error.\n\
+                 Re-run with RUST_BACKTRACE=1 for diagnostic details.",
+            );
+        }
+    }));
+}
+
+fn backtrace_requested(value: Option<&str>) -> bool {
+    value.is_some_and(|value| !value.is_empty() && value != "0")
+}
+
+fn format_error(error: &anyhow::Error) -> String {
+    format!("error: {error:#}")
+}
+
+fn write_stderr(message: &str) {
+    let _ = writeln!(std::io::stderr().lock(), "{message}");
 }
 
 fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
@@ -156,5 +202,23 @@ mod tests {
     #[test]
     fn workers_rejects_zero() {
         assert!(parsed_workers(&["tempest", "test", "--workers", "0"]).is_err());
+    }
+
+    #[test]
+    fn backtraces_are_only_shown_when_explicitly_requested() {
+        assert!(!backtrace_requested(None));
+        assert!(!backtrace_requested(Some("")));
+        assert!(!backtrace_requested(Some("0")));
+        assert!(backtrace_requested(Some("1")));
+        assert!(backtrace_requested(Some("full")));
+    }
+
+    #[test]
+    fn expected_errors_are_formatted_without_debug_backtraces() {
+        let error = anyhow::anyhow!("line 3, column 7").context("invalid YAML in test.yml");
+        let message = format_error(&error);
+
+        assert_eq!(message, "error: invalid YAML in test.yml: line 3, column 7");
+        assert!(!message.contains("Stack backtrace"));
     }
 }

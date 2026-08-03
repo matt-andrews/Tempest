@@ -24,11 +24,11 @@ impl<'a> ReportCoordinator<'a> {
         }
     }
 
-    pub fn title(&self, options: &RunOptions, test_count: usize) {
-        self.reporter.title(options, self.templates, test_count);
+    pub fn title(&self, options: &RunOptions, test_count: usize) -> anyhow::Result<()> {
+        self.reporter.title(options, self.templates, test_count)
     }
 
-    pub fn consume(&mut self, outcome: FileOutcome) {
+    pub fn consume(&mut self, outcome: FileOutcome) -> anyhow::Result<()> {
         let ordinal = outcome.ordinal;
         let source_file = outcome.source_file.clone();
 
@@ -41,12 +41,13 @@ impl<'a> ReportCoordinator<'a> {
         }
 
         while let Some(outcome) = self.pending.remove(&self.next_file_ordinal) {
-            self.emit_file(outcome);
+            self.emit_file(outcome)?;
             self.next_file_ordinal += 1;
         }
+        Ok(())
     }
 
-    pub fn summary(&self, options: &RunOptions) -> SummaryResult {
+    pub fn summary(&self, options: &RunOptions) -> anyhow::Result<SummaryResult> {
         assert!(
             self.pending.is_empty(),
             "cannot summarize while file outcomes are missing"
@@ -60,14 +61,14 @@ impl<'a> ReportCoordinator<'a> {
         &self.results
     }
 
-    fn emit_file(&mut self, outcome: FileOutcome) {
+    fn emit_file(&mut self, outcome: FileOutcome) -> anyhow::Result<()> {
         for descriptor in outcome.descriptors {
             let test_count = self.results.len();
 
             for (retry_count, attempt) in descriptor.attempts.iter().enumerate() {
                 if let Some(message) = attempt.debug_message.as_deref() {
                     self.reporter
-                        .debug(message, &attempt.options, self.templates);
+                        .debug(message, &attempt.options, self.templates)?;
                 }
 
                 self.reporter.report(
@@ -79,13 +80,14 @@ impl<'a> ReportCoordinator<'a> {
                     self.templates,
                     test_count,
                     retry_count,
-                );
+                )?;
             }
 
             if let Some(result) = descriptor.final_result {
                 self.results.push(result);
             }
         }
+        Ok(())
     }
 }
 
@@ -175,23 +177,27 @@ mod tests {
         let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.consume(file(
-            1,
-            vec![descriptor(
-                vec![attempt("second", true, Some(SummaryResult::Failed), None)],
-                Some(SummaryResult::Failed),
-            )],
-        ));
+        coordinator
+            .consume(file(
+                1,
+                vec![descriptor(
+                    vec![attempt("second", true, Some(SummaryResult::Failed), None)],
+                    Some(SummaryResult::Failed),
+                )],
+            ))
+            .unwrap();
 
         assert!(!path.exists(), "later files must wait for earlier ordinals");
 
-        coordinator.consume(file(
-            0,
-            vec![descriptor(
-                vec![attempt("first", true, Some(SummaryResult::Passed), None)],
-                Some(SummaryResult::Passed),
-            )],
-        ));
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(
+                    vec![attempt("first", true, Some(SummaryResult::Passed), None)],
+                    Some(SummaryResult::Passed),
+                )],
+            ))
+            .unwrap();
 
         let output = std::fs::read_to_string(path).unwrap();
         assert_eq!(
@@ -211,32 +217,34 @@ mod tests {
         let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.consume(file(
-            0,
-            vec![
-                descriptor(
-                    vec![
-                        attempt(
-                            "unstable",
-                            true,
-                            Some(SummaryResult::Failed),
-                            Some("/unstable"),
-                        ),
-                        attempt(
-                            "unstable",
-                            true,
-                            Some(SummaryResult::Passed),
-                            Some("/unstable"),
-                        ),
-                    ],
-                    Some(SummaryResult::Flaky),
-                ),
-                descriptor(
-                    vec![attempt("next", true, Some(SummaryResult::Passed), None)],
-                    Some(SummaryResult::Passed),
-                ),
-            ],
-        ));
+        coordinator
+            .consume(file(
+                0,
+                vec![
+                    descriptor(
+                        vec![
+                            attempt(
+                                "unstable",
+                                true,
+                                Some(SummaryResult::Failed),
+                                Some("/unstable"),
+                            ),
+                            attempt(
+                                "unstable",
+                                true,
+                                Some(SummaryResult::Passed),
+                                Some("/unstable"),
+                            ),
+                        ],
+                        Some(SummaryResult::Flaky),
+                    ),
+                    descriptor(
+                        vec![attempt("next", true, Some(SummaryResult::Passed), None)],
+                        Some(SummaryResult::Passed),
+                    ),
+                ],
+            ))
+            .unwrap();
 
         let output = std::fs::read_to_string(path).unwrap();
         assert_eq!(
@@ -262,16 +270,18 @@ mod tests {
         let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.consume(file(
-            0,
-            vec![
-                descriptor(vec![attempt("group", false, None, None)], None),
-                descriptor(
-                    vec![attempt("test", true, Some(SummaryResult::Passed), None)],
-                    Some(SummaryResult::Passed),
-                ),
-            ],
-        ));
+        coordinator
+            .consume(file(
+                0,
+                vec![
+                    descriptor(vec![attempt("group", false, None, None)], None),
+                    descriptor(
+                        vec![attempt("test", true, Some(SummaryResult::Passed), None)],
+                        Some(SummaryResult::Passed),
+                    ),
+                ],
+            ))
+            .unwrap();
 
         let output = std::fs::read_to_string(path).unwrap();
         assert_eq!(
@@ -304,29 +314,36 @@ mod tests {
         };
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.title(&options, 2);
-        coordinator.consume(file(
-            1,
-            vec![descriptor(
-                vec![AttemptOutcome {
-                    options: options.clone(),
-                    ..attempt("second", true, Some(SummaryResult::Passed), None)
-                }],
-                Some(SummaryResult::Passed),
-            )],
-        ));
-        coordinator.consume(file(
-            0,
-            vec![descriptor(
-                vec![AttemptOutcome {
-                    options: options.clone(),
-                    ..attempt("first", true, Some(SummaryResult::Passed), None)
-                }],
-                Some(SummaryResult::Passed),
-            )],
-        ));
+        coordinator.title(&options, 2).unwrap();
+        coordinator
+            .consume(file(
+                1,
+                vec![descriptor(
+                    vec![AttemptOutcome {
+                        options: options.clone(),
+                        ..attempt("second", true, Some(SummaryResult::Passed), None)
+                    }],
+                    Some(SummaryResult::Passed),
+                )],
+            ))
+            .unwrap();
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(
+                    vec![AttemptOutcome {
+                        options: options.clone(),
+                        ..attempt("first", true, Some(SummaryResult::Passed), None)
+                    }],
+                    Some(SummaryResult::Passed),
+                )],
+            ))
+            .unwrap();
 
-        assert_eq!(coordinator.summary(&options), SummaryResult::Passed);
+        assert_eq!(
+            coordinator.summary(&options).unwrap(),
+            SummaryResult::Passed
+        );
 
         let report: serde_json::Value =
             serde_json::from_str(&std::fs::read_to_string(report_path).unwrap()).unwrap();

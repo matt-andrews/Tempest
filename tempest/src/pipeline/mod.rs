@@ -27,9 +27,9 @@ pub async fn execute(
         workers,
     );
 
-    run.title();
-    run.walk().await;
-    let result = run.summary();
+    run.title()?;
+    run.walk().await?;
+    let result = run.summary()?;
 
     Ok(result)
 }
