@@ -45,7 +45,7 @@ impl<'a> Iterator for DescriptorIter<'a> {
 }
 
 impl Descriptor {
-    pub(crate) fn descendants(&self) -> DescriptorIter<'_> {
+    pub fn descendants(&self) -> DescriptorIter<'_> {
         DescriptorIter {
             stack: VecDeque::from([(self, RunOptions::default())]),
         }

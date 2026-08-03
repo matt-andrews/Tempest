@@ -65,6 +65,12 @@ impl LiquidRenderer {
                     "liquid_error_message": msg
                 })
             }
+
+            ReportEvent::Debug { msg } => {
+                liquid::object!({
+                    "debug_message": msg
+                })
+            }
         }
     }
 }
@@ -124,6 +130,7 @@ mod tests {
             test_template: Some(test_template.to_string()),
             section_template: Some(test_template.to_string()),
             error_template: Some(test_template.to_string()),
+            debug_template: Some(test_template.to_string()),
             title_template: Some(test_template.to_string()),
             summary_template: Some(test_template.to_string()),
             file: None,
@@ -263,6 +270,18 @@ mod tests {
             .unwrap();
 
         assert_eq!(output, "ERR: template failed");
+    }
+
+    #[test]
+    fn renders_debug_globals() {
+        let renderer = LiquidRenderer::new();
+        let event = ReportEvent::Debug { msg: "GET /users" };
+
+        let output = renderer
+            .render(&template("DEBUG: {{ debug_message }}"), &event)
+            .unwrap();
+
+        assert_eq!(output, "DEBUG: GET /users");
     }
 
     #[test]

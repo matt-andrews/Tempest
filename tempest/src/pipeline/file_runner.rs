@@ -7,15 +7,14 @@ use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
 use crate::models::test_spec::TestSpec;
 use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
-use crate::pipeline::directory_runner::{AttemptOutcome, DescriptorOutcome, FileOutcome};
-use crate::pipeline::runners::TestRunner;
-use crate::pipeline::runners::test_runner_for;
+use crate::pipeline::runners::{TestRunner, resolved_route, test_runner_for};
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use crate::templating::liquid::LiquidEngine;
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 pub struct FileRunner<'a> {
+    ordinal: usize,
     root: &'a Descriptor,
     envs: &'a HashMap<String, String>,
     base_options: RunOptions,
@@ -25,6 +24,7 @@ pub struct FileRunner<'a> {
 
 impl<'a> FileRunner<'a> {
     pub fn new(
+        ordinal: usize,
         root: &'a Descriptor,
         envs: &'a HashMap<String, String>,
         base_options: RunOptions,
@@ -32,6 +32,7 @@ impl<'a> FileRunner<'a> {
         suite_path: &'a Path,
     ) -> Self {
         Self {
+            ordinal,
             root,
             envs,
             base_options,
@@ -58,8 +59,9 @@ impl<'a> FileRunner<'a> {
             descriptors.push(outcome);
         }
         FileOutcome {
+            ordinal: self.ordinal,
             descriptors,
-            source_file: self.suite_path.to_path_buf(),
+            source_file: self.root.file.clone().unwrap_or_default(),
         }
     }
 
@@ -114,8 +116,6 @@ impl<'a> FileRunner<'a> {
     ) -> AttemptOutcome {
         let mut descriptor = descriptor.to_owned();
 
-        //self.apply_file_context(&mut descriptor, context);
-
         let mut options = self.options_for_descriptor(&descriptor, ancestor_options);
 
         self.render_inputs(&mut descriptor, &mut options, context);
@@ -130,6 +130,7 @@ impl<'a> FileRunner<'a> {
             test_result: test_run.test_result,
             assertions: test_run.assertions,
             result: test_run.summary_result,
+            debug_message: test_run.debug_message,
         }
     }
 
@@ -138,18 +139,23 @@ impl<'a> FileRunner<'a> {
         descriptor: &Descriptor,
         options: &RunOptions,
         context: &mut RunContext,
-    ) -> crate::pipeline::directory_runner::TestRunOutcome {
+    ) -> TestRunOutcome {
         let Some(test) = &descriptor.test else {
-            return crate::pipeline::directory_runner::TestRunOutcome {
+            return TestRunOutcome {
                 test_result: None,
                 assertions: Vec::new(),
                 summary_result: None,
+                debug_message: None,
             };
         };
 
         let mut test = test.to_owned();
         test.render_template(self.template_engine, &liquid::object!(&context));
 
+        let debug_message = options
+            .debug
+            .unwrap_or(false)
+            .then(|| resolved_route(&test, options));
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
 
@@ -170,10 +176,11 @@ impl<'a> FileRunner<'a> {
             SummaryResult::Passed
         };
 
-        crate::pipeline::directory_runner::TestRunOutcome {
+        TestRunOutcome {
             test_result: Some(test_result),
             assertions,
             summary_result: Some(summary_result),
+            debug_message,
         }
     }
 
@@ -241,4 +248,31 @@ impl<'a> FileRunner<'a> {
         options.render_template(self.template_engine, &obj);
         descriptor.render_template(self.template_engine, &obj);
     }
+}
+
+pub struct AttemptOutcome {
+    pub descriptor: Descriptor,
+    pub options: RunOptions,
+    pub test_result: Option<TestResult>,
+    pub assertions: Vec<Assertion>,
+    pub result: Option<SummaryResult>,
+    pub debug_message: Option<String>,
+}
+
+pub struct DescriptorOutcome {
+    pub attempts: Vec<AttemptOutcome>,
+    pub final_result: Option<SummaryResult>,
+}
+
+pub struct FileOutcome {
+    pub ordinal: usize,
+    pub source_file: PathBuf,
+    pub descriptors: Vec<DescriptorOutcome>,
+}
+
+struct TestRunOutcome {
+    test_result: Option<TestResult>,
+    assertions: Vec<Assertion>,
+    summary_result: Option<SummaryResult>,
+    debug_message: Option<String>,
 }

@@ -1,9 +1,7 @@
-use crate::models::run_options::RunOptions;
 use crate::models::test_result::{TempestStatusCode, TestResult};
 use crate::models::test_spec::TestSpec;
 use crate::pipeline::runners::TestRunner;
 use async_trait::async_trait;
-use colored::Colorize;
 use reqwest::header::HeaderMap;
 use std::sync::LazyLock;
 use std::time::Instant;
@@ -17,24 +15,13 @@ static CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
 
 pub struct HttpTestRunner {
     route: String,
-    #[allow(dead_code)] //we will need this field here sooner or later
-    options: RunOptions,
     test: TestSpec,
 }
 impl HttpTestRunner {
-    pub fn new(route: &str, options: &RunOptions, test: &TestSpec) -> Self {
+    pub fn new(route: &str, test: &TestSpec) -> Self {
         Self {
             route: route.to_string(),
-            options: options.clone(),
             test: test.clone(),
-        }
-    }
-
-    fn print_debug(&self, message: &str) {
-        if let Some(debug) = self.options.debug
-            && debug
-        {
-            println!("\nDEBUG: {}", message.on_bright_yellow().black());
         }
     }
 }
@@ -59,8 +46,6 @@ impl TestRunner for HttpTestRunner {
             "HEAD" => Some(CLIENT.head(&self.route)),
             _ => None,
         };
-
-        self.print_debug(&self.route);
 
         if let Some(mut builder) = builder {
             for header in self.test.headers.clone().unwrap_or_default() {
@@ -104,14 +89,13 @@ impl TestRunner for HttpTestRunner {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::run_options::RunOptions;
     use crate::models::test_spec::TestSpec;
     use crate::pipeline::runners::TestRunner;
     use mockito::Server;
     use std::collections::HashMap;
 
     fn test_runner(url: &str, test: &TestSpec) -> HttpTestRunner {
-        HttpTestRunner::new(url, &RunOptions::default(), test)
+        HttpTestRunner::new(url, test)
     }
 
     fn test_model(route: &str, verb: Option<&str>) -> TestSpec {
@@ -242,7 +226,7 @@ mod tests {
             verb: Some("FOOBAR".to_string()),
             ..Default::default()
         };
-        let cap = HttpTestRunner::new("http://127.0.0.1:1", &RunOptions::default(), &test);
+        let cap = HttpTestRunner::new("http://127.0.0.1:1", &test);
         let result = cap.run().await;
 
         assert_eq!(
@@ -289,7 +273,7 @@ mod tests {
     async fn connection_error_produces_504_status() {
         // Port 1 is reserved and will always be refused.
         let test = test_model("http://127.0.0.1:1/nope", Some("GET"));
-        let cap = HttpTestRunner::new("http://127.0.0.1:1/nope", &RunOptions::default(), &test);
+        let cap = HttpTestRunner::new("http://127.0.0.1:1/nope", &test);
         let result = cap.run().await;
 
         assert_eq!(result.status.code, 504);

@@ -19,6 +19,12 @@ pub enum AnyTestRunner {
 }
 
 pub fn test_runner_for(test: &TestSpec, options: &RunOptions) -> AnyTestRunner {
+    let url = resolved_route(test, options);
+
+    HttpTestRunner::new(&url, test).into()
+}
+
+pub fn resolved_route(test: &TestSpec, options: &RunOptions) -> String {
     let mut url = test.route.trim_start().to_string();
 
     if !url.starts_with("http://")
@@ -32,5 +38,5 @@ pub fn test_runner_for(test: &TestSpec, options: &RunOptions) -> AnyTestRunner {
         );
     }
 
-    HttpTestRunner::new(&url, options, test).into()
+    url
 }

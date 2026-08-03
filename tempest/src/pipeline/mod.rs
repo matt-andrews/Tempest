@@ -1,7 +1,9 @@
 pub mod assertions;
 mod directory_runner;
-pub mod file_runner;
+mod file_runner;
+mod file_scheduler;
 mod pipeline_runner;
+mod report_coordinator;
 mod reporting;
 pub mod runners;
 pub mod variables;

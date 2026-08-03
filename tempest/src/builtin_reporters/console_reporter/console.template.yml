@@ -1,5 +1,6 @@
 test_template: console.test.liquid
 section_template: console.section.liquid
 error_template: console.error.liquid
+debug_template: console.debug.liquid
 title_template: console.title.liquid
 summary_template: console.summary.liquid

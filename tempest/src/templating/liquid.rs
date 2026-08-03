@@ -15,6 +15,7 @@ static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
         .filter(OnRedFilter)
         .filter(OnGreenFilter)
         .filter(OnYellowFilter)
+        .filter(OnBrightYellowFilter)
         .filter(OnBrightRedFilter)
         .filter(OnBrightGreenFilter)
         .filter(OnBrightBlueFilter)
