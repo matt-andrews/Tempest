@@ -22,7 +22,7 @@ dunce = "1"
 cel-parser = "0.10.1"
 scraper = { version = "0.27.0", features = ["atomic"] }
 simdxml = "0.2.1"
-base64 = "0.22"
+base64 = "0.23"
 
 [dev-dependencies]
 tempfile = "3.27.0"
