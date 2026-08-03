@@ -230,14 +230,14 @@ When interpolating a string into a CEL assertion, include CEL string quotes arou
 
 ```yaml
 assert:
-  - '"{{ file.expected_name }}" == "octocat"'
+  - '"{{ vars.expected_name }}" == "octocat"'
 ```
 
 Numeric and boolean values can normally be interpolated without quotes:
 
 ```yaml
 assert:
-  - status == {{ file.expected_status }}
+  - status == {{ vars.expected_status }}
 ```
 
 ## CEL Assertions
@@ -311,12 +311,12 @@ Saved values are exposed to subsequent tests through the Liquid `file` object:
 ```yaml
 name: "Use the saved user"
 test:
-  route: "/users/{{ file.user_id }}"
+  route: "/users/{{ vars.user_id }}"
   headers:
-    X-Expected-Name: "{{ file.user_name }}"
+    X-Expected-Name: "{{ vars.user_name }}"
   assert:
     - status == 200
-    - 'body.json().name == "{{ file.user_name }}"'
+    - 'body.json().name == "{{ vars.user_name }}"'
 ```
 
 Variable scope and behavior:
@@ -471,10 +471,10 @@ describe:
 
   - name: "Use the saved post"
     test:
-      route: "/posts/{{ file.post_id }}"
+      route: "/posts/{{ vars.post_id }}"
       assert:
         - status == 200
-        - 'body.json().title == "{{ file.post_title }}"'
+        - 'body.json().title == "{{ vars.post_title }}"'
 
   - name: "Create a post"
     test:

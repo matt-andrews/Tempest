@@ -367,7 +367,7 @@ mod tests {
             description: None,
             tags: None,
             test: Some(TestSpec {
-                route: format!("{}/items/{{{{ file.id }}}}", server.url()),
+                route: format!("{}/items/{{{{ vars.id }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
                 ..Default::default()
@@ -683,7 +683,7 @@ mod tests {
             description: None,
             tags: None,
             test: Some(TestSpec {
-                route: format!("{}/unstable/{{{{ file.token }}}}", server.url()),
+                route: format!("{}/unstable/{{{{ vars.token }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
                 vars: Some(HashMap::from([("token".to_string(), "body".to_string())])),
@@ -698,7 +698,7 @@ mod tests {
             description: None,
             tags: None,
             test: Some(TestSpec {
-                route: format!("{}/items/{{{{ file.token }}}}", server.url()),
+                route: format!("{}/items/{{{{ vars.token }}}}", server.url()),
                 verb: Some("GET".to_string()),
                 assert: Some(vec!["status == 200".to_string()]),
                 ..Default::default()

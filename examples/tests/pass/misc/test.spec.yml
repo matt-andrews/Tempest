@@ -18,5 +18,5 @@ describe:
     test:
       route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
       assert:
-        - bytes.toBase64() == "{{ file.zzz_base64 }}"
-        - '"{{ file.zzz_base64 }}".fromBase64() == bytes'
+        - bytes.toBase64() == "{{ vars.zzz_base64 }}"
+        - '"{{ vars.zzz_base64 }}".fromBase64() == bytes'

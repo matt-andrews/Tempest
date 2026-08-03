@@ -76,7 +76,7 @@ vars:
 Once a variable has been declared it can be used with Liquid templates in a subsequent test with the file scope:
 ```yml
 assert:
-  - 'body == "{{ file.my_var }}"'
+  - 'body == "{{ vars.my_var }}"'
 ```
 
 You can see some working examples [here](https://github.com/matt-andrews/Tempest/tree/main/examples/tests/pass/vars.spec.yml)
