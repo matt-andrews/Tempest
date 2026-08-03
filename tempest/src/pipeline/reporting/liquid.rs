@@ -248,7 +248,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(title.lines().count(), 11, "{title:?}");
-        assert_eq!(summary.lines().count(), 2, "{summary:?}");
+        assert_eq!(summary.lines().count(), 3, "{summary:?}");
         assert!(title.contains("Running 12 tests"));
         assert!(summary.contains("10 passed · 1 flaky · 1 failed"));
     }

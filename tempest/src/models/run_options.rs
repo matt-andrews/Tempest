@@ -9,6 +9,7 @@ pub struct RunOptions {
     pub debug: Option<bool>,
     pub reports: Option<Vec<String>>,
     pub retries: Option<u8>,
+    pub concurrent: Option<bool>,
 
     #[serde(skip)]
     pub start_time: Option<DateTime>,
@@ -22,6 +23,7 @@ impl RunOptions {
             reports: Some(vec!["console".to_string()]),
             start_time: Some(DateTime::now()),
             retries: Some(retries),
+            concurrent: Some(true),
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -31,6 +33,7 @@ impl RunOptions {
             reports: other.reports.or(self.reports),
             start_time: other.start_time.or(self.start_time),
             retries: other.retries.or(self.retries),
+            concurrent: other.concurrent.or(self.concurrent),
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
@@ -49,6 +52,7 @@ mod tests {
         assert_eq!(d.debug, Some(false));
         assert_eq!(d.reports, Some(vec!["console".to_string()]));
         assert_eq!(d.retries, Some(33));
+        assert_eq!(d.concurrent, Some(true));
     }
 
     #[test]
@@ -58,6 +62,7 @@ mod tests {
         assert_eq!(d.debug, Some(true));
         assert_eq!(d.reports, Some(vec!["console".to_string()]));
         assert_eq!(d.retries, Some(12));
+        assert_eq!(d.concurrent, Some(true));
     }
 
     #[test]
@@ -68,6 +73,7 @@ mod tests {
             reports: Some(vec!["base.html".to_string()]),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
@@ -75,6 +81,7 @@ mod tests {
             reports: Some(vec!["other.html".to_string()]),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -91,6 +98,7 @@ mod tests {
             reports: Some(vec!["r.html".to_string()]),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -98,6 +106,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
@@ -114,6 +123,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -121,6 +131,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);
@@ -159,5 +170,19 @@ mod tests {
         let merged = base.merge(other);
 
         assert_eq!(merged.retries, Some(2));
+    }
+
+    #[test]
+    fn merge_uses_more_local_concurrency_setting() {
+        let base = RunOptions {
+            concurrent: Some(false),
+            ..Default::default()
+        };
+        let other = RunOptions {
+            concurrent: Some(true),
+            ..Default::default()
+        };
+
+        assert_eq!(base.merge(other).concurrent, Some(true));
     }
 }

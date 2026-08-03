@@ -3,7 +3,9 @@ use crate::models::run_options::RunOptions;
 use crate::pipeline::file_runner::FileRunner;
 use crate::pipeline::report_coordinator::ReportCoordinator;
 use crate::templating::liquid::LiquidEngine;
+use futures_util::{StreamExt, stream};
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::Path;
 
 pub struct FileJob<'a> {
@@ -43,21 +45,46 @@ impl<'a> FileScheduler<'a> {
         });
     }
 
-    pub async fn execute(self, reports: &mut ReportCoordinator<'_>) {
-        for job in self.jobs {
-            let outcome = FileRunner::new(
-                job.ordinal,
-                job.root,
-                job.envs,
-                job.base_options,
-                job.template_engine,
-                job.suite_path,
-            )
-            .execute()
-            .await;
+    pub async fn execute(self, reports: &mut ReportCoordinator<'_>, workers: usize) {
+        run_bounded(
+            self.jobs,
+            workers,
+            |job| async move {
+                FileRunner::new(
+                    job.ordinal,
+                    job.root,
+                    job.envs,
+                    job.base_options,
+                    job.template_engine,
+                    job.suite_path,
+                )
+                .execute()
+                .await
+            },
+            |outcome| reports.consume(outcome),
+        )
+        .await;
+    }
+}
 
-            reports.consume(outcome);
-        }
+async fn run_bounded<I, Run, RunFuture, Output, Consume>(
+    items: I,
+    workers: usize,
+    run: Run,
+    mut consume: Consume,
+) where
+    I: IntoIterator,
+    Run: FnMut(I::Item) -> RunFuture,
+    RunFuture: Future<Output = Output>,
+    Consume: FnMut(Output),
+{
+    assert!(workers > 0, "file worker count must be greater than zero");
+
+    let outcomes = stream::iter(items).map(run).buffer_unordered(workers);
+    futures_util::pin_mut!(outcomes);
+
+    while let Some(outcome) = outcomes.next().await {
+        consume(outcome);
     }
 }
 
@@ -66,6 +93,8 @@ mod tests {
     use super::*;
     use crate::models::test_spec::TestSpec;
     use std::path::PathBuf;
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     fn root(path: &str) -> Descriptor {
         Descriptor {
@@ -102,5 +131,68 @@ mod tests {
                 (1, Some(Path::new("a.spec.yml"))),
             ]
         );
+    }
+
+    async fn observed_max_concurrency(workers: usize) -> (usize, usize) {
+        let started = Arc::new(AtomicUsize::new(0));
+        let active = Arc::new(AtomicUsize::new(0));
+        let max_active = Arc::new(AtomicUsize::new(0));
+        let completed = Arc::new(AtomicUsize::new(0));
+
+        run_bounded(
+            0..4,
+            workers,
+            {
+                let started = Arc::clone(&started);
+                let active = Arc::clone(&active);
+                let max_active = Arc::clone(&max_active);
+
+                move |_| {
+                    let started = Arc::clone(&started);
+                    let active = Arc::clone(&active);
+                    let max_active = Arc::clone(&max_active);
+
+                    async move {
+                        let current = active.fetch_add(1, Ordering::SeqCst) + 1;
+                        max_active.fetch_max(current, Ordering::SeqCst);
+                        started.fetch_add(1, Ordering::SeqCst);
+
+                        std::future::poll_fn(|cx| {
+                            if started.load(Ordering::SeqCst) >= workers {
+                                std::task::Poll::Ready(())
+                            } else {
+                                cx.waker().wake_by_ref();
+                                std::task::Poll::Pending
+                            }
+                        })
+                        .await;
+
+                        active.fetch_sub(1, Ordering::SeqCst);
+                    }
+                }
+            },
+            {
+                let completed = Arc::clone(&completed);
+                move |_| {
+                    completed.fetch_add(1, Ordering::SeqCst);
+                }
+            },
+        )
+        .await;
+
+        (
+            completed.load(Ordering::SeqCst),
+            max_active.load(Ordering::SeqCst),
+        )
+    }
+
+    #[tokio::test]
+    async fn bounded_runner_respects_the_worker_limit() {
+        assert_eq!(observed_max_concurrency(2).await, (4, 2));
+    }
+
+    #[tokio::test]
+    async fn one_worker_keeps_file_execution_serial() {
+        assert_eq!(observed_max_concurrency(1).await, (4, 1));
     }
 }

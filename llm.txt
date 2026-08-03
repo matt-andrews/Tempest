@@ -46,6 +46,7 @@ tempest test \
   [--run ./relative/spec-or-directory] \
   [--debug] \
   [--retries 2] \
+  [--workers 4] \
   [--strict] \
   [--warn-as-err]
 ```
@@ -56,6 +57,7 @@ CLI behavior:
 - `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project.
 - `--debug` prints detailed request/response data.
 - `--retries N` sets the default number of additional attempts after a failed test.
+- `--workers N` sets the maximum number of spec files in flight. Supplying it enables file concurrency; `--workers 1` forces serial execution.
 - `--strict` makes an otherwise non-failing run containing flaky tests exit with code 2.
 - `--warn-as-err` makes any collected warning cause exit code 1. `--warn-as-err` also has the short form `-w`.
 - `--debug` and `--strict` have the short forms `-d` and `-s`.
@@ -151,6 +153,7 @@ retries: 1
 reports:
   - console
   - json
+concurrent: true
 ```
 
 Option behavior:
@@ -159,9 +162,12 @@ Option behavior:
 - `debug` enables detailed request/response data.
 - `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
 - `reports` selects report templates by name.
+- `concurrent` enables concurrent spec-file execution when set in the root project config. Tests within each file, including retries and variable assignment, remain sequential.
 - The CLI starts with `reports: ["console"]`, `debug: false`, and `retries: 0`.
 - When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
 - Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
+
+`concurrent` is a suite scheduler setting rather than a descriptor behavior, so set it only in the root project config. With `concurrent: true` and no `--workers` argument, Tempest uses `std::thread::available_parallelism()` as the worker limit. An explicit `--workers N` takes precedence and also enables concurrency even when `concurrent` is absent or false.
 
 A test that fails and later passes during its retries is `flaky`. Each attempt is reported, but the final summary counts the descriptor once. The file-variable context is restored before each retry, so values assigned by a failed attempt do not leak into the next attempt.
 

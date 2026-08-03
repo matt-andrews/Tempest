@@ -162,6 +162,7 @@ mod tests {
             reports: Some(reports.iter().map(|r| r.to_string()).collect()),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         }
     }
 
@@ -195,6 +196,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -227,6 +229,7 @@ mod tests {
             reports: Some(vec!["file".to_string()]),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
 
         TemplateReporter::new().title(&options, &templates, 1);

@@ -81,6 +81,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         }
     }
 
@@ -206,6 +207,7 @@ mod tests {
                 reports: None,
                 start_time: None,
                 retries: Some(0),
+                concurrent: None,
             }),
             vec![group(
                 "a",
