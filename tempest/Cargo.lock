@@ -2145,6 +2145,7 @@ dependencies = [
  "dotenvy",
  "dunce",
  "enum_dispatch",
+ "futures-util",
  "include_dir",
  "liquid",
  "liquid-core",

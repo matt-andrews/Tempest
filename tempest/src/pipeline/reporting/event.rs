@@ -18,6 +18,7 @@ pub enum ReportEvent<'a> {
         passed: usize,
         failed: usize,
         flaky: usize,
+        duration: usize,
     },
     Error {
         msg: &'a str,
@@ -115,6 +116,7 @@ mod tests {
             passed: 2,
             failed: 1,
             flaky: 0,
+            duration: 120,
         };
 
         assert_eq!(event.template(&template()), Some("summary"));

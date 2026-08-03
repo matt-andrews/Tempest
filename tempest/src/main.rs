@@ -12,6 +12,7 @@ use crate::pipeline::warnings;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use std::collections::{HashMap, HashSet};
+use std::num::NonZeroUsize;
 use std::path::{Path, PathBuf};
 use std::process;
 
@@ -35,6 +36,9 @@ enum Commands {
         strict: bool,
         #[arg(short, long, default_value = "false")]
         warn_as_err: bool,
+        /// Maximum number of spec files to execute at once.
+        #[arg(long)]
+        workers: Option<NonZeroUsize>,
     },
 }
 
@@ -51,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
             retries,
             strict,
             warn_as_err,
+            workers,
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
@@ -62,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
                 run_path,
             )?;
 
-            let result = pipeline::execute(discovery, &options).await?;
+            let result = pipeline::execute(discovery, &options, workers).await?;
 
             print_warnings();
 
@@ -120,5 +125,36 @@ fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -
         ExitCode::FlakyTests
     } else {
         ExitCode::Success
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parsed_workers(args: &[&str]) -> Result<Option<NonZeroUsize>, clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Test { workers, .. } = cli.command;
+        Ok(workers)
+    }
+
+    #[test]
+    fn workers_are_optional() {
+        assert_eq!(parsed_workers(&["tempest", "test"]).unwrap(), None);
+    }
+
+    #[test]
+    fn workers_accepts_a_positive_limit() {
+        assert_eq!(
+            parsed_workers(&["tempest", "test", "--workers", "4"])
+                .unwrap()
+                .map(NonZeroUsize::get),
+            Some(4)
+        );
+    }
+
+    #[test]
+    fn workers_rejects_zero() {
+        assert!(parsed_workers(&["tempest", "test", "--workers", "0"]).is_err());
     }
 }

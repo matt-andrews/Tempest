@@ -8,7 +8,9 @@ use crate::pipeline::reporting::event::ReportEvent;
 use crate::pipeline::reporting::liquid::LiquidRenderer;
 use crate::pipeline::reporting::sinks::OutputSink;
 use crate::pipeline::reporting::sinks::output_sink_for;
+use liquid_core::model::DateTime;
 use std::collections::HashMap;
+use std::time::Duration;
 
 pub struct TemplateReporter {
     renderer: LiquidRenderer,
@@ -96,11 +98,17 @@ impl Reporter for TemplateReporter {
             .iter()
             .filter(|f| matches!(f, SummaryResult::Flaky))
             .count();
+        let duration = DateTime::now().unix_timestamp_nanos()
+            - options
+                .start_time
+                .unwrap_or(DateTime::now())
+                .unix_timestamp_nanos();
         self.emit(
             ReportEvent::Summary {
                 passed,
                 failed,
                 flaky,
+                duration: Duration::from_nanos(duration as u64).as_millis() as usize,
             },
             options,
             templates,
@@ -162,6 +170,7 @@ mod tests {
             reports: Some(reports.iter().map(|r| r.to_string()).collect()),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         }
     }
 
@@ -195,6 +204,7 @@ mod tests {
             reports: None,
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -227,6 +237,7 @@ mod tests {
             reports: Some(vec!["file".to_string()]),
             start_time: None,
             retries: Some(0),
+            concurrent: None,
         };
 
         TemplateReporter::new().title(&options, &templates, 1);

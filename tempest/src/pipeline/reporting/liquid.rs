@@ -38,11 +38,13 @@ impl LiquidRenderer {
                 passed,
                 failed,
                 flaky,
+                duration,
             } => {
                 liquid::object!({
                     "passed": *passed,
                     "failed": *failed,
                     "flaky": *flaky,
+                    "duration": *duration,
                 })
             }
 
@@ -214,6 +216,7 @@ mod tests {
             passed: 8,
             failed: 2,
             flaky: 1,
+            duration: 120,
         };
 
         let output = renderer
@@ -243,14 +246,15 @@ mod tests {
                     passed: 10,
                     failed: 1,
                     flaky: 1,
+                    duration: 120,
                 },
             )
             .unwrap();
 
         assert_eq!(title.lines().count(), 11, "{title:?}");
-        assert_eq!(summary.lines().count(), 2, "{summary:?}");
+        assert_eq!(summary.lines().count(), 3, "{summary:?}");
         assert!(title.contains("Running 12 tests"));
-        assert!(summary.contains("10 passed · 1 flaky · 1 failed"));
+        assert!(summary.contains("10 passed · 1 flaky · 1 failed · 120ms duration"));
     }
 
     #[test]

@@ -208,6 +208,16 @@ mod tests {
     }
 
     #[test]
+    fn parse_config_parses_file_concurrency() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.config.yml");
+        fs::write(&path, "concurrent: true\n").unwrap();
+
+        let result = YamlFileParser.parse_config(&path).unwrap();
+        assert_eq!(result.concurrent, Some(true));
+    }
+
+    #[test]
     fn parse_config_partial_fields_leave_others_none() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.config.yml");
@@ -217,6 +227,7 @@ mod tests {
         assert_eq!(result.base_uri.as_deref(), Some("http://example.com"));
         assert!(result.debug.is_none());
         assert!(result.reports.is_none());
+        assert!(result.concurrent.is_none());
     }
 
     #[test]
@@ -229,6 +240,7 @@ mod tests {
         assert!(result.base_uri.is_none());
         assert!(result.debug.is_none());
         assert!(result.reports.is_none());
+        assert!(result.concurrent.is_none());
     }
 
     #[test]

@@ -18,6 +18,7 @@ liquid = "0.26.11"
 liquid-core = "0.26.11"
 include_dir = "0.7"
 async-trait = "0.1.91"
+futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
 dunce = "1"
 cel-parser = "0.10.1"
 scraper = { version = "0.27.0", features = ["atomic"] }

@@ -45,8 +45,17 @@ There are a few options that you can use to configure your tests (more on the wa
 | base_uri | Set the base url so that your routes don't need to be fully qualified                                                                                |
 | reports  | Define which report sinks to use. By default `console` is used, but if this option is specified it will clear that default and you must add it again |
 | retries  | Define the number of retries a test will attempt before declaring failure.                                                                           |
+| concurrent | Run spec files concurrently. Tests within each spec file remain sequential. Set this in the root project config.                                  |
 
 Options are cascading so you can set top level project defaults, and then override at the directory, or descriptor level!
+
+File concurrency is a suite-level exception to cascading options. Enable it in a root `*.config.yml`:
+
+```yaml
+concurrent: true
+```
+
+Tempest then uses the machine's available parallelism as the default number of file workers. Use `--workers N` to set an explicit cap; passing `--workers` also enables file concurrency, and `--workers 1` forces serial execution.
 
 ## Custom Reporters
 We use [Liquid Template](https://shopify.github.io/liquid/) syntax for report customization. You can create a template and drop it in the directory and it will be discovered.
