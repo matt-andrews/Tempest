@@ -3,6 +3,7 @@ use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
+use anyhow::Context;
 use include_dir::{Dir, File};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,21 +11,27 @@ use std::path::{Path, PathBuf};
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
     fn parse_descriptor(&self, path: &Path) -> anyhow::Result<Descriptor> {
-        let contents = fs::read_to_string(path)?;
-        let mut result: Descriptor = noyalib::from_str(&contents)?;
+        let contents = fs::read_to_string(path)
+            .with_context(|| format!("could not read YAML file {}", path.display()))?;
+        let mut result: Descriptor = noyalib::from_str(&contents)
+            .with_context(|| format!("invalid YAML in {}", path.display()))?;
         Self::assign_file(&mut result, path);
         Ok(result)
     }
 
     fn parse_config(&self, path: &Path) -> anyhow::Result<RunOptions> {
-        let contents = fs::read_to_string(path)?;
-        let config: RunOptions = noyalib::from_str(&contents)?;
+        let contents = fs::read_to_string(path)
+            .with_context(|| format!("could not read YAML file {}", path.display()))?;
+        let config: RunOptions = noyalib::from_str(&contents)
+            .with_context(|| format!("invalid YAML in {}", path.display()))?;
         Ok(config)
     }
 
     fn parse_report_template(&self, path: &Path) -> anyhow::Result<ReportTemplate> {
-        let contents = fs::read_to_string(path)?;
-        let mut template: ReportTemplate = noyalib::from_str(&contents)?;
+        let contents = fs::read_to_string(path)
+            .with_context(|| format!("could not read YAML file {}", path.display()))?;
+        let mut template: ReportTemplate = noyalib::from_str(&contents)
+            .with_context(|| format!("invalid YAML in {}", path.display()))?;
 
         let parent = path.parent().map(PathBuf::from).unwrap_or_default();
 
@@ -44,7 +51,8 @@ impl FileParser for YamlFileParser {
         dir: &Dir,
     ) -> anyhow::Result<ReportTemplate> {
         let contents = file.contents_utf8().unwrap_or_default();
-        let mut template = noyalib::from_str::<ReportTemplate>(contents)?;
+        let mut template = noyalib::from_str::<ReportTemplate>(contents)
+            .with_context(|| format!("invalid embedded YAML in {}", file.path().display()))?;
 
         template.test_template = Self::resolve_embedded_liquid(template.test_template, dir);
         template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);
@@ -249,13 +257,18 @@ mod tests {
         let path = dir.path().join("bad.config.yml");
         fs::write(&path, ": bad: yaml: here").unwrap();
 
-        assert!(YamlFileParser.parse_config(&path).is_err());
+        let error = YamlFileParser.parse_config(&path).unwrap_err();
+        let message = format!("{error:#}");
+        assert!(message.contains("invalid YAML"));
+        assert!(message.contains("bad.config.yml"));
     }
 
     #[test]
     fn parse_config_returns_error_for_missing_file() {
         let result = YamlFileParser.parse_config(&PathBuf::from("/no/such/file.yml"));
-        assert!(result.is_err());
+        let message = format!("{:#}", result.unwrap_err());
+        assert!(message.contains("could not read YAML file"));
+        assert!(message.contains("file.yml"));
     }
 
     #[test]

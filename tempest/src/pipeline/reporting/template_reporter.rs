@@ -27,11 +27,11 @@ impl TemplateReporter {
         event: ReportEvent<'_>,
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
-    ) {
+    ) -> anyhow::Result<()> {
         for template in active_templates(templates, options) {
             let sink = output_sink_for(template, options);
             match self.renderer.render(template, &event) {
-                Ok(output) => sink.print(&output),
+                Ok(output) => sink.print(&output)?,
                 Err(err) => {
                     match self.renderer.render(
                         template,
@@ -39,20 +39,26 @@ impl TemplateReporter {
                             msg: &err.to_string(),
                         },
                     ) {
-                        Ok(fallback) => sink.print(&fallback),
+                        Ok(fallback) => sink.print(&fallback)?,
                         Err(err) => {
-                            sink.println(&format!("Failed to render and fallback: {}", err))
+                            sink.println(&format!("Failed to render and fallback: {}", err))?
                         }
                     };
                 }
             }
         }
+        Ok(())
     }
 }
 
 impl Reporter for TemplateReporter {
-    fn debug(&self, msg: &str, options: &RunOptions, templates: &HashMap<String, ReportTemplate>) {
-        self.emit(ReportEvent::Debug { msg }, options, templates);
+    fn debug(
+        &self,
+        msg: &str,
+        options: &RunOptions,
+        templates: &HashMap<String, ReportTemplate>,
+    ) -> anyhow::Result<()> {
+        self.emit(ReportEvent::Debug { msg }, options, templates)
     }
 
     fn report(
@@ -65,7 +71,7 @@ impl Reporter for TemplateReporter {
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
         retry_count: usize,
-    ) {
+    ) -> anyhow::Result<()> {
         self.emit(
             ReportEvent::Descriptor {
                 descriptor,
@@ -77,7 +83,7 @@ impl Reporter for TemplateReporter {
             },
             options,
             templates,
-        );
+        )
     }
 
     fn summary(
@@ -85,7 +91,7 @@ impl Reporter for TemplateReporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         results: &[SummaryResult],
-    ) -> SummaryResult {
+    ) -> anyhow::Result<SummaryResult> {
         let passed = results
             .iter()
             .filter(|f| matches!(f, SummaryResult::Passed))
@@ -112,14 +118,14 @@ impl Reporter for TemplateReporter {
             },
             options,
             templates,
-        );
+        )?;
 
         if failed > 0 {
-            SummaryResult::Failed
+            Ok(SummaryResult::Failed)
         } else if flaky > 0 {
-            SummaryResult::Flaky
+            Ok(SummaryResult::Flaky)
         } else {
-            SummaryResult::Passed
+            Ok(SummaryResult::Passed)
         }
     }
 
@@ -128,8 +134,8 @@ impl Reporter for TemplateReporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
-    ) {
-        self.emit(ReportEvent::Title { test_count }, options, templates);
+    ) -> anyhow::Result<()> {
+        self.emit(ReportEvent::Title { test_count }, options, templates)
     }
 }
 
@@ -240,7 +246,9 @@ mod tests {
             concurrent: None,
         };
 
-        TemplateReporter::new().title(&options, &templates, 1);
+        TemplateReporter::new()
+            .title(&options, &templates, 1)
+            .unwrap();
 
         let output = std::fs::read_to_string(path).unwrap();
         assert!(output.contains("ERR:"));

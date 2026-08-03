@@ -34,4 +34,4 @@ opt-level     = "z"     # optimize for binary size
 lto           = "thin"  # cross-crate dead-code elimination; faster than "fat"
 codegen-units = 1       # single CGU gives LLVM full-program visibility
 strip         = true    # strip debuginfo at link time
-panic         = "abort" # drop unwinding machinery (~50–100 KB)
+panic         = "unwind" # allow the CLI panic boundary to return a controlled error

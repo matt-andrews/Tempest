@@ -35,16 +35,16 @@ impl<'a> PipelineRunner<'a> {
             report_coordinator: ReportCoordinator::new(&discovery_result.templates),
         }
     }
-    pub fn title(&self) {
+    pub fn title(&self) -> anyhow::Result<()> {
         self.report_coordinator
-            .title(&self.options, self.discovered.directory.test_count());
+            .title(&self.options, self.discovered.directory.test_count())
     }
 
-    pub fn summary(&self) -> SummaryResult {
+    pub fn summary(&self) -> anyhow::Result<SummaryResult> {
         self.report_coordinator.summary(&self.options)
     }
 
-    pub async fn walk(&mut self) {
+    pub async fn walk(&mut self) -> anyhow::Result<()> {
         let mut scheduler = FileScheduler::new();
         for directory in self.discovered.directory.walk() {
             let base_options = merge_option_chain(&self.options, &directory.options);
@@ -61,7 +61,7 @@ impl<'a> PipelineRunner<'a> {
 
         scheduler
             .execute(&mut self.report_coordinator, self.workers)
-            .await;
+            .await
     }
 }
 

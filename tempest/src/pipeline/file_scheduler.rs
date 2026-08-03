@@ -45,7 +45,11 @@ impl<'a> FileScheduler<'a> {
         });
     }
 
-    pub async fn execute(self, reports: &mut ReportCoordinator<'_>, workers: usize) {
+    pub async fn execute(
+        self,
+        reports: &mut ReportCoordinator<'_>,
+        workers: usize,
+    ) -> anyhow::Result<()> {
         run_bounded(
             self.jobs,
             workers,
@@ -63,7 +67,7 @@ impl<'a> FileScheduler<'a> {
             },
             |outcome| reports.consume(outcome),
         )
-        .await;
+        .await
     }
 }
 
@@ -72,11 +76,12 @@ async fn run_bounded<I, Run, RunFuture, Output, Consume>(
     workers: usize,
     run: Run,
     mut consume: Consume,
-) where
+) -> anyhow::Result<()>
+where
     I: IntoIterator,
     Run: FnMut(I::Item) -> RunFuture,
     RunFuture: Future<Output = Output>,
-    Consume: FnMut(Output),
+    Consume: FnMut(Output) -> anyhow::Result<()>,
 {
     assert!(workers > 0, "file worker count must be greater than zero");
 
@@ -84,8 +89,9 @@ async fn run_bounded<I, Run, RunFuture, Output, Consume>(
     futures_util::pin_mut!(outcomes);
 
     while let Some(outcome) = outcomes.next().await {
-        consume(outcome);
+        consume(outcome)?;
     }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -175,10 +181,12 @@ mod tests {
                 let completed = Arc::clone(&completed);
                 move |_| {
                     completed.fetch_add(1, Ordering::SeqCst);
+                    Ok(())
                 }
             },
         )
-        .await;
+        .await
+        .unwrap();
 
         (
             completed.load(Ordering::SeqCst),

@@ -9,8 +9,8 @@ use enum_dispatch::enum_dispatch;
 
 #[enum_dispatch]
 pub trait OutputSink {
-    fn println(&self, msg: &str);
-    fn print(&self, msg: &str);
+    fn println(&self, msg: &str) -> anyhow::Result<()>;
+    fn print(&self, msg: &str) -> anyhow::Result<()>;
 }
 
 #[enum_dispatch(OutputSink)]
