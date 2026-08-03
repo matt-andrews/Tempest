@@ -19,6 +19,7 @@ pub trait Reporter {
     fn report(
         &self,
         descriptor: &Descriptor,
+        title_path: &[String],
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,
@@ -26,6 +27,7 @@ pub trait Reporter {
         test_count: usize,
         retry_count: usize,
     );
+    fn debug(&self, msg: &str, options: &RunOptions, templates: &HashMap<String, ReportTemplate>);
     fn summary(
         &self,
         options: &RunOptions,

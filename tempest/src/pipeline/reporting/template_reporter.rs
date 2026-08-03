@@ -49,9 +49,14 @@ impl TemplateReporter {
 }
 
 impl Reporter for TemplateReporter {
+    fn debug(&self, msg: &str, options: &RunOptions, templates: &HashMap<String, ReportTemplate>) {
+        self.emit(ReportEvent::Debug { msg }, options, templates);
+    }
+
     fn report(
         &self,
         descriptor: &Descriptor,
+        title_path: &[String],
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,
@@ -62,6 +67,7 @@ impl Reporter for TemplateReporter {
         self.emit(
             ReportEvent::Descriptor {
                 descriptor,
+                title_path,
                 test_result,
                 assertions,
                 test_count,
@@ -144,6 +150,7 @@ mod tests {
             section_template: Some(name.to_string()),
             summary_template: Some(name.to_string()),
             error_template: Some(name.to_string()),
+            debug_template: Some(name.to_string()),
             file: None,
         }
     }
@@ -204,6 +211,7 @@ mod tests {
             section_template: None,
             summary_template: None,
             error_template: Some("ERR: {{ liquid_error_message }}".to_string()),
+            debug_template: None,
             file: Some(ReportFile {
                 dir: Some(dir.path().to_path_buf()),
                 file_name: Some("report.txt".to_string()),

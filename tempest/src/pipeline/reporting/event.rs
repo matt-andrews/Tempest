@@ -8,6 +8,7 @@ pub enum ReportEvent<'a> {
     },
     Descriptor {
         descriptor: &'a Descriptor,
+        title_path: &'a [String],
         test_result: Option<&'a TestResult>,
         assertions: &'a [Assertion],
         test_count: usize,
@@ -19,6 +20,9 @@ pub enum ReportEvent<'a> {
         flaky: usize,
     },
     Error {
+        msg: &'a str,
+    },
+    Debug {
         msg: &'a str,
     },
 }
@@ -33,6 +37,7 @@ impl<'a> ReportEvent<'a> {
             ReportEvent::Descriptor { .. } => template.section_template.as_deref(),
             ReportEvent::Summary { .. } => template.summary_template.as_deref(),
             ReportEvent::Error { .. } => template.error_template.as_deref(),
+            ReportEvent::Debug { .. } => template.debug_template.as_deref(),
         }
     }
 }
@@ -51,6 +56,7 @@ mod tests {
             section_template: Some("section".to_string()),
             summary_template: Some("summary".to_string()),
             error_template: Some("error".to_string()),
+            debug_template: Some("debug".to_string()),
             file: None,
         }
     }
@@ -78,6 +84,7 @@ mod tests {
         let descriptor = descriptor(true);
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &[],
             test_result: None,
             assertions: &[],
             test_count: 1,
@@ -92,6 +99,7 @@ mod tests {
         let descriptor = descriptor(false);
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
+            title_path: &[],
             test_result: None,
             assertions: &[],
             test_count: 0,
@@ -116,5 +124,11 @@ mod tests {
     fn error_event_selects_error_template() {
         let event = ReportEvent::Error { msg: "bad liquid" };
         assert_eq!(event.template(&template()), Some("error"));
+    }
+
+    #[test]
+    fn debug_event_selects_debug_template() {
+        let event = ReportEvent::Debug { msg: "GET /users" };
+        assert_eq!(event.template(&template()), Some("debug"));
     }
 }

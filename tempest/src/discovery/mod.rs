@@ -81,9 +81,9 @@ pub fn discover(
 ) -> anyhow::Result<DiscoveryResult> {
     let run_path_is_dir = run_path.is_dir();
 
-    let (dirs, files): (Vec<_>, Vec<_>) = fs::read_dir(dir)?
-        .filter_map(|e| e.ok())
-        .partition(|e| e.path().is_dir());
+    let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
+    entries.sort_by_key(|entry| entry.path());
+    let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.path().is_dir());
 
     let mut options: Vec<RunOptions> = inherited_configs.unwrap_or_default();
     let mut tests: Vec<Descriptor> = Vec::new();
@@ -196,11 +196,44 @@ mod tests {
     #[test]
     fn discover_finds_multiple_spec_files() {
         let dir = tempdir().unwrap();
-        fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
         fs::write(dir.path().join("b.spec.yml"), "test:\n  route: /b\n").unwrap();
+        fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
 
         let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
         assert_eq!(result.directory.files.len(), 2);
+        assert_eq!(
+            result
+                .directory
+                .files
+                .iter()
+                .map(|descriptor| {
+                    descriptor
+                        .file
+                        .as_deref()
+                        .and_then(Path::file_name)
+                        .and_then(|name| name.to_str())
+                })
+                .collect::<Vec<_>>(),
+            vec![Some("a.spec.yml"), Some("b.spec.yml")]
+        );
+    }
+
+    #[test]
+    fn discover_sorts_child_directories_by_path() {
+        let dir = tempdir().unwrap();
+        fs::create_dir(dir.path().join("z-child")).unwrap();
+        fs::create_dir(dir.path().join("a-child")).unwrap();
+
+        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        assert_eq!(
+            result
+                .directory
+                .children
+                .iter()
+                .filter_map(|child| child.dir.file_name().and_then(|name| name.to_str()))
+                .collect::<Vec<_>>(),
+            vec!["a-child", "z-child"]
+        );
     }
 
     #[test]

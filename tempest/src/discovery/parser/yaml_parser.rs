@@ -31,6 +31,7 @@ impl FileParser for YamlFileParser {
         template.test_template = Self::resolve_liquid_ref(template.test_template, &parent);
         template.section_template = Self::resolve_liquid_ref(template.section_template, &parent);
         template.error_template = Self::resolve_liquid_ref(template.error_template, &parent);
+        template.debug_template = Self::resolve_liquid_ref(template.debug_template, &parent);
         template.title_template = Self::resolve_liquid_ref(template.title_template, &parent);
         template.summary_template = Self::resolve_liquid_ref(template.summary_template, &parent);
 
@@ -48,6 +49,7 @@ impl FileParser for YamlFileParser {
         template.test_template = Self::resolve_embedded_liquid(template.test_template, dir);
         template.section_template = Self::resolve_embedded_liquid(template.section_template, dir);
         template.error_template = Self::resolve_embedded_liquid(template.error_template, dir);
+        template.debug_template = Self::resolve_embedded_liquid(template.debug_template, dir);
         template.title_template = Self::resolve_embedded_liquid(template.title_template, dir);
         template.summary_template = Self::resolve_embedded_liquid(template.summary_template, dir);
 
@@ -278,10 +280,11 @@ mod tests {
         fs::write(dir.path().join("test.liquid"), "test content").unwrap();
         fs::write(dir.path().join("section.liquid"), "section content").unwrap();
         fs::write(dir.path().join("error.liquid"), "error content").unwrap();
+        fs::write(dir.path().join("debug.liquid"), "debug content").unwrap();
         fs::write(dir.path().join("title.liquid"), "title content").unwrap();
         fs::write(dir.path().join("summary.liquid"), "summary content").unwrap();
 
-        let yaml = "test_template: test.liquid\nsection_template: section.liquid\nerror_template: error.liquid\ntitle_template: title.liquid\nsummary_template: summary.liquid\n";
+        let yaml = "test_template: test.liquid\nsection_template: section.liquid\nerror_template: error.liquid\ndebug_template: debug.liquid\ntitle_template: title.liquid\nsummary_template: summary.liquid\n";
         let path = dir.path().join("all.template.yml");
         fs::write(&path, yaml).unwrap();
 
@@ -289,6 +292,7 @@ mod tests {
         assert_eq!(result.test_template.as_deref(), Some("test content"));
         assert_eq!(result.section_template.as_deref(), Some("section content"));
         assert_eq!(result.error_template.as_deref(), Some("error content"));
+        assert_eq!(result.debug_template.as_deref(), Some("debug content"));
         assert_eq!(result.title_template.as_deref(), Some("title content"));
         assert_eq!(result.summary_template.as_deref(), Some("summary content"));
     }
@@ -318,6 +322,7 @@ mod tests {
         assert!(result.test_template.is_none());
         assert!(result.section_template.is_none());
         assert!(result.error_template.is_none());
+        assert!(result.debug_template.is_none());
         assert!(result.title_template.is_none());
         assert!(result.summary_template.is_none());
     }
@@ -345,6 +350,7 @@ mod tests {
         assert!(result.test_template.is_none());
         assert!(result.section_template.is_none());
         assert!(result.error_template.is_none());
+        assert!(result.debug_template.is_none());
         assert!(result.title_template.is_none());
         assert!(result.summary_template.is_none());
     }
@@ -377,7 +383,7 @@ mod tests {
     }
 
     #[test]
-    fn parse_embedded_report_template_all_five_fields_resolved() {
+    fn parse_embedded_report_template_all_fields_resolved() {
         let console_dir = BUILTIN_REPORTERS
             .get_dir("console_reporter")
             .expect("console_reporter should be embedded");
@@ -395,6 +401,7 @@ mod tests {
             ("test_template", &result.test_template),
             ("section_template", &result.section_template),
             ("error_template", &result.error_template),
+            ("debug_template", &result.debug_template),
             ("title_template", &result.title_template),
             ("summary_template", &result.summary_template),
         ] {

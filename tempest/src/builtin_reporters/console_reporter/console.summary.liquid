@@ -1,6 +1,2 @@
-
-- Summary Test Results {% if failed > 0%}❌{%else%}✅{%endif%} ----------
-    {{ "Passed:" | green }} {{ passed }}
-    {{ "Flaky:" | yellow }} {{ flaky }}
-{% if failed > 0%}{{ "   " | on_red }} {{ "Failed:" | red }} {{ failed }} {{ "                      " | on_red }}{%else%}    {{ "Failed:" | red }} {{ failed }}{%endif%}
-------------------------------------
+{% if failed > 0 %}{{ "✗" | bright_red }}{% elsif flaky > 0 %}{{ "!" | yellow }}{% else %}{{ "✓" | bright_green }}{% endif %} {{ "Summary" | bright_purple }} · {{ passed | green }} passed · {{ flaky | yellow }} flaky · {{ failed | red }} failed
+{% if failed > 0 %}{{ "  " | on_bright_red }} {{ "Failed" |  red }} {{ "    " | on_bright_red }}{% else %}{{ "  " | on_bright_green }} {{ "Passed" | green }} {{ "    " | on_bright_green }}{% endif %}

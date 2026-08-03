@@ -1,27 +1,12 @@
-use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
-use crate::models::evaluation_context::EvaluationContext;
-use crate::models::report_template::ReportTemplate;
-use crate::models::response_content_cache::ResponseContentCache;
-use crate::models::run_context::RunContext;
 use crate::models::run_options::RunOptions;
-use crate::models::summary_result::SummaryResult;
-use crate::models::test_result::{Assertion, TestResult};
-use crate::models::test_spec::TestSpec;
-use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
-use crate::pipeline::reporting::{AnyReporter, Reporter};
-use crate::pipeline::runners::TestRunner;
-use crate::pipeline::runners::test_runner_for;
-use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
+use crate::pipeline::file_scheduler::FileScheduler;
 use crate::templating::liquid::LiquidEngine;
-use std::collections::HashMap;
 use std::path::Path;
 
 pub struct DirectoryRunner<'a> {
-    reporter: &'a AnyReporter,
     directory: &'a DirectoryNode,
     template_engine: &'a LiquidEngine,
-    templates: &'a HashMap<String, ReportTemplate>,
     base_options: RunOptions,
     top_path: &'a Path,
 }
@@ -31,252 +16,27 @@ impl<'a> DirectoryRunner<'a> {
         base_options: RunOptions,
         directory: &'a DirectoryNode,
         template_engine: &'a LiquidEngine,
-        templates: &'a HashMap<String, ReportTemplate>,
-        reporter: &'a AnyReporter,
         top_path: &'a Path,
     ) -> Self {
         Self {
-            reporter,
             base_options,
             directory,
-            templates,
             template_engine,
             top_path,
         }
     }
-    pub async fn execute_dir(&self, summary: &mut Vec<SummaryResult>) {
-        let mut context = RunContext::new("", &self.directory.envs);
-        for (descriptor, ancestor_options) in self.descriptors() {
-            let outcome = self
-                .execute_descriptor_with_retries(
-                    descriptor,
-                    ancestor_options,
-                    &mut context,
-                    summary.len(),
-                )
-                .await;
 
-            if let Some(result) = &outcome.summary_result {
-                summary.push(result.to_owned());
-            }
+    pub fn schedule(&self, scheduler: &mut FileScheduler<'a>) {
+        for root in &self.directory.files {
+            scheduler.schedule(
+                root,
+                &self.directory.envs,
+                self.base_options.clone(),
+                self.template_engine,
+                self.top_path,
+            );
         }
     }
-
-    async fn execute_descriptor_with_retries(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-        context: &mut RunContext,
-        test_count: usize,
-    ) -> DescriptorOutcome {
-        let context_before_descriptor = context.clone();
-        let mut retry_attempts = 0usize;
-        let mut saw_failure = false;
-
-        loop {
-            context.retry_attempts = retry_attempts;
-            let mut outcome = self
-                .execute_descriptor(descriptor, ancestor_options.clone(), context)
-                .await;
-
-            self.report_descriptor(&outcome, test_count, retry_attempts);
-
-            match &outcome.summary_result {
-                Some(SummaryResult::Failed) => {
-                    let max_retries = usize::from(outcome.options.retries.unwrap_or(0));
-                    if retry_attempts < max_retries {
-                        retry_attempts += 1;
-                        saw_failure = true;
-                        *context = context_before_descriptor.clone();
-                        continue;
-                    }
-                }
-                Some(SummaryResult::Passed) if saw_failure => {
-                    outcome.summary_result = Some(SummaryResult::Flaky);
-                }
-                _ => {}
-            }
-
-            return outcome;
-        }
-    }
-
-    async fn execute_descriptor(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-        context: &mut RunContext,
-    ) -> DescriptorOutcome {
-        let mut descriptor = descriptor.to_owned();
-
-        self.apply_file_context(&mut descriptor, context);
-
-        let mut options = self.options_for_descriptor(&descriptor, ancestor_options);
-
-        self.render_inputs(&mut descriptor, &mut options, context);
-
-        let test_run = self
-            .run_test_if_present(&descriptor, &options, context)
-            .await;
-
-        DescriptorOutcome {
-            descriptor,
-            options,
-            test_result: test_run.test_result,
-            assertions: test_run.assertions,
-            summary_result: test_run.summary_result,
-        }
-    }
-
-    async fn run_test_if_present(
-        &self,
-        descriptor: &Descriptor,
-        options: &RunOptions,
-        context: &mut RunContext,
-    ) -> TestRunOutcome {
-        let Some(test) = &descriptor.test else {
-            return TestRunOutcome {
-                test_result: None,
-                assertions: Vec::new(),
-                summary_result: None,
-            };
-        };
-
-        let mut test = test.to_owned();
-        test.render_template(self.template_engine, &liquid::object!(&context));
-
-        let runner = test_runner_for(&test, options);
-        let test_result = runner.run().await;
-
-        let response_content_cache = ResponseContentCache::default();
-        let assertions =
-            self.evaluate_assertions(&test, &test_result, descriptor, &response_content_cache);
-        self.assign_variables(
-            &test,
-            &test_result,
-            context,
-            descriptor,
-            &response_content_cache,
-        );
-
-        let summary_result = if assertions.iter().any(|a| !a.passed) {
-            SummaryResult::Failed
-        } else {
-            SummaryResult::Passed
-        };
-
-        TestRunOutcome {
-            test_result: Some(test_result),
-            assertions,
-            summary_result: Some(summary_result),
-        }
-    }
-
-    fn evaluate_assertions(
-        &self,
-        test: &TestSpec,
-        test_result: &TestResult,
-        descriptor: &Descriptor,
-        response_content_cache: &ResponseContentCache,
-    ) -> Vec<Assertion> {
-        let mut assert_result: Vec<Assertion> = Vec::new();
-        for assert in test.assert.as_deref().unwrap_or_default() {
-            let evaluation_context = EvaluationContext {
-                suite_dir: self.top_path.to_path_buf(),
-                spec_file: descriptor.file.clone(),
-            };
-            let assert_evaluator = assertion_evaluator_for(assert);
-            let result =
-                assert_evaluator.evaluate(test_result, &evaluation_context, response_content_cache);
-            assert_result.push(result.clone());
-        }
-        assert_result
-    }
-
-    fn assign_variables(
-        &self,
-        test: &TestSpec,
-        result: &TestResult,
-        context: &mut RunContext,
-        descriptor: &Descriptor,
-        response_content_cache: &ResponseContentCache,
-    ) {
-        let evaluation_context = EvaluationContext {
-            suite_dir: self.top_path.to_path_buf(),
-            spec_file: descriptor.file.clone(),
-        };
-        let vars = test.vars.clone().unwrap_or_default();
-        let assign_var = variable_assignment_for(&vars);
-        assign_var.set(
-            result,
-            &mut *context,
-            &evaluation_context,
-            response_content_cache,
-        );
-    }
-
-    fn descriptors(&self) -> impl Iterator<Item = (&Descriptor, RunOptions)> {
-        self.directory.files.iter().flat_map(|m| m.descendants())
-    }
-
-    fn apply_file_context(&self, descriptor: &mut Descriptor, context: &mut RunContext) {
-        if let Some(file_name) = descriptor.file.clone() {
-            if file_name != context.file_name {
-                *context =
-                    RunContext::new(file_name.to_str().unwrap_or_default(), &self.directory.envs);
-            }
-
-            descriptor.file = Some(file_name);
-        }
-    }
-
-    fn options_for_descriptor(
-        &self,
-        descriptor: &Descriptor,
-        ancestor_options: RunOptions,
-    ) -> RunOptions {
-        self.base_options
-            .clone()
-            .merge(ancestor_options)
-            .merge(descriptor.options.clone().unwrap_or_default())
-    }
-
-    fn render_inputs(
-        &self,
-        descriptor: &mut Descriptor,
-        options: &mut RunOptions,
-        context: &RunContext,
-    ) {
-        let obj = liquid::object!(&context);
-        options.render_template(self.template_engine, &obj);
-        descriptor.render_template(self.template_engine, &obj);
-    }
-
-    fn report_descriptor(&self, outcome: &DescriptorOutcome, count: usize, retry_count: usize) {
-        self.reporter.report(
-            &outcome.descriptor,
-            outcome.test_result.as_ref(),
-            &outcome.assertions,
-            &outcome.options,
-            self.templates,
-            count,
-            retry_count,
-        );
-    }
-}
-
-struct DescriptorOutcome {
-    descriptor: Descriptor,
-    options: RunOptions,
-    test_result: Option<TestResult>,
-    assertions: Vec<Assertion>,
-    summary_result: Option<SummaryResult>,
-}
-
-struct TestRunOutcome {
-    test_result: Option<TestResult>,
-    assertions: Vec<Assertion>,
-    summary_result: Option<SummaryResult>,
 }
 
 #[cfg(test)]
@@ -288,7 +48,7 @@ mod tests {
     use crate::models::run_options::RunOptions;
     use crate::models::summary_result::SummaryResult;
     use crate::models::test_spec::TestSpec;
-    use crate::pipeline::reporting::reporter_for;
+    use crate::pipeline::report_coordinator::ReportCoordinator;
     use crate::templating::liquid::LiquidEngine;
     use mockito::Server;
     use std::collections::HashMap;
@@ -317,18 +77,20 @@ mod tests {
     fn make_runner<'a>(
         directory: &'a DirectoryNode,
         engine: &'a LiquidEngine,
-        templates: &'a HashMap<String, ReportTemplate>,
-        reporter: &'a AnyReporter,
         base_options: RunOptions,
     ) -> DirectoryRunner<'a> {
-        DirectoryRunner::new(
-            base_options,
-            directory,
-            engine,
-            templates,
-            reporter,
-            Path::new("./"),
-        )
+        DirectoryRunner::new(base_options, directory, engine, Path::new("./"))
+    }
+
+    async fn execute_runner(
+        runner: DirectoryRunner<'_>,
+        templates: &HashMap<String, ReportTemplate>,
+    ) -> Vec<SummaryResult> {
+        let mut reports = ReportCoordinator::new(templates);
+        let mut scheduler = FileScheduler::new();
+        runner.schedule(&mut scheduler);
+        scheduler.execute(&mut reports).await;
+        reports.results().to_vec()
     }
 
     fn get_descriptor(route: &str, assertions: Option<Vec<&str>>) -> Descriptor {
@@ -352,7 +114,6 @@ mod tests {
     async fn descriptor_without_test_produces_no_summary_result() {
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![Descriptor {
             name: Some("no-test".to_string()),
             description: None,
@@ -363,10 +124,11 @@ mod tests {
             file: None,
         }]);
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert!(summary.is_empty());
     }
@@ -382,16 +144,16 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(
             &format!("{}/ok", server.url()),
             Some(vec!["status == 200"]),
         )]);
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Passed));
@@ -408,16 +170,16 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(
             &format!("{}/ok", server.url()),
             Some(vec!["status == 404"]),
         )]);
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Failed));
@@ -434,13 +196,13 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(&format!("{}/ok", server.url()), None)]);
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Passed));
@@ -462,16 +224,16 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![
             get_descriptor(&format!("{}/a", server.url()), Some(vec!["status == 200"])),
             get_descriptor(&format!("{}/b", server.url()), Some(vec!["status == 200"])),
         ]);
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 2);
         assert!(matches!(summary[0], SummaryResult::Passed));
@@ -489,21 +251,19 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor("/items", Some(vec!["status == 200"]))]);
 
-        let mut summary = Vec::new();
-        make_runner(
-            &dir,
-            &engine,
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    base_uri: Some(server.url()),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                base_uri: Some(server.url()),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         assert_eq!(summary.len(), 1);
@@ -522,7 +282,6 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![Descriptor {
             name: Some("override".to_string()),
             description: None,
@@ -541,24 +300,35 @@ mod tests {
             file: None,
         }]);
 
-        let mut summary = Vec::new();
         // base_options has a bogus URI; descriptor.options has the real one
-        make_runner(
-            &dir,
-            &engine,
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    base_uri: Some("http://127.0.0.1:1".to_string()),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                base_uri: Some("http://127.0.0.1:1".to_string()),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Passed));
         mock.assert_async().await;
+    }
+
+    fn spec_file(children: Vec<Descriptor>) -> Descriptor {
+        Descriptor {
+            name: Some("test spec".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(children),
+            options: None,
+            file: Some(PathBuf::from("test.spec.yml")),
+        }
     }
 
     #[tokio::test]
@@ -578,8 +348,6 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
-
         let seed = Descriptor {
             name: Some("seed".to_string()),
             description: None,
@@ -609,11 +377,12 @@ mod tests {
             file: None,
         };
 
-        let dir = dir_node(vec![seed, consumer]);
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let dir = dir_node(vec![spec_file(vec![seed, consumer])]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 2);
         assert!(matches!(summary[1], SummaryResult::Passed));
@@ -631,8 +400,6 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
-
         let mut envs = HashMap::new();
         envs.insert("HOST".to_string(), server.url());
 
@@ -654,13 +421,73 @@ mod tests {
             envs,
         );
 
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Passed));
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn nested_titles_are_available_to_report_templates() {
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("GET", "/users")
+            .with_status(200)
+            .create_async()
+            .await;
+        let report_dir = tempfile::tempdir().unwrap();
+        let report_path = report_dir.path().join("report.txt");
+        let templates = HashMap::from([(
+            "file".to_string(),
+            ReportTemplate {
+                test_template: Some("{{ full_name }}\n".to_string()),
+                section_template: None,
+                error_template: None,
+                debug_template: None,
+                title_template: None,
+                summary_template: None,
+                file: Some(ReportFile {
+                    dir: Some(report_dir.path().to_path_buf()),
+                    file_name: Some("report.txt".to_string()),
+                }),
+            },
+        )]);
+        let mut test = get_descriptor(&format!("{}/users", server.url()), None);
+        test.name = Some("creates a user".to_string());
+        let section = Descriptor {
+            name: Some("accounts".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(vec![test]),
+            options: None,
+            file: None,
+        };
+        let dir = dir_node(vec![spec_file(vec![section])]);
+        let engine = LiquidEngine;
+
+        execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    reports: Some(vec!["file".to_string()]),
+                    ..Default::default()
+                },
+            ),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(
+            std::fs::read_to_string(report_path).unwrap(),
+            "test spec › accounts › creates a user\n"
+        );
         mock.assert_async().await;
     }
 
@@ -682,24 +509,22 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(
             &format!("{}/unstable", server.url()),
             Some(vec!["status == 200"]),
         )]);
 
-        let mut summary = Vec::new();
-        make_runner(
-            &dir,
-            &engine,
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    retries: Some(1),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                retries: Some(1),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         assert_eq!(summary.len(), 1);
@@ -720,24 +545,22 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(
             &format!("{}/down", server.url()),
             Some(vec!["status == 200"]),
         )]);
 
-        let mut summary = Vec::new();
-        make_runner(
-            &dir,
-            &engine,
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    retries: Some(2),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                retries: Some(2),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         assert_eq!(summary.len(), 1);
@@ -770,6 +593,7 @@ mod tests {
                 test_template: Some("{{ status }}\n".to_string()),
                 section_template: None,
                 error_template: None,
+                debug_template: None,
                 title_template: None,
                 summary_template: None,
                 file: Some(ReportFile {
@@ -780,25 +604,23 @@ mod tests {
         );
 
         let engine = LiquidEngine;
-        let reporter = reporter_for();
         let dir = dir_node(vec![get_descriptor(
             &format!("{}/reported", server.url()),
             Some(vec!["status == 200"]),
         )]);
 
-        let mut summary = Vec::new();
-        make_runner(
-            &dir,
-            &engine,
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    reports: Some(vec!["file".to_string()]),
+                    retries: Some(1),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                reports: Some(vec!["file".to_string()]),
-                retries: Some(1),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         let report = std::fs::read_to_string(report_path).unwrap();
@@ -841,7 +663,6 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
         let seed = Descriptor {
             name: Some("seed".to_string()),
             description: None,
@@ -887,19 +708,18 @@ mod tests {
             file: None,
         };
 
-        let dir = dir_node(vec![seed, unstable, consumer_descriptor]);
-        let mut summary = Vec::new();
-        make_runner(
-            &dir,
-            &engine,
+        let dir = dir_node(vec![spec_file(vec![seed, unstable, consumer_descriptor])]);
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    retries: Some(1),
+                    ..Default::default()
+                },
+            ),
             &templates,
-            &reporter,
-            RunOptions {
-                retries: Some(1),
-                ..Default::default()
-            },
         )
-        .execute_dir(&mut summary)
         .await;
 
         assert_eq!(summary.len(), 3);
@@ -931,8 +751,6 @@ mod tests {
 
         let engine = LiquidEngine;
         let templates = HashMap::new();
-        let reporter = reporter_for();
-
         let file_a = Descriptor {
             name: Some("file-a".to_string()),
             description: None,
@@ -963,10 +781,11 @@ mod tests {
         };
 
         let dir = dir_node(vec![file_a, file_b]);
-        let mut summary = Vec::new();
-        make_runner(&dir, &engine, &templates, &reporter, RunOptions::default())
-            .execute_dir(&mut summary)
-            .await;
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
 
         assert_eq!(summary.len(), 2);
         assert!(matches!(summary[0], SummaryResult::Passed));

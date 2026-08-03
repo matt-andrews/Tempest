@@ -55,7 +55,6 @@ describe:
     description: "tests saving variables from complex json objects"
     options:
       base_uri: "{{ env.GITHUB_BASE_URI }}"
-      debug: true
     describe:
       - name: "Fetch the octocat/Hello-World repo"
         test:

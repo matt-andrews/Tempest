@@ -54,7 +54,7 @@ CLI behavior:
 
 - `--path` is the test-project root. It defaults to `/etc/tests` for Docker volume mounts.
 - `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project.
-- `--debug` prints each resolved request URL.
+- `--debug` prints detailed request/response data.
 - `--retries N` sets the default number of additional attempts after a failed test.
 - `--strict` makes an otherwise non-failing run containing flaky tests exit with code 2.
 - `--warn-as-err` makes any collected warning cause exit code 1. `--warn-as-err` also has the short form `-w`.
@@ -156,7 +156,7 @@ reports:
 Option behavior:
 
 - `base_uri` is prepended to a route that does not start with `http://` or `https://`. Slashes at the join are normalized.
-- `debug` enables resolved-URL logging.
+- `debug` enables detailed request/response data.
 - `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
 - `reports` selects report templates by name.
 - The CLI starts with `reports: ["console"]`, `debug: false`, and `retries: 0`.
@@ -326,7 +326,7 @@ Variable scope and behavior:
 
 Tempest includes these built-in report templates:
 
-- `console`: default console output.
+- `console`: default console output. It prints one line per passing test, combines nested descriptor names with ` › `, and prints only failed assertions beneath failed tests.
 - `json`: appends JSON output to `./tempest-reports/report-{{start_timestamp}}.json`.
 
 Enable reports with options:
@@ -366,6 +366,9 @@ summary_template: |
 error_template: |
   Template error: {{ liquid_error_message }}
 
+debug_template: |
+  DEBUG: {{ debug_message }}
+
 file:
   dir: ./tempest-reports
   file_name: report-{{start_timestamp}}.txt
@@ -389,6 +392,8 @@ Title template:
 Section and test templates:
 
 - `name`
+- `title_path`: array of rendered ancestor descriptor names.
+- `full_name`: the rendered ancestor names and current descriptor name joined with ` › `.
 - `description`
 - `passed`
 - `test_count`: number of previously completed tests already counted in the run summary, represented as a string.
@@ -418,6 +423,10 @@ Summary template:
 Error template:
 
 - `liquid_error_message`
+
+Debug template:
+
+- `debug_message`: complex request/response data emitted when debug output is enabled.
 
 The Liquid engine includes its standard library plus Tempest filters. Tempest filters include `json`, `red`, `green`, `yellow`, `bright_red`, `bright_green`, `bright_blue`, `bright_purple`, their `on_*` background variants, `color_status`, and `color_duration`. Standard filters used by built-in templates include `round`.
 

@@ -2,17 +2,17 @@ use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::directory_runner::DirectoryRunner;
-use crate::pipeline::reporting::{AnyReporter, Reporter, reporter_for};
+use crate::pipeline::file_scheduler::FileScheduler;
+use crate::pipeline::report_coordinator::ReportCoordinator;
 use crate::templating::liquid::LiquidEngine;
 use std::path::Path;
 
 pub struct PipelineRunner<'a> {
-    reporter: AnyReporter,
     options: RunOptions,
     discovered: &'a DiscoveryResult,
-    summary: Vec<SummaryResult>,
     template_engine: LiquidEngine,
     top_path: &'a Path,
+    report_coordinator: ReportCoordinator<'a>,
 }
 
 impl<'a> PipelineRunner<'a> {
@@ -23,28 +23,24 @@ impl<'a> PipelineRunner<'a> {
     ) -> Self {
         let options = merge_option_chain(&default_options, &discovery_result.directory.options);
         Self {
-            reporter: reporter_for(),
             options,
             discovered: discovery_result,
-            summary: Vec::new(),
             template_engine: LiquidEngine,
             top_path,
+            report_coordinator: ReportCoordinator::new(&discovery_result.templates),
         }
     }
     pub fn title(&self) {
-        self.reporter.title(
-            &self.options,
-            &self.discovered.templates,
-            self.discovered.directory.test_count(),
-        );
+        self.report_coordinator
+            .title(&self.options, self.discovered.directory.test_count());
     }
 
     pub fn summary(&self) -> SummaryResult {
-        self.reporter
-            .summary(&self.options, &self.discovered.templates, &self.summary)
+        self.report_coordinator.summary(&self.options)
     }
 
     pub async fn walk(&mut self) {
+        let mut scheduler = FileScheduler::new();
         for directory in self.discovered.directory.walk() {
             let base_options = merge_option_chain(&self.options, &directory.options);
 
@@ -52,13 +48,13 @@ impl<'a> PipelineRunner<'a> {
                 base_options,
                 directory,
                 &self.template_engine,
-                &self.discovered.templates,
-                &self.reporter,
                 self.top_path,
             );
 
-            run.execute_dir(&mut self.summary).await;
+            run.schedule(&mut scheduler);
         }
+
+        scheduler.execute(&mut self.report_coordinator).await;
     }
 }
 

@@ -86,6 +86,12 @@ color_filter!(OnRedFilter, OnRedFilterImpl, "on_red", on_red);
 color_filter!(OnGreenFilter, OnGreenFilterImpl, "on_green", on_green);
 color_filter!(OnYellowFilter, OnYellowFilterImpl, "on_yellow", on_yellow);
 color_filter!(
+    OnBrightYellowFilter,
+    OnBrightYellowFilterImpl,
+    "on_bright_yellow",
+    on_bright_yellow
+);
+color_filter!(
     OnBrightRedFilter,
     OnBrightRedFilterImpl,
     "on_bright_red",
