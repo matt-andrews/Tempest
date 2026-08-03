@@ -99,7 +99,7 @@ describe:
       - name: "Download emoji and compare to pre-downloaded copy"
         description: "This test downloads the octocat emoji defined in the previous test, and then compares it to the local copy"
         test:
-          route: "{{ file.emoji_octocat }}"
+          route: "{{ vars.emoji_octocat }}"
           assert:
             - status == 200
             - bytes == fileBytes("octocat.png")

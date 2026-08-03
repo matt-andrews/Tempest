@@ -21,10 +21,10 @@ describe:
       - name: "Variable reading experiment"
         description: "we can read variables published by other tests"
         test:
-          route: "/status/{{ file.var_status }}"
+          route: "/status/{{ vars.var_status }}"
           assert:
-            - status == {{ file.var_status }}
-            - "'{{ file.var_body }}' == 'HTTPBIN'"
+            - status == {{ vars.var_status }}
+            - "'{{ vars.var_body }}' == 'HTTPBIN'"
 
   - name: "Headers as vars"
     description: "Tests saving response headers to variables"
@@ -45,11 +45,11 @@ describe:
         test:
           route: "/get"
           headers:
-            X-Tempest-Test: "{{ file.fwdContentType }}"
+            X-Tempest-Test: "{{ vars.fwdContentType }}"
           assert:
             - status == 200
             - body.contains("application/json")
-            - '"{{ file.fwdContentType }}" == "application/json"'
+            - '"{{ vars.fwdContentType }}" == "application/json"'
 
   - name: "Json objects"
     description: "tests saving variables from complex json objects"
@@ -71,7 +71,7 @@ describe:
 
       - name: "Fetch the octocat/Hello-World repo dynamically"
         test:
-          route: "/repos/{{ file.github_user }}/{{ file.github_repo }}"
+          route: "/repos/{{ vars.github_user }}/{{ vars.github_repo }}"
           headers:
             Accept: "application/vnd.github.v3+json"
           assert:
