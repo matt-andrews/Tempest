@@ -16,6 +16,7 @@ describe:
             - body.json().all(post, post.id >= 1 && post.id <= 100 && post.userId >= 1 && post.userId <= 10)
             - body.json().filter(post, post.userId == 7).size() == 10
             - body.json().exists_one(post, post.id == 1 && post.title.startsWith("sunt aut facere"))
+            - '"{\"testJson\": \"caching discriminator works!\" }".json().testJson == "caching discriminator works!"'
 
       - name: "Get post by ID"
         test:

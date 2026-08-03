@@ -114,6 +114,17 @@ mod tests {
     }
 
     #[test]
+    fn nested_json_calls_parse_their_own_source() {
+        let body = r#"{"owner":{"content":"[1,2]"}}"#;
+        let a = eval(
+            "body.json().owner.content.json()[0] == 1",
+            &result(200, body),
+        );
+
+        assert!(a.passed, "{}", a.error);
+    }
+
+    #[test]
     fn header_value_comparison() {
         let r = with_header(result(200, ""), "x-request-id", "abc-123");
         assert!(eval(r#"headers["x-request-id"] == "abc-123""#, &r).passed);
