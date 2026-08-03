@@ -23,7 +23,7 @@ impl RunOptions {
             reports: Some(vec!["console".to_string()]),
             start_time: Some(DateTime::now()),
             retries: Some(retries),
-            concurrent: Some(true),
+            concurrent: None,
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -52,7 +52,7 @@ mod tests {
         assert_eq!(d.debug, Some(false));
         assert_eq!(d.reports, Some(vec!["console".to_string()]));
         assert_eq!(d.retries, Some(33));
-        assert_eq!(d.concurrent, Some(true));
+        assert_eq!(d.concurrent, None);
     }
 
     #[test]
@@ -62,7 +62,7 @@ mod tests {
         assert_eq!(d.debug, Some(true));
         assert_eq!(d.reports, Some(vec!["console".to_string()]));
         assert_eq!(d.retries, Some(12));
-        assert_eq!(d.concurrent, Some(true));
+        assert_eq!(d.concurrent, None);
     }
 
     #[test]
