@@ -5,14 +5,14 @@ edition = "2024"
 [dependencies]
 clap = { version = "4.6.2", features = ["derive"] }
 tokio = { version = "1.53.0", features = ["rt", "rt-multi-thread", "macros"] }
-anyhow = "1.0.102"
+anyhow = "1.0.104"
 dotenvy = "0.15.7"
 serde = { version = "1.0.229", features = ["derive"] }
 colored = "3.1.1"
 enum_dispatch = "0.3.13"
 noyalib = { version = "0.0.17", features = ["compat-serde-yaml"] }
 reqwest = { version = "0.13.4", features = ["json"] }
-serde_json = "1.0.150"
+serde_json = "1.0.151"
 cel-interpreter = { version = "0.10.0", features = ["json"] }
 liquid = "0.26.11"
 liquid-core = "0.26.11"
@@ -22,7 +22,7 @@ dunce = "1"
 cel-parser = "0.10.1"
 scraper = { version = "0.27.0", features = ["atomic"] }
 simdxml = "0.2.1"
-base64 = "0.22"
+base64 = "0.23"
 
 [dev-dependencies]
 tempfile = "3.27.0"
