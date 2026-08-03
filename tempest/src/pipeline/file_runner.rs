@@ -10,10 +10,9 @@ use crate::pipeline::assertions::{AssertionEvaluator, assertion_evaluator_for};
 use crate::pipeline::runners::{TestRunner, resolved_route, test_runner_for};
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use crate::templating::liquid::LiquidEngine;
-use std::collections::HashMap;
-use std::fmt::format;
-use std::path::{Path, PathBuf};
 use reqwest::header::HeaderMap;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 
 pub struct FileRunner<'a> {
     ordinal: usize,
@@ -157,9 +156,9 @@ impl<'a> FileRunner<'a> {
         let runner = test_runner_for(&test, options);
         let test_result = runner.run().await;
 
-        let debug_message = match options.debug.unwrap_or(false){
+        let debug_message = match options.debug.unwrap_or(false) {
             true => Some(self.format_debug_message(&test, options, &test_result)),
-            false => None
+            false => None,
         };
 
         let response_content_cache = ResponseContentCache::default();
@@ -187,15 +186,22 @@ impl<'a> FileRunner<'a> {
         }
     }
 
-    fn format_debug_message(&self, test_spec: &TestSpec, options: &RunOptions, test_result: &TestResult) -> String{
-        format!("Route: {} - {}\nHeaders: \n{}\nBody: \n{}",
-                resolved_route(&test_spec, options),
-                test_result.status.code,
-                self.headers_to_display(&test_result.headers),
-                test_result.body)
+    fn format_debug_message(
+        &self,
+        test_spec: &TestSpec,
+        options: &RunOptions,
+        test_result: &TestResult,
+    ) -> String {
+        format!(
+            "Route: {} - {}\nHeaders: \n{}\nBody: \n{}",
+            resolved_route(test_spec, options),
+            test_result.status.code,
+            self.headers_to_display(&test_result.headers),
+            test_result.body
+        )
     }
 
-    fn headers_to_display(&self, headers: &HeaderMap) -> String{
+    fn headers_to_display(&self, headers: &HeaderMap) -> String {
         let mut map: HashMap<String, Vec<String>> = HashMap::new();
 
         for (key, value) in headers.iter() {
@@ -204,9 +210,10 @@ impl<'a> FileRunner<'a> {
             map.entry(k).or_default().push(v);
         }
 
-        let result: Vec<String> = map.iter().map(|(k, v)| {
-            format!("{}: {}", k, v.join(";"))
-        }).collect();
+        let result: Vec<String> = map
+            .iter()
+            .map(|(k, v)| format!("{}: {}", k, v.join(";")))
+            .collect();
         result.join("\n")
     }
 
