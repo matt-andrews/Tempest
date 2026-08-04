@@ -26,7 +26,7 @@ Create a directory for your tests and add `my-test.spec.yml`:
 # my-test.spec.yml
 name: "Fetch the octocat/Hello-World repo"
 test:
-  route: "/repos/octocat/Hello-World"
+  route: "https://api.github.com/repos/octocat/Hello-World"
   headers:
     Accept: "application/vnd.github.v3+json"
   assert:
