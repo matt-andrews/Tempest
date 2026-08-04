@@ -33,8 +33,10 @@ Run from this repository with Cargo:
 
 ```bash
 cd tempest
-cargo run -- test --path ../examples/tests
+cargo run -- test --path ../examples/tests --run pass
 ```
+
+The full `examples/tests` tree intentionally contains passing, flaky, and failing tests and calls public network services. Use `--run pass` for a successful smoke run.
 
 ## CLI
 
@@ -55,8 +57,8 @@ CLI behavior:
 
 - `--path` is the test-project root. It defaults to `/etc/tests` for Docker volume mounts.
 - `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project.
-- `--debug` prints detailed request/response data.
-- `--retries N` sets the default number of additional attempts after a failed test.
+- `--debug` prints the resolved route, response status, response headers, and response body. It does not print outgoing request headers or the request body.
+- `--retries N` sets the default number of additional attempts after an assertion failure.
 - `--workers N` sets the maximum number of spec files in flight. Supplying it enables file concurrency; `--workers 1` forces serial execution.
 - `--strict` makes an otherwise non-failing run containing flaky tests exit with code 2.
 - `--warn-as-err` makes any collected warning cause exit code 1. `--warn-as-err` also has the short form `-w`.
@@ -74,7 +76,7 @@ Recognized YAML files:
 
 File names matter. The YAML file stem must end with `.spec`, `.config`, or `.template`. For example, `users.spec.yml` is recognized, but `users.yml` is ignored.
 
-Files whose names end in `.env` provide Liquid input variables. Use simple `KEY=value` lines; blank lines and comments beginning with `#` are ignored.
+Files whose names end in `.env` provide Liquid input variables. Use simple `KEY=value` lines. Blank lines are ignored, and `#` begins a comment even when it appears after a value. These files are not a full shell parser: do not rely on shell expansion, `export`, or complex quoting.
 
 ```dotenv
 API_BASE_URI=https://api.example.com
@@ -124,6 +126,8 @@ test:
 
 Nested `describe` blocks are traversed depth-first in source order. A section is reported immediately before its own tests. Options on a descriptor are inherited by its descendants, while options on sibling branches do not leak into one another.
 
+`tags` is currently metadata only. Tempest parses and Liquid-renders the field, but tags cannot select or filter tests.
+
 Common nested example:
 
 ```yaml
@@ -163,13 +167,13 @@ Option behavior:
 - `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
 - `reports` selects report templates by name.
 - `concurrent` enables concurrent spec-file execution when set in the root project config. Tests within each file, including retries and variable assignment, remain sequential.
-- The CLI starts with `reports: ["console"]`, `debug: false`, and `retries: 0`.
+- The CLI starts with `reports: ["console"]`, `debug: false`, `retries: 0`, and serial spec-file execution.
 - When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
 - Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
 
 `concurrent` is a suite scheduler setting rather than a descriptor behavior, so set it only in the root project config. With `concurrent: true` and no `--workers` argument, Tempest uses `std::thread::available_parallelism()` as the worker limit. An explicit `--workers N` takes precedence and also enables concurrency even when `concurrent` is absent or false.
 
-A test that fails and later passes during its retries is `flaky`. Each attempt is reported, but the final summary counts the descriptor once. The file-variable context is restored before each retry, so values assigned by a failed attempt do not leak into the next attempt.
+A test that fails and later passes during its retries is `flaky`. Each attempt is reported, but the final summary counts the descriptor once. The saved-variable context is restored before each retry, so values assigned by a failed attempt do not leak into the next attempt.
 
 The zero-based Liquid input variable `retry_attempts` is available while rendering a retried test:
 
@@ -220,7 +224,7 @@ Before a request is sent, Tempest renders spec strings with Liquid. This include
 Useful Liquid input globals:
 
 - `env`: values loaded from discovered `.env` files.
-- `file`: values saved by earlier tests in the same spec file.
+- `vars`: values saved by earlier tests in the same spec file.
 - `retry_attempts`: zero-based attempt number; `0` is the initial attempt.
 - `file_name`: the current spec-file path as a string.
 
@@ -237,7 +241,7 @@ Numeric and boolean values can normally be interpolated without quotes:
 
 ```yaml
 assert:
-  - status == {{ vars.expected_status }}
+  - 'status == {{ vars.expected_status }}'
 ```
 
 ## CEL Assertions
@@ -255,8 +259,12 @@ Available CEL response variables:
 
 Available Tempest CEL functions:
 
-- `body.json()`: parses the response body and returns CEL-compatible JSON data.
+- `body.json()`: parses a string as JSON and returns CEL-compatible JSON data. It is normally called on the response body.
+- `body.css(selector)`: parses an HTML string and returns matching elements. Each result contains `tag`, normalized `text`, and an `attrs` map. Invalid selectors produce evaluation errors.
+- `body.xpath(expression)`: evaluates XPath against an XML string. Boolean, number, and string results become CEL scalars; node sets become lists of strings.
 - `fileBytes(path)`: reads a file and returns bytes. Relative paths resolve from the current spec file's directory. Paths beginning with `/` resolve from the suite root selected by `--path`. Paths may not escape that root.
+- `bytes.toBase64()`: encodes bytes as a standard Base64 string.
+- `string.fromBase64()`: decodes a standard Base64 string and returns bytes. Invalid Base64 produces an evaluation error.
 
 The old standalone `json` variable is obsolete and unavailable. Referencing it emits a warning explaining that `body.json()` must be used. Do not generate `json.id`, `json["id"]`, or similar expressions.
 
@@ -271,9 +279,15 @@ assert:
   - body.json()["display-name"] != ""
   - body.json()[0].id == 1
   - body.json().all(item, item.id > 0)
+  - body.css("title").exists(element, element.text == "Example Domain")
+  - body.css("a[href]").all(element, element.attrs.href.startsWith("https://"))
+  - body.xpath("count(/slideshow/slide)") == 2.0
+  - body.xpath("/slideshow/slide/title") == ["First", "Second"]
   - headers["content-type"].contains("application/json")
   - duration < 1000u
   - bytes == fileBytes("fixtures/avatar.png")
+  - bytes.toBase64() == "aGVsbG8="
+  - '"aGVsbG8=".fromBase64() == b"hello"'
 ```
 
 Both dotted JSON field access and bracket access work. Prefer dotted access for ordinary identifier-like keys and brackets for keys containing punctuation or other characters that are not valid CEL identifiers.
@@ -306,7 +320,7 @@ vars:
   user_id: "{{ body.json().id }}"
 ```
 
-Saved values are exposed to subsequent tests through the Liquid `file` object:
+Saved values are exposed to subsequent tests through the Liquid `vars` object:
 
 ```yaml
 name: "Use the saved user"
@@ -324,7 +338,7 @@ Variable scope and behavior:
 - A saved variable is available only to later descriptors from the same spec file.
 - The variable context resets when execution moves to another spec file.
 - Define a producer before its consumer; do not rely on ordering across different spec files.
-- CEL values are converted to JSON-compatible values before being placed in `file`.
+- CEL values are converted to JSON-compatible values before being placed in `vars`.
 - If a variable expression cannot be evaluated or converted, Tempest stores `null`. A variable-assignment error does not itself fail the test.
 - Failed retry attempts have their variable mutations rolled back before the next attempt.
 
@@ -350,7 +364,7 @@ reports:
   - myreport
 ```
 
-A user template with the same registered name can replace a built-in template. Unknown names are ignored.
+Unknown report names are ignored. Avoid duplicate registered names, including built-in names: later-discovered templates replace earlier entries, and precedence depends on discovery location and order.
 
 ## Custom Report Templates
 
@@ -367,7 +381,7 @@ test_template: |
   {{ name }}: {{ status }} {{ status_message }}
 
 summary_template: |
-  Passed: {{ passed }}, Failed: {{ failed }}, Flaky: {{ flaky }}
+  Passed: {{ passed }}, Failed: {{ failed }}, Flaky: {{ flaky }}, Duration: {{ duration }}ms
 
 error_template: |
   Template error: {{ liquid_error_message }}
@@ -425,6 +439,7 @@ Summary template:
 - `passed`
 - `failed`
 - `flaky`
+- `duration`: total run duration in whole milliseconds.
 
 Error template:
 
@@ -432,7 +447,7 @@ Error template:
 
 Debug template:
 
-- `debug_message`: complex request/response data emitted when debug output is enabled.
+- `debug_message`: resolved route, response status, response headers, and response body emitted when debug output is enabled.
 
 The Liquid engine includes its standard library plus Tempest filters. Tempest filters include `json`, `red`, `green`, `yellow`, `bright_red`, `bright_green`, `bright_blue`, `bright_purple`, their `on_*` background variants, `color_status`, and `color_duration`. Standard filters used by built-in templates include `round`.
 
@@ -498,21 +513,26 @@ describe:
 ## Exit Codes
 
 - `0`: no failed tests; flaky tests also return 0 unless `--strict` is used.
-- `1`: one or more tests failed, or warnings exist while `--warn-as-err` is enabled.
+- `1`: one or more tests failed, warnings exist while `--warn-as-err` is enabled, or Tempest encounters an expected operational error such as invalid YAML or report I/O failure.
 - `2`: one or more tests were flaky, none failed, and `--strict` was enabled.
+- `70`: Tempest encountered an unexpected internal panic.
 
 Warning-as-error handling takes precedence over the flaky exit code.
+
+Expected operational errors are written to stderr without a stack trace. Unexpected internal panics print a concise fatal message; set `RUST_BACKTRACE=1` to request diagnostic backtrace details.
 
 ## Current Limitations and Gotchas
 
 - Tempest currently runs HTTP tests only.
 - The `query` field is modeled but not implemented. Put query strings in `route`.
+- `tags` is metadata only and cannot currently select or filter tests.
 - Assertions and saved-variable expressions are CEL, not JavaScript or Liquid.
 - The old CEL `json` variable is obsolete and does not work; always use `body.json()`.
 - Unknown HTTP verbs return a default empty result with status `0` rather than a parse error.
 - The HTTP client follows reqwest defaults, including redirect behavior.
 - Request status alone does not determine success; write an assertion such as `status == 200`.
 - JSON report files and other file-backed reports are appended runtime artifacts unless intentionally committed as examples.
+- Repository examples call public services and require network access. The full example tree intentionally contains failing and flaky tests.
 
 ## Repository Layout for Contributors
 
@@ -537,7 +557,7 @@ Common verification commands:
 cd tempest
 cargo test
 cargo clippy --all-targets --all-features -- -D warnings
-cargo run -- test --path ../examples/tests
+cargo run -- test --path ../examples/tests --run pass
 ```
 
 When changing docs or examples, keep them aligned with the current models, runner, CEL context, and examples. Do not document planned fields as usable until the execution path implements them.
