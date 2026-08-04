@@ -9,6 +9,7 @@ mod utils;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
+use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use futures_util::FutureExt;
@@ -45,6 +46,8 @@ enum Commands {
         /// Maximum number of spec files to execute at once.
         #[arg(long)]
         workers: Option<NonZeroUsize>,
+        #[arg(short, long)]
+        env: Option<Vec<String>>,
     },
 }
 
@@ -75,16 +78,15 @@ async fn run() -> anyhow::Result<ExitCode> {
             strict,
             warn_as_err,
             workers,
+            env,
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
 
-            let discovery = &discovery::discover(
-                &dunce::canonicalize(&path)?,
-                None,
-                &mut HashMap::new(),
-                run_path,
-            )?;
+            let mut envs = parse_cli_envs(env)?;
+
+            let discovery =
+                &discovery::discover(&dunce::canonicalize(&path)?, None, &mut envs, run_path)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -94,6 +96,27 @@ async fn run() -> anyhow::Result<ExitCode> {
             Ok(exit)
         }
     }
+}
+
+fn parse_cli_envs(env: Option<Vec<String>>) -> anyhow::Result<HashMap<String, String>> {
+    env.unwrap_or_default()
+        .into_iter()
+        .map(|entry| -> anyhow::Result<(String, String)> {
+            let (key, value) = entry.split_once('=').ok_or_else(|| {
+                anyhow::anyhow!("invalid environment variable `{entry}`; expected KEY=VALUE")
+            })?;
+
+            let key = key.trim();
+            let value = value.trim();
+            
+            ensure!(
+                !key.is_empty(),
+                "invalid environment variable `{entry}`; key cannot be empty"
+            );
+
+            Ok((key.to_owned(), value.to_owned()))
+        })
+        .collect()
 }
 
 fn install_panic_hook() {
