@@ -63,6 +63,7 @@ CLI behavior:
 - `--strict` makes an otherwise non-failing run containing flaky tests exit with code 2.
 - `--warn-as-err` makes any collected warning cause exit code 1. `--warn-as-err` also has the short form `-w`.
 - `--debug` and `--strict` have the short forms `-d` and `-s`.
+- `--env` or `-e` is an array of base environment variables. Eg; `-e KEY1=value1 -e KEY2=value2`
 
 ## File Discovery
 
