@@ -9,6 +9,7 @@ mod utils;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
+use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
 use futures_util::FutureExt;
@@ -18,7 +19,6 @@ use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::process;
-use anyhow::ensure;
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -85,12 +85,8 @@ async fn run() -> anyhow::Result<ExitCode> {
 
             let mut envs = parse_cli_envs(env)?;
 
-            let discovery = &discovery::discover(
-                &dunce::canonicalize(&path)?,
-                None,
-                &mut envs,
-                run_path,
-            )?;
+            let discovery =
+                &discovery::discover(&dunce::canonicalize(&path)?, None, &mut envs, run_path)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -106,13 +102,9 @@ fn parse_cli_envs(env: Option<Vec<String>>) -> anyhow::Result<HashMap<String, St
     env.unwrap_or_default()
         .into_iter()
         .map(|entry| -> anyhow::Result<(String, String)> {
-            let (key, value) = entry
-                .split_once('=')
-                .ok_or_else(|| {
-                    anyhow::anyhow!(
-                        "invalid environment variable `{entry}`; expected KEY=VALUE"
-                    )
-                })?;
+            let (key, value) = entry.split_once('=').ok_or_else(|| {
+                anyhow::anyhow!("invalid environment variable `{entry}`; expected KEY=VALUE")
+            })?;
 
             ensure!(
                 !key.is_empty(),
