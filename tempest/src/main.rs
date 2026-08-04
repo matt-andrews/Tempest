@@ -106,6 +106,9 @@ fn parse_cli_envs(env: Option<Vec<String>>) -> anyhow::Result<HashMap<String, St
                 anyhow::anyhow!("invalid environment variable `{entry}`; expected KEY=VALUE")
             })?;
 
+            let key = key.trim();
+            let value = value.trim();
+            
             ensure!(
                 !key.is_empty(),
                 "invalid environment variable `{entry}`; key cannot be empty"
