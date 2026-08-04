@@ -18,6 +18,7 @@ use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::process;
+use anyhow::ensure;
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -45,6 +46,8 @@ enum Commands {
         /// Maximum number of spec files to execute at once.
         #[arg(long)]
         workers: Option<NonZeroUsize>,
+        #[arg(short, long)]
+        env: Option<Vec<String>>,
     },
 }
 
@@ -75,14 +78,17 @@ async fn run() -> anyhow::Result<ExitCode> {
             strict,
             warn_as_err,
             workers,
+            env,
         } => {
             let options = RunOptions::default_from_args(debug, retries);
             let run_path = &resolve_run_path(&path, &run)?;
 
+            let mut envs = parse_cli_envs(env)?;
+
             let discovery = &discovery::discover(
                 &dunce::canonicalize(&path)?,
                 None,
-                &mut HashMap::new(),
+                &mut envs,
                 run_path,
             )?;
 
@@ -94,6 +100,28 @@ async fn run() -> anyhow::Result<ExitCode> {
             Ok(exit)
         }
     }
+}
+
+fn parse_cli_envs(env: Option<Vec<String>>) -> anyhow::Result<HashMap<String, String>> {
+    env.unwrap_or_default()
+        .into_iter()
+        .map(|entry| -> anyhow::Result<(String, String)> {
+            let (key, value) = entry
+                .split_once('=')
+                .ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "invalid environment variable `{entry}`; expected KEY=VALUE"
+                    )
+                })?;
+
+            ensure!(
+                !key.is_empty(),
+                "invalid environment variable `{entry}`; key cannot be empty"
+            );
+
+            Ok((key.to_owned(), value.to_owned()))
+        })
+        .collect()
 }
 
 fn install_panic_hook() {
