@@ -60,7 +60,7 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
           repository: ${{ secrets.DOCKERHUB_USERNAME }}/tempest
-          readme-filepath: ./DOCKER_HUB_README.md
+          readme-filepath: ./README.md
 
   create-release:
     needs: [publish-app]
