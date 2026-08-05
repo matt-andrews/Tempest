@@ -6,9 +6,10 @@ test_template: |
   {% if test_count > '0' or retry_count > '0' %},{%endif%}
     {
       "name": {{ name | json }},
-      "status": {{ status }},
-      "statusMessage": {{ status_message | json }},
-      "duration": {{ duration_ms | round: 2 }},
+      "skipped": {{ skipped }},
+      "status": {% if skipped %}null{% else %}{{ status }}{% endif %},
+      "statusMessage": {% if skipped %}null{% else %}{{ status_message | json }}{% endif %},
+      "duration": {% if skipped %}null{% else %}{{ duration_ms | round: 2 }}{% endif %},
       "failed": [
         {% assign failed_assertions = assertions | where: "passed", false %}{%- for assert in failed_assertions %}
           {% if assert.passed == false %}{{ assert.expr | json }}{% if assert.error != blank %},{{ assert.error | json }}{% endif %}{% endif %}{% unless forloop.last %}, {% endunless %}
@@ -25,7 +26,8 @@ summary_template: |
     "summary": {
       "passed": {{ passed }},
       "flaky": {{ flaky }},
-      "failed": {{ failed }} 
+      "failed": {{ failed }},
+      "skipped": {{ skipped }}
     }}
 
 file:
