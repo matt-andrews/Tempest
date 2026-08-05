@@ -164,8 +164,9 @@ impl<'a> FileRunner<'a> {
             };
         };
 
-        if let Some(skip) = options.skip
-            && skip
+        if let Some(skip) = &options.skip
+            && skip.resolve(self.template_engine, &liquid::object!(&context))
+                .unwrap_or(false)
         {
             return TestRunOutcome {
                 test_result: None,

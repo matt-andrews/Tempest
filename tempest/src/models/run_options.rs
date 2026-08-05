@@ -2,6 +2,7 @@ use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
+use crate::models::templated::Templated;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
@@ -10,7 +11,7 @@ pub struct RunOptions {
     pub reports: Option<Vec<String>>,
     pub retries: Option<u8>,
     pub concurrent: Option<bool>,
-    pub skip: Option<bool>,
+    pub skip: Option<Templated<bool>>,
 
     #[serde(skip)]
     pub start_time: Option<DateTime>,

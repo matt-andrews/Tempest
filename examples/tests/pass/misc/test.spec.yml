@@ -29,3 +29,14 @@ describe:
       route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
       assert:
         - status == 201
+
+  #test the viability of a templated boolean.
+  #this test will run once and intentionally fail the assertion.
+  #and on retry != 0 we skip
+  - name: "testing `skip` option with liquid templates"
+    options:
+      skip: '{% if retry_attempts == 0 %}false{% else %}true{% endif %}'
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - status == 0

@@ -8,3 +8,4 @@ pub mod run_options;
 pub mod summary_result;
 pub mod test_result;
 pub mod test_spec;
+pub mod templated;
