@@ -10,6 +10,7 @@ pub struct RunOptions {
     pub reports: Option<Vec<String>>,
     pub retries: Option<u8>,
     pub concurrent: Option<bool>,
+    pub skip: Option<bool>,
 
     #[serde(skip)]
     pub start_time: Option<DateTime>,
@@ -24,6 +25,7 @@ impl RunOptions {
             start_time: Some(DateTime::now()),
             retries: Some(retries),
             concurrent: None,
+            skip: None,
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -34,6 +36,7 @@ impl RunOptions {
             start_time: other.start_time.or(self.start_time),
             retries: other.retries.or(self.retries),
             concurrent: other.concurrent.or(self.concurrent),
+            skip: other.skip.or(self.skip),
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
@@ -74,6 +77,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
@@ -82,6 +86,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -99,6 +104,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -107,6 +113,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
@@ -124,6 +131,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -132,6 +140,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);

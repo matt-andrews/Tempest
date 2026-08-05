@@ -82,6 +82,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         }
     }
 
@@ -208,6 +209,7 @@ mod tests {
                 start_time: None,
                 retries: Some(0),
                 concurrent: None,
+                skip: None,
             }),
             vec![group(
                 "a",

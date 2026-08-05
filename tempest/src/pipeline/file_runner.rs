@@ -164,6 +164,17 @@ impl<'a> FileRunner<'a> {
             };
         };
 
+        if let Some(skip) = options.skip
+            && skip
+        {
+            return TestRunOutcome {
+                test_result: None,
+                assertions: Vec::new(),
+                summary_result: Some(SummaryResult::Skipped),
+                debug_message: None,
+            };
+        }
+
         let mut test = test.to_owned();
         test.render_template(self.template_engine, &liquid::object!(&context));
 
