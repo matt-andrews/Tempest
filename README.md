@@ -192,6 +192,10 @@ test:
 | `retries` | Number of additional attempts allowed after assertion failure. |
 | `reports` | Names of report templates to use. Defaults to `console`. A configured list replaces, rather than extends, the inherited list. |
 | `concurrent` | Enables concurrent spec-file execution. Treat this as a root project setting. |
+| `skip` | When `true`, matching tests are reported as skipped without sending a request or evaluating assertions/variables. |
+
+> [!NOTE]
+> Sections without tests are not counted as skipped
 
 Options cascade from command defaults through parent-directory configs, child-directory configs, and nested descriptor options. The more local configured value wins.
 
@@ -443,10 +447,14 @@ section_template: |
   # {{ full_name }}
 
 test_template: |
-  {{ full_name }}: {{ status }} {{ status_message }}
+  {% if skipped %}
+    {{ full_name }}: skipped
+  {% else %}
+    {{ full_name }}: {{ status }} {{ status_message }}
+  {% endif %}
 
 summary_template: |
-  Passed: {{ passed }}, flaky: {{ flaky }}, failed: {{ failed }}
+  Passed: {{ passed }}, flaky: {{ flaky }}, failed: {{ failed }}, skipped: {{ skipped }}
 
 error_template: |
   Template error: {{ liquid_error_message }}
@@ -472,14 +480,14 @@ Unknown report names are ignored.
 
 ### Report template globals
 
-| Event/template | Available globals |
-|---|---|
-| `title_template` | `test_count` |
+| Event/template | Available globals                                                                                     |
+|---|-------------------------------------------------------------------------------------------------------|
+| `title_template` | `test_count`                                                                                          |
 | `section_template` | `name`, `description`, `title_path`, `full_name`, `passed`, `test_count`, `retry_count`, `assertions` |
-| `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, and `headers` |
-| `summary_template` | `passed`, `failed`, `flaky` |
-| `error_template` | `liquid_error_message` |
-| `debug_template` | `debug_message` |
+| `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, `skipped`, and `headers`       |
+| `summary_template` | `passed`, `failed`, `flaky`                                                                           |
+| `error_template` | `liquid_error_message`                                                                                |
+| `debug_template` | `debug_message`                                                                                       |
 
 Each item in `assertions` contains `expr`, `passed`, and `error`.
 
