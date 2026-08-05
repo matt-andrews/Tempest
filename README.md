@@ -484,8 +484,8 @@ Unknown report names are ignored.
 |---|-------------------------------------------------------------------------------------------------------|
 | `title_template` | `test_count`                                                                                          |
 | `section_template` | `name`, `description`, `title_path`, `full_name`, `passed`, `test_count`, `retry_count`, `assertions` |
-| `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, `skipped`, and `headers`       |
-| `summary_template` | `passed`, `failed`, `flaky`                                                                           |
+| `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, `skipped`, and `headers`      |
+| `summary_template` | `passed`, `failed`, `flaky`, `skipped`                                                                |
 | `error_template` | `liquid_error_message`                                                                                |
 | `debug_template` | `debug_message`                                                                                       |
 

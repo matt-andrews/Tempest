@@ -20,7 +20,7 @@ impl Templated<bool> {
                     "true" => Ok(true),
                     "false" => Ok(false),
                     value => anyhow::bail!(
-                        "`skip` Liquid template must render to `true` or `false`, got `{value}`"
+                        "Liquid template must render to `true` or `false`, got `{value}`"
                     ),
                 }
             }

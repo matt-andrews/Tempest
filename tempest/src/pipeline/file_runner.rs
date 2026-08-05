@@ -167,7 +167,10 @@ impl<'a> FileRunner<'a> {
         if let Some(skip) = &options.skip
             && skip
                 .resolve(self.template_engine, &liquid::object!(&context))
-                .unwrap_or(false)
+                .unwrap_or_else(|e| {
+                    eprintln!("{e}");
+                    false
+                })
         {
             return TestRunOutcome {
                 test_result: None,
