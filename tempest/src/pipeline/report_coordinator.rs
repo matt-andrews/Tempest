@@ -351,4 +351,66 @@ mod tests {
         assert_eq!(report["tests"][1]["name"], "second");
         assert_eq!(report["summary"]["passed"], 2);
     }
+
+    #[test]
+    fn built_in_json_report_is_valid_when_last_test_is_skipped() {
+        let suite_dir = tempfile::tempdir().unwrap();
+        let report_dir = tempfile::tempdir().unwrap();
+        let report_path = report_dir.path().join("report.json");
+        let mut discovered = discovery::discover(
+            suite_dir.path(),
+            None,
+            &mut HashMap::new(),
+            suite_dir.path(),
+        )
+        .unwrap();
+        let mut json_template = discovered.templates.remove("json").unwrap();
+        json_template.file = Some(ReportFile {
+            dir: Some(report_dir.path().to_path_buf()),
+            file_name: Some("report.json".to_string()),
+        });
+        let templates = HashMap::from([("json".to_string(), json_template)]);
+        let options = RunOptions {
+            reports: Some(vec!["json".to_string()]),
+            ..Default::default()
+        };
+        let mut coordinator = ReportCoordinator::new(&templates);
+
+        coordinator.title(&options, 2).unwrap();
+        let mut skipped = attempt("skipped", true, Some(SummaryResult::Skipped), None);
+        skipped.options = options.clone();
+        skipped.test_result = None;
+        coordinator
+            .consume(file(
+                0,
+                vec![
+                    descriptor(
+                        vec![AttemptOutcome {
+                            options: options.clone(),
+                            ..attempt("passed", true, Some(SummaryResult::Passed), None)
+                        }],
+                        Some(SummaryResult::Passed),
+                    ),
+                    descriptor(vec![skipped], Some(SummaryResult::Skipped)),
+                ],
+            ))
+            .unwrap();
+
+        assert_eq!(
+            coordinator.summary(&options).unwrap(),
+            SummaryResult::Passed
+        );
+
+        let report: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(report_path).unwrap()).unwrap();
+        assert_eq!(report["tests"][0]["name"], "passed");
+        assert_eq!(report["tests"][0]["skipped"], false);
+        assert_eq!(report["tests"][1]["name"], "skipped");
+        assert_eq!(report["tests"][1]["skipped"], true);
+        assert!(report["tests"][1]["status"].is_null());
+        assert!(report["tests"][1]["statusMessage"].is_null());
+        assert!(report["tests"][1]["duration"].is_null());
+        assert_eq!(report["summary"]["passed"], 1);
+        assert_eq!(report["summary"]["skipped"], 1);
+    }
 }

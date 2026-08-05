@@ -104,6 +104,10 @@ impl Reporter for TemplateReporter {
             .iter()
             .filter(|f| matches!(f, SummaryResult::Flaky))
             .count();
+        let skipped = results
+            .iter()
+            .filter(|f| matches!(f, SummaryResult::Skipped))
+            .count();
         let duration = DateTime::now().unix_timestamp_nanos()
             - options
                 .start_time
@@ -114,6 +118,7 @@ impl Reporter for TemplateReporter {
                 passed,
                 failed,
                 flaky,
+                skipped,
                 duration: Duration::from_nanos(duration as u64).as_millis() as usize,
             },
             options,
@@ -177,6 +182,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         }
     }
 
@@ -211,6 +217,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -244,6 +251,7 @@ mod tests {
             start_time: None,
             retries: Some(0),
             concurrent: None,
+            skip: None,
         };
 
         TemplateReporter::new()

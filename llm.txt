@@ -117,6 +117,7 @@ options:
   retries: 1
   reports:
     - console
+  skip: true
 describe:
   - name: "Nested section"
     test:
@@ -168,6 +169,7 @@ Option behavior:
 - `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
 - `reports` selects report templates by name.
 - `concurrent` enables concurrent spec-file execution when set in the root project config. Tests within each file, including retries and variable assignment, remain sequential.
+- `skip` option will cause the test to be skipped and any inherited tests to be skipped. A skipped test does not run, assert or set variables.
 - The CLI starts with `reports: ["console"]`, `debug: false`, `retries: 0`, and serial spec-file execution.
 - When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
 - Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
@@ -518,7 +520,7 @@ describe:
 - `2`: one or more tests were flaky, none failed, and `--strict` was enabled.
 - `70`: Tempest encountered an unexpected internal panic.
 
-Warning-as-error handling takes precedence over the flaky exit code.
+Warning-as-error handling takes precedence over the flaky exit code. Skipped tests do not affect the exit code.
 
 Expected operational errors are written to stderr without a stack trace. Unexpected internal panics print a concise fatal message; set `RUST_BACKTRACE=1` to request diagnostic backtrace details.
 

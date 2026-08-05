@@ -18,6 +18,7 @@ pub enum ReportEvent<'a> {
         passed: usize,
         failed: usize,
         flaky: usize,
+        skipped: usize,
         duration: usize,
     },
     Error {
@@ -116,6 +117,7 @@ mod tests {
             passed: 2,
             failed: 1,
             flaky: 0,
+            skipped: 0,
             duration: 120,
         };
 

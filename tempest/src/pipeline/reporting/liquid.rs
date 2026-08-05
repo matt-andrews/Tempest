@@ -38,12 +38,14 @@ impl LiquidRenderer {
                 passed,
                 failed,
                 flaky,
+                skipped,
                 duration,
             } => {
                 liquid::object!({
                     "passed": *passed,
                     "failed": *failed,
                     "flaky": *flaky,
+                    "skipped": *skipped,
                     "duration": *duration,
                 })
             }
@@ -86,6 +88,7 @@ fn build_descriptor_globals(
     test_count: usize,
     retry_count: usize,
 ) -> liquid::Object {
+    let skipped = descriptor.test.is_some() && test_result.is_none();
     let all_passed = assertions.iter().all(|a| a.passed);
 
     let assertion_values: Vec<Value> = assertions
@@ -131,7 +134,8 @@ fn build_descriptor_globals(
         "description".into(),
         Value::scalar(descriptor.description.clone().unwrap_or_default()),
     );
-    globals.insert("passed".into(), Value::scalar(all_passed));
+    globals.insert("passed".into(), Value::scalar(all_passed && !skipped));
+    globals.insert("skipped".into(), Value::scalar(skipped));
     globals.insert("test_count".into(), Value::scalar(test_count.to_string()));
     globals.insert("retry_count".into(), Value::scalar(retry_count.to_string()));
 
@@ -216,14 +220,18 @@ mod tests {
             passed: 8,
             failed: 2,
             flaky: 1,
+            skipped: 0,
             duration: 120,
         };
 
         let output = renderer
-            .render(&template("{{ passed }}|{{ failed }}|{{ flaky }}"), &event)
+            .render(
+                &template("{{ passed }}|{{ failed }}|{{ flaky }}|{{ skipped }}"),
+                &event,
+            )
             .unwrap();
 
-        assert_eq!(output, "8|2|1");
+        assert_eq!(output, "8|2|1|0");
     }
 
     #[test]
@@ -246,6 +254,7 @@ mod tests {
                     passed: 10,
                     failed: 1,
                     flaky: 1,
+                    skipped: 0,
                     duration: 120,
                 },
             )
@@ -254,7 +263,7 @@ mod tests {
         assert_eq!(title.lines().count(), 11, "{title:?}");
         assert_eq!(summary.lines().count(), 3, "{summary:?}");
         assert!(title.contains("Running 12 tests"));
-        assert!(summary.contains("10 passed · 1 flaky · 1 failed · 120ms duration"));
+        assert!(summary.contains("10 passed · 1 flaky · 1 failed · 0 skipped · 120ms duration"));
     }
 
     #[test]
@@ -280,7 +289,7 @@ mod tests {
         let output = renderer
             .render(
                 &template(
-                    "{{ name }}|{{ full_name }}|{{ description }}|{{ passed }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
+                    "{{ name }}|{{ full_name }}|{{ description }}|{{ passed }}|{{ skipped }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
                 ),
                 &event,
             )
@@ -288,8 +297,28 @@ mod tests {
 
         assert_eq!(
             output,
-            "login|accounts › authenticated › login|login description|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
+            "login|accounts › authenticated › login|login description|false|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
         );
+    }
+
+    #[test]
+    fn renders_skipped_descriptor_globals() {
+        let renderer = LiquidRenderer::new();
+        let descriptor = descriptor(true);
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            title_path: &[],
+            test_result: None,
+            assertions: &[],
+            test_count: 0,
+            retry_count: 0,
+        };
+
+        let output = renderer
+            .render(&template("{{ passed }}|{{ skipped }}"), &event)
+            .unwrap();
+
+        assert_eq!(output, "false|true");
     }
 
     #[test]
@@ -380,6 +409,36 @@ mod tests {
         assert!(output.contains("[retry 1]"));
         assert!(output.contains("body contains user"));
         assert!(!output.contains("status == 404"));
+    }
+
+    #[test]
+    fn console_skip_uses_one_line_without_http_fields() {
+        let renderer = LiquidRenderer::new();
+        let descriptor = descriptor(true);
+        let title_path = vec!["accounts".to_string()];
+        let event = ReportEvent::Descriptor {
+            descriptor: &descriptor,
+            title_path: &title_path,
+            test_result: None,
+            assertions: &[],
+            test_count: 0,
+            retry_count: 0,
+        };
+
+        let output = renderer
+            .render(
+                &template(include_str!(
+                    "../../builtin_reporters/console_reporter/console.test.liquid"
+                )),
+                &event,
+            )
+            .unwrap();
+
+        assert_eq!(output.lines().count(), 1, "{output:?}");
+        assert!(output.contains("- accounts › login"));
+        assert!(output.contains("| skipped"));
+        assert!(!output.contains("ms"));
+        assert!(!output.contains("✗"));
     }
 
     #[test]
