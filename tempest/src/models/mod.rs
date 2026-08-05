@@ -6,6 +6,6 @@ pub mod response_content_cache;
 pub mod run_context;
 pub mod run_options;
 pub mod summary_result;
+pub mod templated;
 pub mod test_result;
 pub mod test_spec;
-pub mod templated;

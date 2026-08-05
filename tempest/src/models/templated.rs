@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use crate::templating::liquid::LiquidEngine;
 use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -10,11 +10,7 @@ pub enum Templated<T> {
 }
 
 impl Templated<bool> {
-    pub fn resolve(
-        &self,
-        engine: &LiquidEngine,
-        context: &liquid::Object,
-    ) -> anyhow::Result<bool> {
+    pub fn resolve(&self, engine: &LiquidEngine, context: &liquid::Object) -> anyhow::Result<bool> {
         match self {
             Self::Literal(value) => Ok(*value),
             Self::Liquid(template) => {

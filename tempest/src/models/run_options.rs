@@ -1,8 +1,8 @@
+use crate::models::templated::Templated;
 use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
-use crate::models::templated::Templated;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
