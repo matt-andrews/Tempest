@@ -110,9 +110,7 @@ pub fn discover(
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
         } else if stem.ends_with(".spec") {
-            let selected = run_paths.iter().any(|run_path| {
-                path == run_path || (run_path.is_dir() && path.starts_with(run_path))
-            });
+            let selected = run_paths.iter().any(|run_path| path.starts_with(run_path));
             if selected {
                 tests.push(parser.parse_descriptor(path)?);
             }
