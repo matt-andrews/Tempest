@@ -3,6 +3,7 @@
 #   1. A curl failure must exit non-zero (not silently produce empty notes).
 #   2. A jq parse failure must exit non-zero.
 #   3. Happy path: valid response produces correct release notes.
+#   4. Git-range mode follows first-parent history and excludes the prior tag.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -20,6 +21,8 @@ run_script() {
   local bin_dir="$1"
   local out_file="$2"
   PATH="$bin_dir:$PATH" \
+    RANGE_MODE="date" \
+    TAG="app/nightly" \
     SINCE_DATE="2024-01-01T00:00:00Z" \
     AREA_LABELS="area: core" \
     GITHUB_TOKEN="fake-token" \
@@ -90,6 +93,69 @@ if run_script "$BIN3" "$OUT3"; then
   fi
 else
   echo "FAIL: happy path should exit 0"
+  FAIL=$((FAIL + 1))
+fi
+
+# ── test 4: exact Git range follows first-parent history ─────────────────────
+REPO4="$WORKDIR/repo4"
+BIN4="$WORKDIR/bin4"
+mkdir -p "$REPO4" "$BIN4"
+
+git -C "$REPO4" init -q
+git -C "$REPO4" config user.name "Release Test"
+git -C "$REPO4" config user.email "release-test@example.com"
+
+printf 'previous\n' > "$REPO4/history.txt"
+git -C "$REPO4" add history.txt
+git -C "$REPO4" commit -qm "previous release"
+git -C "$REPO4" tag app/v1.0.0
+PREVIOUS_SHA=$(git -C "$REPO4" rev-parse HEAD)
+DEFAULT_BRANCH=$(git -C "$REPO4" branch --show-current)
+
+git -C "$REPO4" checkout -qb feature
+printf 'feature\n' >> "$REPO4/history.txt"
+git -C "$REPO4" commit -qam "feature branch commit"
+FEATURE_SHA=$(git -C "$REPO4" rev-parse HEAD)
+
+git -C "$REPO4" checkout -q "$DEFAULT_BRANCH"
+git -C "$REPO4" merge --no-ff -m "merge feature" feature >/dev/null
+git -C "$REPO4" tag app/v1.1.0
+MERGE_SHA=$(git -C "$REPO4" rev-parse HEAD)
+
+cat > "$BIN4/curl" << 'EOF'
+#!/bin/sh
+printf '%s\n' "$*" >> "$CURL_LOG"
+printf '[{"number":99,"title":"Current range PR","html_url":"https://github.com/owner/repo/pull/99","merged_at":"2024-01-02T00:00:00Z","user":{"login":"alice"},"labels":[{"name":"area: core"}]}]\n'
+EOF
+chmod +x "$BIN4/curl"
+
+OUT4="$WORKDIR/notes4.md"
+CURL_LOG="$WORKDIR/curl4.log"
+if (
+  cd "$REPO4"
+  PATH="$BIN4:$PATH" \
+    RANGE_MODE="git" \
+    BASE_TAG="app/v1.0.0" \
+    TAG="app/v1.1.0" \
+    AREA_LABELS="area: core" \
+    GITHUB_TOKEN="fake-token" \
+    GITHUB_REPOSITORY="owner/repo" \
+    OUTPUT_FILE="$OUT4" \
+    CURL_LOG="$CURL_LOG" \
+    bash "$COLLECT_PRS" >/dev/null 2>&1
+); then
+  if grep -q "$MERGE_SHA" "$CURL_LOG" \
+    && ! grep -q "$PREVIOUS_SHA" "$CURL_LOG" \
+    && ! grep -q "$FEATURE_SHA" "$CURL_LOG" \
+    && grep -q "Current range PR" "$OUT4"; then
+    echo "PASS: Git range follows first-parent history"
+    PASS=$((PASS + 1))
+  else
+    echo "FAIL: Git range queried non-first-parent commits or omitted the merge"
+    FAIL=$((FAIL + 1))
+  fi
+else
+  echo "FAIL: Git-range collection should exit 0"
   FAIL=$((FAIL + 1))
 fi
 

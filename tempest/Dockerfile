@@ -24,8 +24,12 @@ RUN RUST_TARGET=$(cat /rust-target.txt) && \
     rm -rf src
 
 COPY src ./src
+
+ARG PACKAGE_VERSION=0.0.0
+
 # Touch to force Cargo to relink (stub and real main share the same mtime otherwise).
-RUN RUST_TARGET=$(cat /rust-target.txt) && \
+RUN sed -i "s/^version = \"0.0.0\"$/version = \"$PACKAGE_VERSION\"/" Cargo.toml && \
+    RUST_TARGET=$(cat /rust-target.txt) && \
     touch src/main.rs && \
     cargo build --release --target "$RUST_TARGET"
 

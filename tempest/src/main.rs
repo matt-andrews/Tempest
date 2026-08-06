@@ -1,6 +1,7 @@
 pub mod cel;
 pub mod content;
 pub mod discovery;
+pub mod environment;
 mod models;
 pub mod pipeline;
 pub mod templating;
@@ -18,7 +19,7 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use std::process;
+use std::{io, process};
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -30,6 +31,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    Version,
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
@@ -81,6 +83,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
         } => {
             let project_dir = dunce::canonicalize(&path)?;
+            load_project_dotenv(&project_dir)?;
             let options = RunOptions::default_from_args(debug, retries);
             let run_paths = &resolve_run_paths(&project_dir, run);
 
@@ -95,6 +98,24 @@ async fn run() -> anyhow::Result<ExitCode> {
             let exit = determine_exit_code(result, strict, warn_as_err);
             Ok(exit)
         }
+        Commands::Version => {
+            println!("{}", env!("CARGO_PKG_VERSION"));
+            Ok(ExitCode::Success)
+        }
+    }
+}
+
+fn load_project_dotenv(project_dir: &Path) -> anyhow::Result<()> {
+    let path = project_dir.join(".env");
+
+    match dotenvy::from_path(&path) {
+        Ok(()) => Ok(()),
+
+        // The file is optional.
+        Err(dotenvy::Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+
+        // Do not silently ignore malformed or unreadable files.
+        Err(error) => Err(error.into()),
     }
 }
 
@@ -208,13 +229,17 @@ mod tests {
 
     fn parsed_runs(args: &[&str]) -> Result<Option<Vec<PathBuf>>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
-        let Commands::Test { run, .. } = cli.command;
+        let Commands::Test { run, .. } = cli.command else {
+            panic!("expected the test command");
+        };
         Ok(run)
     }
 
     fn parsed_workers(args: &[&str]) -> Result<Option<NonZeroUsize>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
-        let Commands::Test { workers, .. } = cli.command;
+        let Commands::Test { workers, .. } = cli.command else {
+            panic!("expected the test command");
+        };
         Ok(workers)
     }
 
