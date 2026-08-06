@@ -86,8 +86,7 @@ async fn run() -> anyhow::Result<ExitCode> {
 
             let mut envs = parse_cli_envs(env)?;
 
-            let discovery =
-                &discovery::discover(&project_dir, None, &mut envs, run_paths)?;
+            let discovery = &discovery::discover(&project_dir, None, &mut envs, run_paths)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -147,10 +146,7 @@ fn write_stderr(message: &str) {
     let _ = writeln!(std::io::stderr().lock(), "{message}");
 }
 
-fn resolve_run_paths(
-    project_dir: &Path,
-    runs: Option<Vec<PathBuf>>,
-) -> Vec<PathBuf> {
+fn resolve_run_paths(project_dir: &Path, runs: Option<Vec<PathBuf>>) -> Vec<PathBuf> {
     runs.map(|runs| {
         runs.iter()
             .map(|run| {
@@ -159,8 +155,7 @@ fn resolve_run_paths(
                     .filter(|component| {
                         matches!(
                             component,
-                            std::path::Component::Normal(_)
-                                | std::path::Component::CurDir
+                            std::path::Component::Normal(_) | std::path::Component::CurDir
                         )
                     })
                     .collect();
@@ -169,7 +164,7 @@ fn resolve_run_paths(
             })
             .collect()
     })
-        .unwrap_or_else(|| vec![project_dir.to_path_buf()])
+    .unwrap_or_else(|| vec![project_dir.to_path_buf()])
 }
 
 fn print_warnings() {
@@ -211,10 +206,69 @@ fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -
 mod tests {
     use super::*;
 
+    fn parsed_runs(args: &[&str]) -> Result<Option<Vec<PathBuf>>, clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Test { run, .. } = cli.command;
+        Ok(run)
+    }
+
     fn parsed_workers(args: &[&str]) -> Result<Option<NonZeroUsize>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
         let Commands::Test { workers, .. } = cli.command;
         Ok(workers)
+    }
+
+    #[test]
+    fn run_paths_are_optional() {
+        assert_eq!(parsed_runs(&["tempest", "test"]).unwrap(), None);
+    }
+
+    #[test]
+    fn run_accepts_multiple_occurrences() {
+        assert_eq!(
+            parsed_runs(&[
+                "tempest",
+                "test",
+                "--run",
+                "api",
+                "--run",
+                "smoke/test.spec.yml",
+            ])
+            .unwrap(),
+            Some(vec![
+                PathBuf::from("api"),
+                PathBuf::from("smoke/test.spec.yml"),
+            ])
+        );
+    }
+
+    #[test]
+    fn omitted_run_resolves_to_project_root() {
+        let project_dir = Path::new("project");
+
+        assert_eq!(
+            resolve_run_paths(project_dir, None),
+            vec![project_dir.to_path_buf()]
+        );
+    }
+
+    #[test]
+    fn run_paths_resolve_relative_to_project_root() {
+        let project_dir = Path::new("project");
+
+        assert_eq!(
+            resolve_run_paths(
+                project_dir,
+                Some(vec![
+                    PathBuf::from("api"),
+                    PathBuf::from("smoke/test.spec.yml"),
+                ]),
+            ),
+            vec![
+                project_dir.join("api"),
+                project_dir.join("smoke/test.spec.yml"),
+            ]
+        );
     }
 
     #[test]
