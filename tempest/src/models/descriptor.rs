@@ -3,8 +3,11 @@ use crate::models::test_spec::TestSpec;
 use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
 use serde::{Deserialize, Serialize};
+use serde_json::{Map as JsonMap, Value as JsonValue};
 use std::collections::VecDeque;
 use std::path::PathBuf;
+
+pub type Profile = JsonMap<String, JsonValue>;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Descriptor {
@@ -14,6 +17,7 @@ pub struct Descriptor {
 
     pub test: Option<TestSpec>,
     pub describe: Option<Vec<Descriptor>>,
+    pub profiles: Option<Vec<Profile>>,
 
     pub options: Option<RunOptions>,
 
@@ -34,9 +38,10 @@ impl<'a> Iterator for DescriptorIter<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let (node, parent_options, ancestor_titles) = self.stack.pop_front()?;
-        let node_options = parent_options
+        let mut node_options = parent_options
             .clone()
             .merge(node.options.clone().unwrap_or_default());
+        node_options.loop_count = None;
 
         let mut child_titles = ancestor_titles.clone();
         if let Some(name) = node.name.as_deref().filter(|name| !name.trim().is_empty()) {
@@ -60,7 +65,16 @@ impl Descriptor {
     pub fn test_count(&self) -> usize {
         let own = if self.test.is_some() { 1 } else { 0 };
         let nested: usize = self.describe.iter().flatten().map(|d| d.test_count()).sum();
-        own + nested
+        self.execution_count() * (own + nested)
+    }
+    pub fn execution_count(&self) -> usize {
+        let profile_count = self.profiles.as_ref().map_or(1, Vec::len);
+        let loop_count = self
+            .options
+            .as_ref()
+            .and_then(|options| options.loop_count)
+            .map_or(1, |count| count.get());
+        profile_count * loop_count
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
         self.name = engine.render_option_string_or_self(&self.name, obj);
@@ -73,6 +87,8 @@ impl Descriptor {
 mod tests {
     use super::*;
     use crate::models::run_options::RunOptions;
+    use serde_json::json;
+    use std::num::NonZeroUsize;
 
     fn options(base_uri: &str) -> RunOptions {
         RunOptions {
@@ -83,6 +99,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         }
     }
 
@@ -93,6 +110,7 @@ mod tests {
             tags: None,
             test: None,
             describe: Some(children),
+            profiles: None,
             options: opts,
             file: None,
         }
@@ -105,6 +123,7 @@ mod tests {
             tags: None,
             test: None,
             describe: None,
+            profiles: None,
             options: opts,
             file: None,
         }
@@ -210,6 +229,7 @@ mod tests {
                 retries: Some(0),
                 concurrent: None,
                 skip: None,
+                loop_count: None,
             }),
             vec![group(
                 "a",
@@ -298,5 +318,48 @@ mod tests {
         let child = results.iter().find(|(n, _)| n == "child").unwrap();
         // child's yielded parent_options should be root's ("http://root"), not its own ("http://child")
         assert_eq!(child.1, Some("http://root".to_string()));
+    }
+
+    #[test]
+    fn descriptor_loop_is_not_propagated_as_a_child_run_option() {
+        let root = group(
+            "root",
+            Some(RunOptions {
+                loop_count: NonZeroUsize::new(2),
+                ..Default::default()
+            }),
+            vec![leaf("child", None)],
+        );
+
+        let child_options = root
+            .descendants()
+            .find(|(descriptor, _, _)| descriptor.name.as_deref() == Some("child"))
+            .map(|(_, options, _)| options)
+            .unwrap();
+
+        assert_eq!(child_options.loop_count, None);
+    }
+
+    #[test]
+    fn test_count_includes_nested_profile_and_loop_cartesian_expansion() {
+        let mut child = leaf("child", None);
+        child.test = Some(TestSpec::default());
+        child.profiles = Some(vec![
+            Profile::from_iter([("role".to_string(), json!("admin"))]),
+            Profile::from_iter([("role".to_string(), json!("reader"))]),
+            Profile::from_iter([("role".to_string(), json!("author"))]),
+        ]);
+
+        let mut root = group("root", None, vec![child]);
+        root.profiles = Some(vec![
+            Profile::from_iter([("region".to_string(), json!("us"))]),
+            Profile::from_iter([("region".to_string(), json!("eu"))]),
+        ]);
+        root.options = Some(RunOptions {
+            loop_count: NonZeroUsize::new(2),
+            ..Default::default()
+        });
+
+        assert_eq!(root.test_count(), 12);
     }
 }

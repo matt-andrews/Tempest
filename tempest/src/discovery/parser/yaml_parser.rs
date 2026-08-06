@@ -15,6 +15,8 @@ impl FileParser for YamlFileParser {
             .with_context(|| format!("could not read YAML file {}", path.display()))?;
         let mut result: Descriptor = noyalib::from_str(&contents)
             .with_context(|| format!("invalid YAML in {}", path.display()))?;
+        Self::validate_descriptor(&result)
+            .with_context(|| format!("invalid descriptor in {}", path.display()))?;
         Self::assign_file(&mut result, path);
         Ok(result)
     }
@@ -24,6 +26,12 @@ impl FileParser for YamlFileParser {
             .with_context(|| format!("could not read YAML file {}", path.display()))?;
         let config: RunOptions = noyalib::from_str(&contents)
             .with_context(|| format!("invalid YAML in {}", path.display()))?;
+        if config.loop_count.is_some() {
+            anyhow::bail!(
+                "`loop` is only valid under a descriptor's `options` in {}",
+                path.display()
+            );
+        }
         Ok(config)
     }
 
@@ -66,6 +74,18 @@ impl FileParser for YamlFileParser {
 }
 
 impl YamlFileParser {
+    fn validate_descriptor(descriptor: &Descriptor) -> anyhow::Result<()> {
+        if descriptor.profiles.as_ref().is_some_and(Vec::is_empty) {
+            anyhow::bail!("`profiles` must contain at least one profile");
+        }
+
+        for child in descriptor.describe.as_deref().unwrap_or_default() {
+            Self::validate_descriptor(child)?;
+        }
+
+        Ok(())
+    }
+
     fn assign_file(descriptor: &mut Descriptor, path: &Path) {
         descriptor.file = Some(path.to_path_buf());
 
@@ -177,6 +197,53 @@ mod tests {
         let opts = result.options.unwrap();
         assert_eq!(opts.base_uri.as_deref(), Some("http://localhost:8080"));
         assert_eq!(opts.debug, Some(true));
+    }
+
+    #[test]
+    fn parse_descriptor_parses_profiles_and_local_loop() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("expanded.spec.yml");
+        let yaml = "profiles:\n  - region: us\n    enabled: true\n  - region: eu\n    enabled: false\noptions:\n  loop: 2\ntest:\n  route: /health\n";
+        fs::write(&path, yaml).unwrap();
+
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
+        let profiles = result.profiles.unwrap();
+
+        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles[0]["region"], serde_json::json!("us"));
+        assert_eq!(profiles[0]["enabled"], serde_json::json!(true));
+        assert_eq!(result.options.unwrap().loop_count.unwrap().get(), 2);
+    }
+
+    #[test]
+    fn parse_descriptor_rejects_empty_profiles() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("empty-profiles.spec.yml");
+        fs::write(&path, "profiles: []\ntest:\n  route: /health\n").unwrap();
+
+        let error = YamlFileParser.parse_descriptor(&path).unwrap_err();
+
+        assert!(format!("{error:#}").contains("must contain at least one profile"));
+    }
+
+    #[test]
+    fn parse_descriptor_rejects_zero_loop_count() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("zero-loop.spec.yml");
+        fs::write(&path, "options:\n  loop: 0\ntest:\n  route: /health\n").unwrap();
+
+        assert!(YamlFileParser.parse_descriptor(&path).is_err());
+    }
+
+    #[test]
+    fn parse_config_rejects_descriptor_loop_option() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("loop.config.yml");
+        fs::write(&path, "loop: 2\n").unwrap();
+
+        let error = YamlFileParser.parse_config(&path).unwrap_err();
+
+        assert!(format!("{error:#}").contains("only valid under a descriptor"));
     }
 
     #[test]

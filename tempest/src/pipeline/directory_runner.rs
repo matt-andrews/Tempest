@@ -42,7 +42,7 @@ impl<'a> DirectoryRunner<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::descriptor::Descriptor;
+    use crate::models::descriptor::{Descriptor, Profile};
     use crate::models::directory_node::DirectoryNode;
     use crate::models::report_template::{ReportFile, ReportTemplate};
     use crate::models::run_options::RunOptions;
@@ -52,7 +52,9 @@ mod tests {
     use crate::templating::liquid::LiquidEngine;
     use indexmap::IndexMap;
     use mockito::Server;
+    use serde_json::json;
     use std::collections::HashMap;
+    use std::num::NonZeroUsize;
     use std::path::PathBuf;
 
     fn dir_node(files: Vec<Descriptor>) -> DirectoryNode {
@@ -106,6 +108,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         }
@@ -121,6 +124,7 @@ mod tests {
             tags: None,
             test: None,
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         }]);
@@ -294,6 +298,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: Some(RunOptions {
                 base_uri: Some(server.url()),
                 ..Default::default()
@@ -320,6 +325,266 @@ mod tests {
         mock.assert_async().await;
     }
 
+    #[tokio::test]
+    async fn loop_runs_descriptor_requested_number_of_times() {
+        let mut server = Server::new_async().await;
+        let mock = server
+            .mock("GET", "/loop")
+            .with_status(200)
+            .expect(3)
+            .create_async()
+            .await;
+        let mut descriptor = get_descriptor(
+            &format!("{}/loop", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        descriptor.options = Some(RunOptions {
+            loop_count: NonZeroUsize::new(3),
+            ..Default::default()
+        });
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![descriptor]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Passed; 3]);
+        mock.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn profiles_render_into_tests_in_source_order() {
+        let mut server = Server::new_async().await;
+        let first = server
+            .mock("GET", "/first")
+            .with_status(200)
+            .create_async()
+            .await;
+        let second = server
+            .mock("GET", "/second")
+            .with_status(200)
+            .create_async()
+            .await;
+        let mut descriptor = get_descriptor(
+            &format!("{}/{{{{ profile.path }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        descriptor.profiles = Some(vec![
+            Profile::from_iter([("path".to_string(), json!("first"))]),
+            Profile::from_iter([("path".to_string(), json!("second"))]),
+        ]);
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![descriptor]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Passed; 2]);
+        first.assert_async().await;
+        second.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn nested_profiles_are_cartesian_and_restore_parent_profile_for_siblings() {
+        let mut server = Server::new_async().await;
+        let child_x = server
+            .mock("GET", "/child/x")
+            .with_status(200)
+            .expect(2)
+            .create_async()
+            .await;
+        let child_y = server
+            .mock("GET", "/child/y")
+            .with_status(200)
+            .expect(2)
+            .create_async()
+            .await;
+        let sibling_us = server
+            .mock("GET", "/sibling/us")
+            .with_status(200)
+            .create_async()
+            .await;
+        let sibling_eu = server
+            .mock("GET", "/sibling/eu")
+            .with_status(200)
+            .create_async()
+            .await;
+
+        let mut child = get_descriptor(
+            &format!("{}/child/{{{{ profile.region }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        child.name = Some("child {{ profile.region }}".to_string());
+        child.profiles = Some(vec![
+            Profile::from_iter([("region".to_string(), json!("x"))]),
+            Profile::from_iter([("region".to_string(), json!("y"))]),
+        ]);
+
+        let mut sibling = get_descriptor(
+            &format!("{}/sibling/{{{{ profile.region }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        sibling.name = Some("sibling {{ profile.region }}".to_string());
+
+        let root = Descriptor {
+            name: Some("root {{ profile.region }}".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(vec![child, sibling]),
+            profiles: Some(vec![
+                Profile::from_iter([("region".to_string(), json!("us"))]),
+                Profile::from_iter([("region".to_string(), json!("eu"))]),
+            ]),
+            options: None,
+            file: None,
+        };
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![root]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Passed; 6]);
+        child_x.assert_async().await;
+        child_y.assert_async().await;
+        sibling_us.assert_async().await;
+        sibling_eu.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn exported_vars_accumulate_and_bleed_into_later_profile_cases() {
+        let mut server = Server::new_async().await;
+        let seed_a = server
+            .mock("GET", "/seed/a")
+            .with_status(200)
+            .with_body("a")
+            .create_async()
+            .await;
+        let seed_b = server
+            .mock("GET", "/seed/b")
+            .with_status(200)
+            .with_body("b")
+            .create_async()
+            .await;
+        let history_a = server
+            .mock("GET", "/history/a/a/a")
+            .with_status(200)
+            .create_async()
+            .await;
+        let history_b = server
+            .mock("GET", "/history/b/a/b")
+            .with_status(200)
+            .create_async()
+            .await;
+
+        let mut producer = get_descriptor(
+            &format!("{}/seed/{{{{ profile.value }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        producer.test.as_mut().unwrap().vars =
+            Some(HashMap::from([("tokens".to_string(), "body".to_string())]));
+        let consumer = get_descriptor(
+            &format!(
+                "{}/history/{{{{ profile.value }}}}/{{{{ vars.tokens[0] }}}}/{{{{ vars.tokens | last }}}}",
+                server.url()
+            ),
+            Some(vec!["status == 200"]),
+        );
+        let root = Descriptor {
+            name: Some("accumulated exports".to_string()),
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(vec![producer, consumer]),
+            profiles: Some(vec![
+                Profile::from_iter([("value".to_string(), json!("a"))]),
+                Profile::from_iter([("value".to_string(), json!("b"))]),
+            ]),
+            options: None,
+            file: None,
+        };
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![root]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Passed; 4]);
+        seed_a.assert_async().await;
+        seed_b.assert_async().await;
+        history_a.assert_async().await;
+        history_b.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn failed_retry_does_not_append_to_collected_vars() {
+        let mut server = Server::new_async().await;
+        let failed = server
+            .mock("GET", "/unstable/0")
+            .with_status(500)
+            .with_body("bad")
+            .create_async()
+            .await;
+        let passed = server
+            .mock("GET", "/unstable/1")
+            .with_status(200)
+            .with_body("good")
+            .create_async()
+            .await;
+        let consumer = server
+            .mock("GET", "/items/good")
+            .with_status(200)
+            .create_async()
+            .await;
+
+        let mut unstable = get_descriptor(
+            &format!("{}/unstable/{{{{ retry_attempts }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+        unstable.test.as_mut().unwrap().vars =
+            Some(HashMap::from([("tokens".to_string(), "body".to_string())]));
+        unstable.options = Some(RunOptions {
+            retries: Some(1),
+            loop_count: NonZeroUsize::new(1),
+            ..Default::default()
+        });
+        let next = get_descriptor(
+            &format!("{}/items/{{{{ vars.tokens[0] }}}}", server.url()),
+            Some(vec!["status == 200"]),
+        );
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![spec_file(vec![unstable, next])]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Flaky, SummaryResult::Passed]);
+        failed.assert_async().await;
+        passed.assert_async().await;
+        consumer.assert_async().await;
+    }
+
     fn spec_file(children: Vec<Descriptor>) -> Descriptor {
         Descriptor {
             name: Some("test spec".to_string()),
@@ -327,6 +592,7 @@ mod tests {
             tags: None,
             test: None,
             describe: Some(children),
+            profiles: None,
             options: None,
             file: Some(PathBuf::from("test.spec.yml")),
         }
@@ -360,6 +626,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -374,6 +641,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -424,6 +692,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -438,6 +707,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -479,6 +749,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -521,6 +792,7 @@ mod tests {
                     ..Default::default()
                 }),
                 describe: None,
+                profiles: None,
                 options: None,
                 file: None,
             }],
@@ -571,6 +843,7 @@ mod tests {
             tags: None,
             test: None,
             describe: Some(vec![test]),
+            profiles: None,
             options: None,
             file: None,
         };
@@ -781,6 +1054,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -796,6 +1070,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -810,6 +1085,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         };
@@ -868,6 +1144,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: Some(PathBuf::from("file-a.yaml")),
         };
@@ -882,6 +1159,7 @@ mod tests {
                 ..Default::default()
             }),
             describe: None,
+            profiles: None,
             options: None,
             file: Some(PathBuf::from("file-b.yaml")),
         };

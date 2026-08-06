@@ -38,7 +38,7 @@ impl VariableAssignment for DefaultVariableAssignment {
                 Ok(v) => v.json().unwrap_or_default(),
                 _ => JsonValue::Null,
             };
-            context.vars.insert(k.clone(), val);
+            context.set_var(k.clone(), val);
         }
     }
 }

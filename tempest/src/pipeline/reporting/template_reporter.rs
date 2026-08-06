@@ -183,6 +183,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         }
     }
 
@@ -218,6 +219,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -252,6 +254,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
 
         TemplateReporter::new()

@@ -489,6 +489,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
 
         let result = discover(

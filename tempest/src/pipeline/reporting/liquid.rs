@@ -171,6 +171,7 @@ mod tests {
             tags: None,
             test: has_test.then(TestSpec::default),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         }
