@@ -3,6 +3,7 @@ use liquid_core::model::{ScalarCow, Value};
 use liquid_core::parser::{FilterArguments, ParameterReflection};
 use liquid_core::{Filter, FilterReflection, ParseFilter, Runtime, ValueView};
 use serde_json;
+use crate::environment;
 
 macro_rules! color_filter {
     ($parser:ident, $filter:ident, $name:literal, $method:ident) => {
@@ -157,11 +158,7 @@ impl Filter for ColorStatusFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
         let code = input.as_scalar().and_then(|s| s.to_integer()).unwrap_or(0);
         let s = input.to_kstr().into_string();
-        let colored = match code {
-            200..=299 => s.green(),
-            300..=399 => s.yellow(),
-            _ => s.red(),
-        };
+        let colored = environment::get_status_color(code, &s);
         Ok(Value::Scalar(ScalarCow::from(colored.to_string())))
     }
 }
@@ -205,11 +202,7 @@ impl Filter for ColorDurationFilterImpl {
     fn evaluate(&self, input: &dyn ValueView, _: &dyn Runtime) -> liquid_core::Result<Value> {
         let ms = input.as_scalar().and_then(|s| s.to_float()).unwrap_or(0.0);
         let s = input.to_kstr().into_string();
-        let colored = match ms {
-            0.0..=50.0 => s.green(),
-            51.0..=200.0 => s.yellow(),
-            _ => s.red(),
-        };
+        let colored = environment::get_duration_color(ms, &s);
         Ok(Value::Scalar(ScalarCow::from(colored.to_string())))
     }
 }

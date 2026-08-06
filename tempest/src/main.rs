@@ -5,6 +5,7 @@ mod models;
 pub mod pipeline;
 pub mod templating;
 mod utils;
+pub mod environment;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
@@ -18,7 +19,7 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use std::process;
+use std::{io, process};
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -81,6 +82,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
         } => {
             let project_dir = dunce::canonicalize(&path)?;
+            load_project_dotenv(&project_dir)?;
             let options = RunOptions::default_from_args(debug, retries);
             let run_paths = &resolve_run_paths(&project_dir, run);
 
@@ -95,6 +97,24 @@ async fn run() -> anyhow::Result<ExitCode> {
             let exit = determine_exit_code(result, strict, warn_as_err);
             Ok(exit)
         }
+    }
+}
+
+fn load_project_dotenv(project_dir: &Path) -> anyhow::Result<()> {
+    let path = project_dir.join(".env");
+
+    match dotenvy::from_path(&path) {
+        Ok(()) => Ok(()),
+
+        // The file is optional.
+        Err(dotenvy::Error::Io(error))
+        if error.kind() == io::ErrorKind::NotFound =>
+            {
+                Ok(())
+            }
+
+        // Do not silently ignore malformed or unreadable files.
+        Err(error) => Err(error.into()),
     }
 }
 
