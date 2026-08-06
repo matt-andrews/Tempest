@@ -39,19 +39,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Determine PR date range
-        id: date-range
+      - name: Determine release boundary
+        id: release-range
         env:
           TAG: ${{ inputs.tag }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
-        run: |
-          SINCE_DATE=$(bash ./.github/scripts/release-wf/determine-since-date.sh)
-          echo "since_date=$SINCE_DATE" >> "$GITHUB_OUTPUT"
+        run: bash ./.github/scripts/release-wf/determine-release-boundary.sh >> "$GITHUB_OUTPUT"
 
       - name: Collect and format release notes
         env:
-          SINCE_DATE: ${{ steps.date-range.outputs.since_date }}
+          RANGE_MODE: ${{ steps.release-range.outputs.range_mode }}
+          BASE_TAG: ${{ steps.release-range.outputs.base_tag }}
+          TAG: ${{ inputs.tag }}
+          SINCE_DATE: ${{ steps.release-range.outputs.since_date }}
           AREA_LABELS: ${{ inputs.area_labels }}
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
