@@ -1,4 +1,4 @@
-use crate::cel;
+use crate::cel::{self, LetBindings};
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::test_result::{Assertion, TestResult};
@@ -14,10 +14,16 @@ impl AssertionEvaluator for CelAssertionEvaluator {
         data: &TestResult,
         context: &EvaluationContext,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) -> Assertion {
-        let result =
-            Self::evaluate_assertion(&self.assertion, data, context, response_content_cache)
-                .map_err(|e| e.to_string());
+        let result = Self::evaluate_assertion(
+            &self.assertion,
+            data,
+            context,
+            response_content_cache,
+            let_bindings,
+        )
+        .map_err(|e| e.to_string());
         let error = match &result {
             Ok(_) => String::new(),
             Err(e) => e.clone(),
@@ -41,8 +47,15 @@ impl CelAssertionEvaluator {
         response: &TestResult,
         context: &EvaluationContext,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) -> anyhow::Result<bool> {
-        match cel::evaluate(expr, response, context, response_content_cache)? {
+        match cel::evaluate(
+            expr,
+            response,
+            context,
+            response_content_cache,
+            let_bindings,
+        )? {
             Value::Bool(b) => Ok(b),
             other => anyhow::bail!("Assertion did not return a bool, got: {:?}", other),
         }
@@ -83,6 +96,7 @@ mod tests {
             r,
             &EvaluationContext::default(),
             &ResponseContentCache::default(),
+            &LetBindings::new(),
         )
     }
 
@@ -169,7 +183,12 @@ mod tests {
     // --- fileBytes ---
 
     fn eval_with_ctx(expr: &str, r: &TestResult, ctx: EvaluationContext) -> Assertion {
-        CelAssertionEvaluator::new(expr).evaluate(r, &ctx, &ResponseContentCache::default())
+        CelAssertionEvaluator::new(expr).evaluate(
+            r,
+            &ctx,
+            &ResponseContentCache::default(),
+            &LetBindings::new(),
+        )
     }
 
     fn suite_ctx(dir: &tempfile::TempDir) -> EvaluationContext {

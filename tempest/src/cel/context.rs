@@ -1,3 +1,4 @@
+use crate::cel::LetBindings;
 use crate::cel::functions;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
@@ -15,13 +16,19 @@ pub fn for_response<'a>(
     evaluation_context: &EvaluationContext,
     refs: &ExpressionReferences,
     response_content_cache: &ResponseContentCache,
+    let_bindings: &LetBindings,
 ) -> anyhow::Result<Context<'a>> {
     let mut context = Context::default();
     check_for_warnings(refs);
     add_response_variables(&mut context, response)?;
+    add_let_bindings(&mut context, let_bindings);
     functions::register_all(&mut context, evaluation_context, response_content_cache);
 
     Ok(context)
+}
+
+fn add_let_bindings(context: &mut Context, let_bindings: &LetBindings) {
+    context.add_variable_from_value("let", let_bindings.clone());
 }
 
 fn check_for_warnings(refs: &ExpressionReferences) {

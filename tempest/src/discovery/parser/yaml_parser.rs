@@ -137,6 +137,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_descriptor_preserves_let_declaration_order() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("let.spec.yml");
+        let yaml =
+            "test:\n  route: /items\n  let:\n    json: body.json()\n    item: let.json.item\n";
+        fs::write(&path, yaml).unwrap();
+
+        let result = YamlFileParser.parse_descriptor(&path).unwrap();
+        let declarations = result.test.unwrap().lets.unwrap();
+        let names = declarations.keys().map(String::as_str).collect::<Vec<_>>();
+
+        assert_eq!(names, vec!["json", "item"]);
+    }
+
+    #[test]
     fn parse_descriptor_parses_nested_describe_blocks() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("nested.spec.yml");

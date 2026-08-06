@@ -1,3 +1,4 @@
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 pub mod liquid;
@@ -21,4 +22,9 @@ pub trait TemplateEngine {
         source: &Option<HashMap<String, String>>,
         context: &liquid_core::Object,
     ) -> Option<HashMap<String, String>>;
+    fn render_indexmap_string_or_self(
+        &self,
+        source: &Option<IndexMap<String, String>>,
+        context: &liquid_core::Object,
+    ) -> Option<IndexMap<String, String>>;
 }
