@@ -20,6 +20,7 @@ pub trait Reporter {
         &self,
         descriptor: &Descriptor,
         title_path: &[String],
+        expansion_prefix: &str,
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,

@@ -1,8 +1,8 @@
 use crate::cel::{self, LetBindings};
-use crate::models::descriptor::Descriptor;
+use crate::models::descriptor::{Descriptor, Profile};
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
-use crate::models::run_context::RunContext;
+use crate::models::run_context::{IterationContext, RunContext};
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::models::test_result::{Assertion, TestResult};
@@ -12,8 +12,11 @@ use crate::pipeline::runners::{TestRunner, resolved_route, test_runner_for};
 use crate::pipeline::variables::{VariableAssignment, variable_assignment_for};
 use crate::templating::{TemplateEngine, liquid::LiquidEngine};
 use reqwest::header::HeaderMap;
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
+use std::future::Future;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 
 pub struct FileRunner<'a> {
     ordinal: usize,
@@ -53,23 +56,117 @@ impl<'a> FileRunner<'a> {
         let mut context = RunContext::new(file_name, self.envs);
 
         let mut descriptors: Vec<DescriptorOutcome> = Vec::new();
-        for (descriptor, ancestor_options, ancestor_titles) in self.root.descendants() {
-            let outcome = self
-                .execute_descriptor_with_retries(
-                    descriptor,
-                    ancestor_options,
-                    &ancestor_titles,
-                    &mut context,
-                )
-                .await;
-
-            descriptors.push(outcome);
-        }
+        let mut title_path = Vec::new();
+        self.execute_descriptor_tree(
+            self.root,
+            RunOptions::default(),
+            &mut context,
+            &mut title_path,
+            &mut descriptors,
+        )
+        .await;
         FileOutcome {
             ordinal: self.ordinal,
             descriptors,
             source_file: self.root.file.clone().unwrap_or_default(),
         }
+    }
+
+    fn execute_descriptor_tree<'b>(
+        &'b self,
+        descriptor: &'b Descriptor,
+        ancestor_options: RunOptions,
+        context: &'b mut RunContext,
+        title_path: &'b mut Vec<String>,
+        outcomes: &'b mut Vec<DescriptorOutcome>,
+    ) -> Pin<Box<dyn Future<Output = ()> + 'b>> {
+        Box::pin(async move {
+            let profiles = descriptor
+                .profiles
+                .as_ref()
+                .map(|profiles| profiles.iter().cloned().map(Some).collect::<Vec<_>>())
+                .unwrap_or_else(|| vec![None]);
+            let profile_count = profiles.len();
+            let loop_count = descriptor
+                .options
+                .as_ref()
+                .and_then(|options| options.loop_count)
+                .map_or(1, |count| count.get());
+            let has_profile = descriptor.profiles.is_some();
+            let has_loop = descriptor
+                .options
+                .as_ref()
+                .is_some_and(|options| options.loop_count.is_some());
+            let expanded = has_profile || has_loop;
+            let case_count = profile_count * loop_count;
+            let mut child_options = ancestor_options
+                .clone()
+                .merge(descriptor.options.clone().unwrap_or_default());
+            child_options.loop_count = None;
+
+            for (profile_index, profile) in profiles.into_iter().enumerate() {
+                for loop_index in 0..loop_count {
+                    let scope = if expanded {
+                        let profile = profile
+                            .as_ref()
+                            .map(|profile| self.render_profile(profile, context));
+                        Some(context.enter_iteration(
+                            profile,
+                            IterationContext {
+                                case_index: profile_index * loop_count + loop_index,
+                                case_count,
+                                has_profile,
+                                profile_index,
+                                profile_count,
+                                has_loop,
+                                loop_index,
+                                loop_count,
+                            },
+                        ))
+                    } else {
+                        None
+                    };
+
+                    let outcome = self
+                        .execute_descriptor_with_retries(
+                            descriptor,
+                            ancestor_options.clone(),
+                            title_path,
+                            context,
+                        )
+                        .await;
+                    let rendered_name = outcome
+                        .attempts
+                        .last()
+                        .and_then(|attempt| attempt.descriptor.name.as_deref())
+                        .filter(|name| !name.trim().is_empty())
+                        .map(str::to_owned);
+                    outcomes.push(outcome);
+
+                    if let Some(name) = &rendered_name {
+                        title_path.push(name.clone());
+                    }
+
+                    for child in descriptor.describe.as_deref().unwrap_or_default() {
+                        self.execute_descriptor_tree(
+                            child,
+                            child_options.clone(),
+                            context,
+                            title_path,
+                            outcomes,
+                        )
+                        .await;
+                    }
+
+                    if rendered_name.is_some() {
+                        title_path.pop();
+                    }
+                    if let Some(scope) = scope {
+                        context.exit_iteration(scope);
+                    }
+                }
+            }
+        })
     }
 
     async fn execute_descriptor_with_retries(
@@ -133,7 +230,8 @@ impl<'a> FileRunner<'a> {
         let mut options = self.options_for_descriptor(&descriptor, ancestor_options);
 
         self.render_inputs(&mut descriptor, &mut options, context);
-        let title_path = self.render_title_path(ancestor_titles, context);
+        let title_path = ancestor_titles.to_vec();
+        let expansion_prefix = context.expansion_prefix();
 
         let test_run = self
             .run_test_if_present(&descriptor, &options, context)
@@ -142,6 +240,7 @@ impl<'a> FileRunner<'a> {
         AttemptOutcome {
             descriptor,
             title_path,
+            expansion_prefix,
             options,
             test_result: test_run.test_result,
             assertions: test_run.assertions,
@@ -377,18 +476,52 @@ impl<'a> FileRunner<'a> {
         descriptor.render_template(self.template_engine, &obj);
     }
 
-    fn render_title_path(&self, titles: &[String], context: &RunContext) -> Vec<String> {
-        let obj = liquid::object!(&context);
-        titles
+    fn render_profile(&self, profile: &Profile, context: &RunContext) -> Profile {
+        profile
             .iter()
-            .map(|title| self.template_engine.render_string_or_self(title, &obj))
+            .map(|(key, value)| {
+                (
+                    self.template_engine
+                        .render_string_or_self(key, &liquid::object!(&context)),
+                    self.render_profile_value(value, context),
+                )
+            })
             .collect()
+    }
+
+    fn render_profile_value(&self, value: &JsonValue, context: &RunContext) -> JsonValue {
+        match value {
+            JsonValue::String(value) => JsonValue::String(
+                self.template_engine
+                    .render_string_or_self(value, &liquid::object!(&context)),
+            ),
+            JsonValue::Array(values) => JsonValue::Array(
+                values
+                    .iter()
+                    .map(|value| self.render_profile_value(value, context))
+                    .collect(),
+            ),
+            JsonValue::Object(values) => JsonValue::Object(
+                values
+                    .iter()
+                    .map(|(key, value)| {
+                        (
+                            self.template_engine
+                                .render_string_or_self(key, &liquid::object!(&context)),
+                            self.render_profile_value(value, context),
+                        )
+                    })
+                    .collect(),
+            ),
+            value => value.clone(),
+        }
     }
 }
 
 pub struct AttemptOutcome {
     pub descriptor: Descriptor,
     pub title_path: Vec<String>,
+    pub expansion_prefix: String,
     pub options: RunOptions,
     pub test_result: Option<TestResult>,
     pub assertions: Vec<Assertion>,

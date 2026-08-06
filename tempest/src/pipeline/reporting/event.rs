@@ -9,6 +9,7 @@ pub enum ReportEvent<'a> {
     Descriptor {
         descriptor: &'a Descriptor,
         title_path: &'a [String],
+        expansion_prefix: &'a str,
         test_result: Option<&'a TestResult>,
         assertions: &'a [Assertion],
         test_count: usize,
@@ -70,6 +71,7 @@ mod tests {
             tags: None,
             test: has_test.then(TestSpec::default),
             describe: None,
+            profiles: None,
             options: None,
             file: None,
         }
@@ -87,6 +89,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &[],
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 1,
@@ -102,6 +105,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &[],
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 0,

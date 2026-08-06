@@ -127,6 +127,33 @@ test:
 
 Nested descriptors execute depth-first in source order. Options on a descriptor are inherited by its descendants; options on one sibling do not affect another sibling. `tags` is currently metadata only and cannot yet be used to select tests.
 
+### Loops and profiles
+
+Use `options.loop` to repeat a descriptor and its subtree a positive number of times. `loop` is descriptor-local rather than inherited: the parent already repeats its complete subtree, so applying the same loop again to every child would multiply it twice.
+
+```yaml
+name: "Health check {{ iteration.loop_index }}"
+options:
+  loop: 2
+test:
+  route: /health
+```
+
+Use a non-empty descriptor-level `profiles` list to run the descriptor once for each input mapping:
+
+```yaml
+name: "Post {{ profile.post_id }}"
+profiles:
+  - post_id: 1
+  - post_id: 2
+test:
+  route: "/posts/{{ profile.post_id }}"
+  assert:
+    - body.json().id == {{ profile.post_id }}
+```
+
+When both are present, profiles are the outer expansion and `loop` is the inner expansion. Nested profiles form a Cartesian product. A child profile is shallow-merged over the active parent profile; matching child keys temporarily override parent keys, and the parent profile is restored before the next sibling. Expanded cases execute sequentially in source order.
+
 ### HTTP test fields
 
 ```yaml
@@ -196,6 +223,7 @@ test:
 | `reports` | Names of report templates to use. Defaults to `console`. A configured list replaces, rather than extends, the inherited list. |
 | `concurrent` | Enables concurrent spec-file execution. Treat this as a root project setting. |
 | `skip` | When `true`, matching tests are reported as skipped without sending a request or evaluating assertions/variables. |
+| `loop` | Positive number of times to execute this descriptor and its subtree. Valid only under descriptor `options` and not inherited as a run option. |
 
 > [!NOTE]
 > Sections without tests are not counted as skipped
@@ -222,6 +250,12 @@ Available input globals are:
 | `vars`           | Values saved by earlier tests in the same spec file. |
 | `file_name`      | Current spec-file path as a string. |
 | `retry_attempts` | Zero-based attempt number: `0` for the initial attempt, `1` for the first retry, and so on. |
+| `profile`        | Effective shallow-merged profile for the current expanded case. |
+| `profile_stack`  | Individual active profiles ordered from outermost to innermost. |
+| `iteration`      | Current case, profile, and loop indexes and counts. |
+| `iteration_stack` | Active iteration metadata ordered from outermost to innermost. |
+
+`iteration` contains `case_index`, `case_count`, `profile_index`, `profile_count`, `loop_index`, and `loop_count`. All indexes are zero-based.
 
 ```yaml
 test:
@@ -389,6 +423,23 @@ Variable behavior:
 - CEL values are converted to JSON-compatible Liquid values.
 - If a variable expression fails or cannot be converted, Tempest stores `null`; assignment failure does not itself fail the test.
 - Mutations from a failed retry attempt are rolled back before the next attempt.
+- A variable exported under an active loop or profile becomes an ordered array and appends once per terminal test attempt.
+- Collected variables bleed into later expanded cases and subsequent descriptors, allowing later criteria to depend on earlier results.
+- Once a variable becomes collected, later assignments to that name continue appending so its type remains stable.
+- A pre-existing scalar is preserved as the first element when an expanded assignment promotes it to a collected variable.
+- Collection indexes follow actual assignment order. Skipped tests and paths that do not evaluate `vars` do not reserve entries.
+
+```yaml
+profiles:
+  - post_id: 1
+  - post_id: 2
+test:
+  route: "/posts/{{ profile.post_id }}"
+  vars:
+    post_ids: body.json().id
+
+# A later descriptor can use vars.post_ids[0] and vars.post_ids[1].
+```
 
 ## Retries and flaky tests
 
@@ -449,6 +500,8 @@ Tempest includes two built-in report templates:
 | `console` | Default human-readable terminal output. (default)                      |
 | `json` | JSON output written under `./tempest-reports/report-<timestamp>.json`. |
 
+The console reporter automatically prefixes expanded tests with their one-based location, for example `[profile #1/2] [loop #2/3]`. Nested expansions include each active profile and loop from outermost to innermost.
+
 Select reporters with the `reports` option:
 
 ```yaml
@@ -471,9 +524,9 @@ section_template: |
 
 test_template: |
   {% if skipped %}
-    {{ full_name }}: skipped
+    {{ expansion_prefix }} {{ full_name }}: skipped
   {% else %}
-    {{ full_name }}: {{ status }} {{ status_message }}
+    {{ expansion_prefix }} {{ full_name }}: {{ status }} {{ status_message }}
   {% endif %}
 
 summary_template: |
@@ -506,13 +559,15 @@ Unknown report names are ignored.
 | Event/template | Available globals                                                                                     |
 |---|-------------------------------------------------------------------------------------------------------|
 | `title_template` | `test_count`                                                                                          |
-| `section_template` | `name`, `description`, `title_path`, `full_name`, `passed`, `test_count`, `retry_count`, `assertions` |
+| `section_template` | `name`, `description`, `title_path`, `full_name`, `expansion_prefix`, `passed`, `test_count`, `retry_count`, `assertions` |
 | `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, `skipped`, and `headers`      |
 | `summary_template` | `passed`, `failed`, `flaky`, `skipped`                                                                |
 | `error_template` | `liquid_error_message`                                                                                |
 | `debug_template` | `debug_message`                                                                                       |
 
 Each item in `assertions` contains `expr`, `passed`, and `error`.
+
+`expansion_prefix` is empty for an ordinary descriptor. For expanded descriptors it contains the same one-based profile and loop locations used by the console reporter.
 
 The Liquid engine includes its standard library plus Tempest's `json`, `color_status`, and `color_duration` filters and ANSI color filters such as `red`, `green`, `yellow`, `bright_red`, and their supported `on_*` background variants. The built-in templates under [`tempest/src/builtin_reporters`](https://github.com/matt-andrews/Tempest/tree/main/tempest/src/builtin_reporters) provide complete examples.
 

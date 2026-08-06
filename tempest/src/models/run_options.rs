@@ -3,6 +3,7 @@ use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
+use std::num::NonZeroUsize;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
@@ -12,6 +13,8 @@ pub struct RunOptions {
     pub retries: Option<u8>,
     pub concurrent: Option<bool>,
     pub skip: Option<Templated<bool>>,
+    #[serde(rename = "loop")]
+    pub loop_count: Option<NonZeroUsize>,
 
     #[serde(skip)]
     pub start_time: Option<DateTime>,
@@ -27,6 +30,7 @@ impl RunOptions {
             retries: Some(retries),
             concurrent: None,
             skip: None,
+            loop_count: None,
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -38,6 +42,10 @@ impl RunOptions {
             retries: other.retries.or(self.retries),
             concurrent: other.concurrent.or(self.concurrent),
             skip: other.skip.or(self.skip),
+            // Looping is a descriptor-local execution directive. Taking only the
+            // more-local value prevents a parent's loop from being applied again
+            // by every descendant.
+            loop_count: other.loop_count,
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
@@ -48,6 +56,7 @@ impl RunOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::num::NonZeroUsize;
 
     #[test]
     fn default_debug_false_has_specific_fields_and_no_other_fields() {
@@ -79,6 +88,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
@@ -88,6 +98,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -106,6 +117,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -115,6 +127,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
@@ -133,6 +146,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let other = RunOptions {
             base_uri: None,
@@ -142,6 +156,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);
@@ -194,5 +209,28 @@ mod tests {
         };
 
         assert_eq!(base.merge(other).concurrent, Some(true));
+    }
+
+    #[test]
+    fn merge_does_not_inherit_descriptor_loop_count() {
+        let parent = RunOptions {
+            loop_count: NonZeroUsize::new(2),
+            ..Default::default()
+        };
+
+        assert_eq!(parent.merge(RunOptions::default()).loop_count, None);
+    }
+
+    #[test]
+    fn merge_uses_loop_count_declared_on_more_local_descriptor() {
+        let local = RunOptions {
+            loop_count: NonZeroUsize::new(3),
+            ..Default::default()
+        };
+
+        assert_eq!(
+            RunOptions::default().merge(local).loop_count.unwrap().get(),
+            3
+        );
     }
 }

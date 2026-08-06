@@ -109,6 +109,7 @@ mod tests {
             tags: None,
             test: Some(TestSpec::default()),
             describe: None,
+            profiles: None,
             options: None,
             file: Some(PathBuf::from(path)),
         }

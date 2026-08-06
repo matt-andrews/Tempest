@@ -65,6 +65,7 @@ impl Reporter for TemplateReporter {
         &self,
         descriptor: &Descriptor,
         title_path: &[String],
+        expansion_prefix: &str,
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,
@@ -76,6 +77,7 @@ impl Reporter for TemplateReporter {
             ReportEvent::Descriptor {
                 descriptor,
                 title_path,
+                expansion_prefix,
                 test_result,
                 assertions,
                 test_count,
@@ -183,6 +185,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         }
     }
 
@@ -218,6 +221,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
 
         assert!(active_templates(&templates, &options).is_empty());
@@ -252,6 +256,7 @@ mod tests {
             retries: Some(0),
             concurrent: None,
             skip: None,
+            loop_count: None,
         };
 
         TemplateReporter::new()

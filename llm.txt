@@ -128,6 +128,21 @@ test:
 
 Nested `describe` blocks are traversed depth-first in source order. A section is reported immediately before its own tests. Options on a descriptor are inherited by its descendants, while options on sibling branches do not leak into one another.
 
+Descriptors can also expand through loops and profiles:
+
+```yaml
+name: "Post {{ profile.post_id }}, loop {{ iteration.loop_index }}"
+profiles:
+  - post_id: 1
+  - post_id: 2
+options:
+  loop: 2
+test:
+  route: "/posts/{{ profile.post_id }}"
+```
+
+`options.loop` must be a positive integer. It applies only to the descriptor where it is declared and repeats that descriptor's complete subtree. `profiles` must be a non-empty list of mappings. Profiles are the outer expansion and `loop` is the inner expansion. Nested profiles form a Cartesian product and shallow-merge over the active parent profile. Child overrides are restored before executing a sibling. Expanded cases remain sequential within their spec file.
+
 `tags` is currently metadata only. Tempest parses and Liquid-renders the field, but tags cannot select or filter tests.
 
 Common nested example:
@@ -170,6 +185,7 @@ Option behavior:
 - `reports` selects report templates by name.
 - `concurrent` enables concurrent spec-file execution when set in the root project config. Tests within each file, including retries and variable assignment, remain sequential.
 - `skip` option will cause the test to be skipped and any inherited tests to be skipped. A skipped test does not run, assert or set variables.
+- `loop` repeats a descriptor and its subtree. It is valid only under descriptor `options` and is not an inherited run option or a valid config-file option.
 - The CLI starts with `reports: ["console"]`, `debug: false`, `retries: 0`, and serial spec-file execution.
 - When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
 - Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
@@ -233,6 +249,10 @@ Useful Liquid input globals:
 - `vars`: values saved by earlier tests in the same spec file.
 - `retry_attempts`: zero-based attempt number; `0` is the initial attempt.
 - `file_name`: the current spec-file path as a string.
+- `profile`: effective shallow-merged profile for the current expanded case.
+- `profile_stack`: individual active profiles ordered from outermost to innermost.
+- `iteration`: current expansion metadata with zero-based `case_index`, `profile_index`, and `loop_index`, plus their corresponding counts.
+- `iteration_stack`: active iteration metadata ordered from outermost to innermost.
 
 Liquid input interpolation and Liquid report rendering use the same Liquid engine, but they run with different globals.
 
@@ -367,12 +387,17 @@ Variable scope and behavior:
 - CEL values are converted to JSON-compatible values before being placed in `vars`.
 - If a variable expression cannot be evaluated or converted, Tempest stores `null`. A variable-assignment error does not itself fail the test.
 - Failed retry attempts have their variable mutations rolled back before the next attempt.
+- A variable exported while any loop or profile is active becomes an ordered array. Each terminal attempt appends one value.
+- Collected values remain visible to later cases, sibling descriptors, and subsequent descriptors in the same spec file.
+- Once a name becomes collected, later assignments keep appending even after the expansion exits.
+- If a scalar already exists when collection begins, it is retained as the first array element. Exported arrays remain individual elements rather than being flattened.
+- Indexes represent actual assignment order. Skipped tests and paths that do not evaluate `vars` do not reserve entries.
 
 ## Reporters
 
 Tempest includes these built-in report templates:
 
-- `console`: default console output. It prints one line per passing test, combines nested descriptor names with ` › `, and prints only failed assertions beneath failed tests.
+- `console`: default console output. It prints one line per passing test, combines nested descriptor names with ` › `, prefixes expanded tests with one-based locations such as `[profile #1/2] [loop #2/3]`, and prints only failed assertions beneath failed tests. Nested expansions list active locations from outermost to innermost.
 - `json`: appends JSON output to `./tempest-reports/report-{{start_timestamp}}.json`.
 
 Enable reports with options:
@@ -404,7 +429,7 @@ section_template: |
   # {{ name }}
 
 test_template: |
-  {{ name }}: {{ status }} {{ status_message }}
+  {{ expansion_prefix }} {{ name }}: {{ status }} {{ status_message }}
 
 summary_template: |
   Passed: {{ passed }}, Failed: {{ failed }}, Flaky: {{ flaky }}, Duration: {{ duration }}ms
@@ -440,6 +465,7 @@ Section and test templates:
 - `name`
 - `title_path`: array of rendered ancestor descriptor names.
 - `full_name`: the rendered ancestor names and current descriptor name joined with ` › `.
+- `expansion_prefix`: empty outside an expansion; otherwise the active one-based profile and loop locations, ordered outermost to innermost.
 - `description`
 - `passed`
 - `test_count`: number of previously completed tests already counted in the run summary, represented as a string.
