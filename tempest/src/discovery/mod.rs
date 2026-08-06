@@ -53,7 +53,7 @@ fn collect_embedded_templates(
     Ok(())
 }
 
-fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
+pub fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
     let contents = fs::read_to_string(path)?;
     let config: HashMap<String, String> = contents
         .lines()
