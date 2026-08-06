@@ -65,6 +65,7 @@ impl Reporter for TemplateReporter {
         &self,
         descriptor: &Descriptor,
         title_path: &[String],
+        expansion_prefix: &str,
         test_result: Option<&TestResult>,
         assertions: &[Assertion],
         options: &RunOptions,
@@ -76,6 +77,7 @@ impl Reporter for TemplateReporter {
             ReportEvent::Descriptor {
                 descriptor,
                 title_path,
+                expansion_prefix,
                 test_result,
                 assertions,
                 test_count,

@@ -7,8 +7,10 @@ use std::collections::{HashMap, HashSet};
 pub struct IterationContext {
     pub case_index: usize,
     pub case_count: usize,
+    pub has_profile: bool,
     pub profile_index: usize,
     pub profile_count: usize,
+    pub has_loop: bool,
     pub loop_index: usize,
     pub loop_count: usize,
 }
@@ -83,6 +85,31 @@ impl RunContext {
         !self.iteration_stack.is_empty()
     }
 
+    pub fn expansion_prefix(&self) -> String {
+        self.iteration_stack
+            .iter()
+            .flat_map(|iteration| {
+                let mut locations = Vec::with_capacity(2);
+                if iteration.has_profile {
+                    locations.push(format!(
+                        "[profile #{}/{}]",
+                        iteration.profile_index + 1,
+                        iteration.profile_count
+                    ));
+                }
+                if iteration.has_loop {
+                    locations.push(format!(
+                        "[loop #{}/{}]",
+                        iteration.loop_index + 1,
+                        iteration.loop_count
+                    ));
+                }
+                locations
+            })
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+
     pub fn set_var(&mut self, name: String, value: JsonValue) {
         if !self.is_expanded() && !self.collected_vars.contains(&name) {
             self.vars.insert(name, value);
@@ -124,8 +151,10 @@ mod tests {
         IterationContext {
             case_index: 0,
             case_count: 2,
+            has_profile: false,
             profile_index: 0,
             profile_count: 1,
+            has_loop: true,
             loop_index: 0,
             loop_count: 2,
         }
@@ -177,5 +206,45 @@ mod tests {
             Profile::from_iter([("region".to_string(), json!("us"))])
         );
         assert_eq!(context.vars["id"], json!([42]));
+    }
+
+    #[test]
+    fn expansion_prefix_describes_every_active_profile_and_loop() {
+        let mut context = RunContext::new("test.yml", &HashMap::new());
+        let outer = context.enter_iteration(
+            None,
+            IterationContext {
+                case_index: 1,
+                case_count: 6,
+                has_profile: true,
+                profile_index: 0,
+                profile_count: 2,
+                has_loop: true,
+                loop_index: 1,
+                loop_count: 3,
+            },
+        );
+        let inner = context.enter_iteration(
+            None,
+            IterationContext {
+                case_index: 1,
+                case_count: 2,
+                has_profile: true,
+                profile_index: 1,
+                profile_count: 2,
+                has_loop: false,
+                loop_index: 0,
+                loop_count: 1,
+            },
+        );
+
+        assert_eq!(
+            context.expansion_prefix(),
+            "[profile #1/2] [loop #2/3] [profile #2/2]"
+        );
+
+        context.exit_iteration(inner);
+        context.exit_iteration(outer);
+        assert!(context.expansion_prefix().is_empty());
     }
 }

@@ -500,6 +500,8 @@ Tempest includes two built-in report templates:
 | `console` | Default human-readable terminal output. (default)                      |
 | `json` | JSON output written under `./tempest-reports/report-<timestamp>.json`. |
 
+The console reporter automatically prefixes expanded tests with their one-based location, for example `[profile #1/2] [loop #2/3]`. Nested expansions include each active profile and loop from outermost to innermost.
+
 Select reporters with the `reports` option:
 
 ```yaml
@@ -522,9 +524,9 @@ section_template: |
 
 test_template: |
   {% if skipped %}
-    {{ full_name }}: skipped
+    {{ expansion_prefix }} {{ full_name }}: skipped
   {% else %}
-    {{ full_name }}: {{ status }} {{ status_message }}
+    {{ expansion_prefix }} {{ full_name }}: {{ status }} {{ status_message }}
   {% endif %}
 
 summary_template: |
@@ -557,13 +559,15 @@ Unknown report names are ignored.
 | Event/template | Available globals                                                                                     |
 |---|-------------------------------------------------------------------------------------------------------|
 | `title_template` | `test_count`                                                                                          |
-| `section_template` | `name`, `description`, `title_path`, `full_name`, `passed`, `test_count`, `retry_count`, `assertions` |
+| `section_template` | `name`, `description`, `title_path`, `full_name`, `expansion_prefix`, `passed`, `test_count`, `retry_count`, `assertions` |
 | `test_template` | Section globals plus `status`, `status_message`, `body`, `duration_ms`, `skipped`, and `headers`      |
 | `summary_template` | `passed`, `failed`, `flaky`, `skipped`                                                                |
 | `error_template` | `liquid_error_message`                                                                                |
 | `debug_template` | `debug_message`                                                                                       |
 
 Each item in `assertions` contains `expr`, `passed`, and `error`.
+
+`expansion_prefix` is empty for an ordinary descriptor. For expanded descriptors it contains the same one-based profile and loop locations used by the console reporter.
 
 The Liquid engine includes its standard library plus Tempest's `json`, `color_status`, and `color_duration` filters and ANSI color filters such as `red`, `green`, `yellow`, `bright_red`, and their supported `on_*` background variants. The built-in templates under [`tempest/src/builtin_reporters`](https://github.com/matt-andrews/Tempest/tree/main/tempest/src/builtin_reporters) provide complete examples.
 

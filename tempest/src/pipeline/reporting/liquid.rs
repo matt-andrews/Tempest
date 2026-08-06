@@ -53,6 +53,7 @@ impl LiquidRenderer {
             ReportEvent::Descriptor {
                 descriptor,
                 title_path,
+                expansion_prefix,
                 test_result,
                 assertions,
                 test_count,
@@ -60,6 +61,7 @@ impl LiquidRenderer {
             } => build_descriptor_globals(
                 descriptor,
                 title_path,
+                expansion_prefix,
                 *test_result,
                 assertions,
                 *test_count,
@@ -83,6 +85,7 @@ impl LiquidRenderer {
 fn build_descriptor_globals(
     descriptor: &Descriptor,
     title_path: &[String],
+    expansion_prefix: &str,
     test_result: Option<&TestResult>,
     assertions: &[Assertion],
     test_count: usize,
@@ -111,6 +114,10 @@ fn build_descriptor_globals(
     globals.insert(
         "name".into(),
         Value::scalar(descriptor.name.clone().unwrap_or_default()),
+    );
+    globals.insert(
+        "expansion_prefix".into(),
+        Value::scalar(expansion_prefix.to_owned()),
     );
     let title_path_values = title_path
         .iter()
@@ -281,6 +288,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &title_path,
+            expansion_prefix: "[profile #1/2] [loop #2/3]",
             test_result: Some(&result),
             assertions: &assertions,
             test_count: 5,
@@ -290,7 +298,7 @@ mod tests {
         let output = renderer
             .render(
                 &template(
-                    "{{ name }}|{{ full_name }}|{{ description }}|{{ passed }}|{{ skipped }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
+                    "{{ name }}|{{ full_name }}|{{ expansion_prefix }}|{{ description }}|{{ passed }}|{{ skipped }}|{{ status }}|{{ status_message }}|{{ body }}|{{ test_count }}|{% for a in assertions %}{{ a.expr }}={{ a.passed }}:{{ a.error }};{% endfor %}",
                 ),
                 &event,
             )
@@ -298,7 +306,7 @@ mod tests {
 
         assert_eq!(
             output,
-            "login|accounts › authenticated › login|login description|false|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
+            "login|accounts › authenticated › login|[profile #1/2] [loop #2/3]|login description|false|false|404|Not Found|missing|5|status == 404u=true:;body.contains(\"ok\")=false:assertion failed;"
         );
     }
 
@@ -309,6 +317,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &[],
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 0,
@@ -330,6 +339,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &[],
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 0,
@@ -356,6 +366,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &title_path,
+            expansion_prefix: "[profile #1/2] [loop #2/3]",
             test_result: Some(&result),
             assertions: &assertions,
             test_count: 0,
@@ -373,6 +384,7 @@ mod tests {
 
         assert_eq!(output.lines().count(), 1, "{output:?}");
         assert!(output.contains("✓"));
+        assert!(output.contains("[profile #1/2] [loop #2/3] accounts › authenticated › login"));
         assert!(output.contains("accounts › authenticated › login"));
         assert!(!output.contains("status == 404"));
     }
@@ -390,6 +402,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &title_path,
+            expansion_prefix: "",
             test_result: Some(&result),
             assertions: &assertions,
             test_count: 0,
@@ -420,6 +433,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &title_path,
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 0,
@@ -449,6 +463,7 @@ mod tests {
         let event = ReportEvent::Descriptor {
             descriptor: &descriptor,
             title_path: &[],
+            expansion_prefix: "",
             test_result: None,
             assertions: &[],
             test_count: 0,

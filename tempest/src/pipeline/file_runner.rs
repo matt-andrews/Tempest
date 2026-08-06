@@ -92,11 +92,12 @@ impl<'a> FileRunner<'a> {
                 .as_ref()
                 .and_then(|options| options.loop_count)
                 .map_or(1, |count| count.get());
-            let expanded = descriptor.profiles.is_some()
-                || descriptor
-                    .options
-                    .as_ref()
-                    .is_some_and(|options| options.loop_count.is_some());
+            let has_profile = descriptor.profiles.is_some();
+            let has_loop = descriptor
+                .options
+                .as_ref()
+                .is_some_and(|options| options.loop_count.is_some());
+            let expanded = has_profile || has_loop;
             let case_count = profile_count * loop_count;
             let mut child_options = ancestor_options
                 .clone()
@@ -114,8 +115,10 @@ impl<'a> FileRunner<'a> {
                             IterationContext {
                                 case_index: profile_index * loop_count + loop_index,
                                 case_count,
+                                has_profile,
                                 profile_index,
                                 profile_count,
+                                has_loop,
                                 loop_index,
                                 loop_count,
                             },
@@ -228,6 +231,7 @@ impl<'a> FileRunner<'a> {
 
         self.render_inputs(&mut descriptor, &mut options, context);
         let title_path = ancestor_titles.to_vec();
+        let expansion_prefix = context.expansion_prefix();
 
         let test_run = self
             .run_test_if_present(&descriptor, &options, context)
@@ -236,6 +240,7 @@ impl<'a> FileRunner<'a> {
         AttemptOutcome {
             descriptor,
             title_path,
+            expansion_prefix,
             options,
             test_result: test_run.test_result,
             assertions: test_run.assertions,
@@ -516,6 +521,7 @@ impl<'a> FileRunner<'a> {
 pub struct AttemptOutcome {
     pub descriptor: Descriptor,
     pub title_path: Vec<String>,
+    pub expansion_prefix: String,
     pub options: RunOptions,
     pub test_result: Option<TestResult>,
     pub assertions: Vec<Assertion>,
