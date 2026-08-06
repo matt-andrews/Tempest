@@ -3,7 +3,7 @@
 #   1. A curl failure must exit non-zero (not silently produce empty notes).
 #   2. A jq parse failure must exit non-zero.
 #   3. Happy path: valid response produces correct release notes.
-#   4. Git-range mode queries the current range but not the previous tag commit.
+#   4. Git-range mode follows first-parent history and excludes the prior tag.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -96,7 +96,7 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# ── test 4: exact Git range excludes the previous tag commit ─────────────────
+# ── test 4: exact Git range follows first-parent history ─────────────────────
 REPO4="$WORKDIR/repo4"
 BIN4="$WORKDIR/bin4"
 mkdir -p "$REPO4" "$BIN4"
@@ -110,11 +110,17 @@ git -C "$REPO4" add history.txt
 git -C "$REPO4" commit -qm "previous release"
 git -C "$REPO4" tag app/v1.0.0
 PREVIOUS_SHA=$(git -C "$REPO4" rev-parse HEAD)
+DEFAULT_BRANCH=$(git -C "$REPO4" branch --show-current)
 
-printf 'current\n' >> "$REPO4/history.txt"
-git -C "$REPO4" commit -qam "current release"
+git -C "$REPO4" checkout -qb feature
+printf 'feature\n' >> "$REPO4/history.txt"
+git -C "$REPO4" commit -qam "feature branch commit"
+FEATURE_SHA=$(git -C "$REPO4" rev-parse HEAD)
+
+git -C "$REPO4" checkout -q "$DEFAULT_BRANCH"
+git -C "$REPO4" merge --no-ff -m "merge feature" feature >/dev/null
 git -C "$REPO4" tag app/v1.1.0
-CURRENT_SHA=$(git -C "$REPO4" rev-parse HEAD)
+MERGE_SHA=$(git -C "$REPO4" rev-parse HEAD)
 
 cat > "$BIN4/curl" << 'EOF'
 #!/bin/sh
@@ -138,13 +144,14 @@ if (
     CURL_LOG="$CURL_LOG" \
     bash "$COLLECT_PRS" >/dev/null 2>&1
 ); then
-  if grep -q "$CURRENT_SHA" "$CURL_LOG" \
+  if grep -q "$MERGE_SHA" "$CURL_LOG" \
     && ! grep -q "$PREVIOUS_SHA" "$CURL_LOG" \
+    && ! grep -q "$FEATURE_SHA" "$CURL_LOG" \
     && grep -q "Current range PR" "$OUT4"; then
-    echo "PASS: Git range excludes the previous tag commit"
+    echo "PASS: Git range follows first-parent history"
     PASS=$((PASS + 1))
   else
-    echo "FAIL: Git range queried the wrong commits or omitted the current PR"
+    echo "FAIL: Git range queried non-first-parent commits or omitted the merge"
     FAIL=$((FAIL + 1))
   fi
 else

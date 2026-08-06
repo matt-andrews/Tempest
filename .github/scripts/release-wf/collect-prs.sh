@@ -2,9 +2,10 @@
 # Finds merged PRs with any of the specified area labels and writes formatted
 # release notes to OUTPUT_FILE.
 #
-# Versioned releases enumerate the exact BASE_TAG..TAG Git range and ask GitHub
-# which PRs are associated with those commits. Date-mode releases query each
-# label separately. Results are combined and deduplicated by PR number.
+# Versioned releases enumerate the first-parent commits in the exact
+# BASE_TAG..TAG Git range and ask GitHub which PRs are associated with those
+# commits. Date-mode releases query each label separately. Results are combined
+# and deduplicated by PR number.
 #
 # Required env:
 #   RANGE_MODE           - "git" for an exact tag range, or "date"
@@ -71,7 +72,7 @@ collect_prs_from_git_range() {
     ]')
 
     append_pr_batch "$batch"
-  done < <(git rev-list --reverse "$revision_range")
+  done < <(git rev-list --first-parent --reverse "$revision_range")
 
   return 0
 }
