@@ -169,6 +169,105 @@ mod tests {
         names
     }
 
+    fn parse_env_contents(contents: &str) -> HashMap<String, String> {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("test.env");
+        fs::write(&path, contents).unwrap();
+        parse_env(&path).unwrap()
+    }
+
+    #[test]
+    fn parse_env_parses_key_value_pairs() {
+        let env = parse_env_contents("HOST=localhost\nPORT=8080\n");
+
+        assert_eq!(
+            env,
+            HashMap::from([
+                ("HOST".to_owned(), "localhost".to_owned()),
+                ("PORT".to_owned(), "8080".to_owned()),
+            ])
+        );
+    }
+
+    #[test]
+    fn parse_env_trims_keys_values_and_blank_lines() {
+        let env = parse_env_contents("\n  HOST = localhost  \n\tPORT\t=\t8080\t\n\n");
+
+        assert_eq!(env.get("HOST").map(String::as_str), Some("localhost"));
+        assert_eq!(env.get("PORT").map(String::as_str), Some("8080"));
+        assert_eq!(env.len(), 2);
+    }
+
+    #[test]
+    fn parse_env_ignores_comments_and_removes_inline_comments() {
+        let env = parse_env_contents(
+            "# file comment\n  # indented comment\nHOST=localhost # local server\nPORT=8080#default\n",
+        );
+
+        assert_eq!(env.get("HOST").map(String::as_str), Some("localhost"));
+        assert_eq!(env.get("PORT").map(String::as_str), Some("8080"));
+        assert_eq!(env.len(), 2);
+    }
+
+    #[test]
+    fn parse_env_preserves_equals_signs_in_values() {
+        let env = parse_env_contents(
+            "DATABASE_URL=postgres://user:password@host/db?sslmode=require\nTOKEN=a=b=c\n",
+        );
+
+        assert_eq!(
+            env.get("DATABASE_URL").map(String::as_str),
+            Some("postgres://user:password@host/db?sslmode=require")
+        );
+        assert_eq!(env.get("TOKEN").map(String::as_str), Some("a=b=c"));
+    }
+
+    #[test]
+    fn parse_env_ignores_lines_without_an_equals_sign_and_accepts_empty_values() {
+        let env = parse_env_contents("MALFORMED\nEMPTY=\nVALID=value\n");
+
+        assert!(!env.contains_key("MALFORMED"));
+        assert_eq!(env.get("EMPTY").map(String::as_str), Some(""));
+        assert_eq!(env.get("VALID").map(String::as_str), Some("value"));
+        assert_eq!(env.len(), 2);
+    }
+
+    #[test]
+    fn parse_env_uses_the_last_value_for_duplicate_keys() {
+        let env = parse_env_contents("MODE=development\nMODE=production\n");
+
+        assert_eq!(env.get("MODE").map(String::as_str), Some("production"));
+        assert_eq!(env.len(), 1);
+    }
+
+    #[test]
+    fn parse_env_supports_crlf_line_endings_and_unicode_values() {
+        let env = parse_env_contents("GREETING=olá\r\nEMOJI=🌩️\r\n");
+
+        assert_eq!(env.get("GREETING").map(String::as_str), Some("olá"));
+        assert_eq!(env.get("EMOJI").map(String::as_str), Some("🌩️"));
+    }
+
+    #[test]
+    fn parse_env_returns_an_error_when_the_file_does_not_exist() {
+        let dir = tempdir().unwrap();
+
+        let result = parse_env(&dir.path().join("missing.env"));
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn parse_env_returns_an_error_for_non_utf8_input() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("invalid.env");
+        fs::write(&path, [0xff, 0xfe, 0xfd]).unwrap();
+
+        let result = parse_env(&path);
+
+        assert!(result.is_err());
+    }
+
     #[test]
     fn discover_empty_directory_has_no_files_options_or_children() {
         let dir = tempdir().unwrap();
