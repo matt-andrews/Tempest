@@ -56,7 +56,7 @@ tempest test \
 CLI behavior:
 
 - `--path` is the test-project root. It defaults to `/etc/tests` for Docker volume mounts.
-- `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project.
+- `--run` limits execution to one spec file or subdirectory beneath `--path`. It defaults to the whole project. is an array.
 - `--debug` prints the resolved route, response status, response headers, and response body. It does not print outgoing request headers or the request body.
 - `--retries N` sets the default number of additional attempts after an assertion failure.
 - `--workers N` sets the maximum number of spec files in flight. Supplying it enables file concurrency; `--workers 1` forces serial execution.

@@ -54,17 +54,17 @@ Tempest currently provides one command:
 tempest test [OPTIONS]
 ```
 
-| Option | Default | Description                                                                                                        |
-|---|---:|--------------------------------------------------------------------------------------------------------------------|
-| `--path <PATH>` | `/etc/tests` | Test-project root to discover.                                                                                     |
-| `--run <PATH>` | `/` | Run only one spec file or subdirectory relative to `--path`.                                                       |
-| `-d`, `--debug` | `false` | Render the resolved route and detailed response information. This may expose sensitive response headers or bodies. |
-| `--retries <N>` | `0` | Default number of additional attempts after an assertion failure.                                                  |
-| `--workers <N>` | unset | Maximum number of spec files in flight. Must be greater than zero and enables file concurrency when supplied.      |
-| `-s`, `--strict` | `false` | Return exit code 2 when the run contains flaky tests but no failures.                                              |
+| Option                | Default | Description                                                                                                        |
+|-----------------------|--:|--------------------------------------------------------------------------------------------------------------------|
+| `--path <PATH>`       | `/etc/tests` | Test-project root to discover.                                                                                     |
+| `-r`, `--run <PATH>`   | | An array of files/subdirectories relative to `--path` that are to be executed.                                     |
+| `-d`, `--debug`       | `false` | Render the resolved route and detailed response information. This may expose sensitive response headers or bodies. |
+| `--retries <N>`       | `0` | Default number of additional attempts after an assertion failure.                                                  |
+| `--workers <N>`       | unset | Maximum number of spec files in flight. Must be greater than zero and enables file concurrency when supplied.      |
+| `-s`, `--strict`      | `false` | Return exit code 2 when the run contains flaky tests but no failures.                                              |
 | `-w`, `--warn-as-err` | `false` | Return exit code 1 when Tempest emits any warning.                                                                 |
-| `-h`, `--help` | | Print command help.                                                                                                |
-| `-e`, `--env` | | An array of base environment variables. Eg; `-e KEY1=value1 -e KEY2=value2`                                         |
+| `-h`, `--help`        | | Print command help.                                                                                                |
+| `-e`, `--env`         | | An array of base environment variables. Eg; `-e KEY1=value1 -e KEY2=value2`                                        |
 
 ## Project files and discovery
 
