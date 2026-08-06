@@ -201,10 +201,13 @@ test:
   headers:
     Content-Type: application/json
     Accept: application/json
+  let:
+    post: body.json()
   assert:
     - status == 200
+    - let.post.title == "Hello"
   vars:
-    post_id: body.json().id
+    post_id: let.post.id
 ```
 
 HTTP behavior:
@@ -222,7 +225,7 @@ An HTTP status does not fail a test by itself. Tests pass or fail according to t
 
 ## Liquid Input Interpolation
 
-Before a request is sent, Tempest renders spec strings with Liquid. This includes descriptor metadata, `base_uri`, and test fields such as `route`, `verb`, `body`, `headers`, `assert`, and `vars`.
+Before a request is sent, Tempest renders spec strings with Liquid. This includes descriptor metadata, `base_uri`, and test fields such as `route`, `verb`, `body`, `headers`, `let`, `assert`, and `vars`.
 
 Useful Liquid input globals:
 
@@ -299,9 +302,29 @@ Both dotted JSON field access and bracket access work. Prefer dotted access for 
 
 Normal CEL operators, string/list/map methods, macros, and literals supported by the bundled CEL interpreter can be used. Existing examples use methods and macros such as `contains`, `startsWith`, `endsWith`, `matches`, `size`, `all`, `exists`, `exists_one`, `filter`, and `map`.
 
+## Test-Scoped Bindings
+
+Use `let:` to name response-derived CEL values within one test attempt. The mapping is ordered: each expression may reference bindings declared above it through the `let` namespace.
+
+```yaml
+test:
+  route: /albums
+  let:
+    json: body.json()
+    album_ids: let.json.map(album, album.id)
+  assert:
+    - status == 200
+    - let.json.all(album, album.title.size() > 0)
+    - let.album_ids.size() == 100
+  vars:
+    first_album_id: let.album_ids[0]
+```
+
+Bindings are evaluated after the response arrives and before assertions. They retain their CEL types, are recomputed for every retry attempt, and are not available to later tests. Assertions and saved-variable expressions from the same test can reference them. A binding evaluation error fails the attempt; later bindings and assertions are skipped, and saved variables are not assigned for that attempt.
+
 ## Saved Variables
 
-Use `vars:` to save response-derived values for later tests. `vars` is a YAML mapping, and every value is a CEL expression evaluated against the current HTTP response with the same variables and functions available to assertions.
+Use `vars:` to save response-derived values for later tests. `vars` is a YAML mapping, and every value is a CEL expression evaluated against the current HTTP response with the same variables, functions, and test-scoped `let` bindings available to assertions.
 
 ```yaml
 name: "Save a user"

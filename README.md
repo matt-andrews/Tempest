@@ -137,11 +137,13 @@ test:
   headers:
     Content-Type: application/json
     Accept: application/json
+  let:
+    post: body.json()
   assert:
     - status == 201u
-    - body.json().title == "Tempest"
+    - let.post.title == "Tempest"
   vars:
-    post_id: body.json().id
+    post_id: let.post.id
 ```
 
 | Field | Required | Description |
@@ -150,6 +152,7 @@ test:
 | `verb` | No | HTTP method. Defaults to `GET`; matching is case-insensitive. |
 | `body` | No | String request body sent with POST, PUT, and PATCH. |
 | `headers` | No | Mapping of request header names to string values. |
+| `let` | No | Ordered mapping of CEL expressions available under the test-scoped `let` namespace. |
 | `assert` | No | List of CEL expressions. Every expression must evaluate to a boolean. |
 | `vars` | No | Mapping of names to CEL expressions saved for later tests in this spec file. |
 
@@ -229,7 +232,7 @@ test:
 
 CEL and Liquid have different jobs:
 
-- Use **CEL** to inspect the current HTTP response in `assert` and on the right-hand side of `vars`.
+- Use **CEL** to inspect the current HTTP response in `let`, `assert`, and on the right-hand side of `vars`.
 - Use **Liquid** to interpolate environment values, retry state, and values saved by earlier tests.
 
 When a Liquid value is rendered into a CEL string comparison, keep the CEL string quotes:
@@ -331,9 +334,29 @@ assert:
 
 Missing files, rejected paths, and invalid Base64 produce evaluation errors.
 
+## Test-scoped bindings
+
+Use `let` to name response-derived CEL values for the current test attempt. Bindings are evaluated in declaration order after the response arrives and before assertions run. Each expression can reference bindings declared above it through the `let` namespace.
+
+```yaml
+test:
+  route: /albums
+  let:
+    json: body.json()
+    album_ids: let.json.map(album, album.id)
+  assert:
+    - status == 200
+    - let.json.all(album, album.title.size() > 0)
+    - let.album_ids.size() == 100
+  vars:
+    first_album_id: let.album_ids[0]
+```
+
+Bindings retain their CEL types, are recomputed for every retry attempt, and do not persist into later tests. Saved-variable expressions in the same test may reference them. If a binding cannot be parsed or evaluated, the attempt fails, later bindings and assertions are not evaluated, and `vars` are not assigned for that attempt.
+
 ## Saved variables
 
-Use `vars` to evaluate response-derived values and make them available to later tests in the same spec file. Each value is a CEL expression evaluated with the same variables and functions available to assertions.
+Use `vars` to evaluate response-derived values and make them available to later tests in the same spec file. Each value is a CEL expression evaluated with the same variables, functions, and test-scoped `let` bindings available to assertions.
 
 ```yaml
 name: "Load a user"
