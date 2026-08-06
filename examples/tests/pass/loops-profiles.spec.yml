@@ -1,0 +1,81 @@
+name: "Loops and profiles"
+description: "Executable examples for descriptor expansion and collected variables"
+options:
+  base_uri: "{{ env.JSON_PLACEHOLDER_BASE_URI }}"
+
+describe:
+  - name: "A descriptor can run a fixed number of times"
+    options:
+      loop: 2
+    test:
+      route: /posts/1
+      assert:
+        - status == 200u
+        - body.json().id == 1
+
+  - name: "Profile {{ profile.post_id }} selects its own input"
+    profiles:
+      - post_id: 1
+      - post_id: 2
+    test:
+      route: "/posts/{{ profile.post_id }}"
+      assert:
+        - status == 200u
+        - body.json().id == {{ profile.post_id }}
+
+  - name: "Profile {{ profile.post_id }}, loop {{ iteration.loop_index }}"
+    description: "Profiles are the outer expansion and loop is the inner expansion"
+    profiles:
+      - post_id: 3
+      - post_id: 4
+    options:
+      loop: 2
+    test:
+      route: "/posts/{{ profile.post_id }}"
+      assert:
+        - status == 200u
+        - body.json().id == {{ profile.post_id }}
+
+  - name: "User {{ profile.user_id }}"
+    description: "Nested profiles form a Cartesian product and shallow-merge their values"
+    profiles:
+      - user_id: 1
+      - user_id: 2
+    describe:
+      - name: "{{ profile.resource }} for user {{ profile.user_id }}"
+        profiles:
+          - resource: posts
+            expected_count: 10
+          - resource: albums
+            expected_count: 10
+        test:
+          route: "/users/{{ profile.user_id }}/{{ profile.resource }}"
+          assert:
+            - status == 200u
+            - body.json().size() == {{ profile.expected_count }}
+            - body.json().all(item, item.userId == {{ profile.user_id }})
+
+  - name: "Collect post {{ profile.post_id }}"
+    description: "Exports under expansion append to an ordered array and bleed into later cases"
+    profiles:
+      - post_id: 1
+      - post_id: 2
+    test:
+      route: "/posts/{{ profile.post_id }}"
+      assert:
+        - status == 200u
+        - body.json().id == {{ profile.post_id }}
+      vars:
+        collected_post_ids: body.json().id
+
+  - name: "Use collected post at index {{ profile.index }}"
+    profiles:
+      - index: 0
+        expected_post_id: 1
+      - index: 1
+        expected_post_id: 2
+    test:
+      route: "/posts/{{ vars.collected_post_ids[profile.index] }}"
+      assert:
+        - status == 200u
+        - body.json().id == {{ profile.expected_post_id }}
