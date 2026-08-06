@@ -33,8 +33,8 @@ enum Commands {
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
-        #[arg(long, default_value = "/")]
-        run: PathBuf,
+        #[arg(short, long)]
+        run: Option<Vec<PathBuf>>,
         #[arg(short, long, default_value = "false")]
         debug: bool,
         #[arg(long, default_value = "0")]
@@ -80,13 +80,14 @@ async fn run() -> anyhow::Result<ExitCode> {
             workers,
             env,
         } => {
+            let project_dir = dunce::canonicalize(&path)?;
             let options = RunOptions::default_from_args(debug, retries);
-            let run_path = &resolve_run_path(&path, &run)?;
+            let run_paths = &resolve_run_paths(&project_dir, run);
 
             let mut envs = parse_cli_envs(env)?;
 
             let discovery =
-                &discovery::discover(&dunce::canonicalize(&path)?, None, &mut envs, run_path)?;
+                &discovery::discover(&project_dir, None, &mut envs, run_paths)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -146,20 +147,29 @@ fn write_stderr(message: &str) {
     let _ = writeln!(std::io::stderr().lock(), "{message}");
 }
 
-fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
-    let root = dunce::canonicalize(project_dir)?;
+fn resolve_run_paths(
+    project_dir: &Path,
+    runs: Option<Vec<PathBuf>>,
+) -> Vec<PathBuf> {
+    runs.map(|runs| {
+        runs.iter()
+            .map(|run| {
+                let sanitized: PathBuf = run
+                    .components()
+                    .filter(|component| {
+                        matches!(
+                            component,
+                            std::path::Component::Normal(_)
+                                | std::path::Component::CurDir
+                        )
+                    })
+                    .collect();
 
-    let sanitized: PathBuf = run
-        .components()
-        .filter(|c| {
-            matches!(
-                c,
-                std::path::Component::Normal(_) | std::path::Component::CurDir
-            )
-        })
-        .collect();
-
-    Ok(root.join(sanitized))
+                project_dir.join(sanitized)
+            })
+            .collect()
+    })
+        .unwrap_or_else(|| vec![project_dir.to_path_buf()])
 }
 
 fn print_warnings() {

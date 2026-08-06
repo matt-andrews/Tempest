@@ -6,7 +6,7 @@ use crate::models::run_options::RunOptions;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod parser;
 
@@ -77,10 +77,8 @@ pub fn discover(
     dir: &Path,
     inherited_configs: Option<Vec<RunOptions>>,
     inherited_envs: &mut HashMap<String, String>,
-    run_path: &Path,
+    run_paths: &[PathBuf],
 ) -> anyhow::Result<DiscoveryResult> {
-    let run_path_is_dir = run_path.is_dir();
-
     let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|entry| entry.path());
     let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.path().is_dir());
@@ -112,18 +110,12 @@ pub fn discover(
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
         } else if stem.ends_with(".spec") {
-            match run_path_is_dir {
-                true => {
-                    if path.starts_with(run_path) {
-                        tests.push(parser.parse_descriptor(path)?);
-                    }
-                }
-                false => {
-                    if path == run_path {
-                        tests.push(parser.parse_descriptor(path)?);
-                    }
-                }
-            };
+            let selected = run_paths.iter().any(|run_path| {
+                path == run_path || (run_path.is_dir() && path.starts_with(run_path))
+            });
+            if selected{
+                tests.push(parser.parse_descriptor(path)?);
+            }
         } else if stem.ends_with(".template") {
             let template = parser.parse_report_template(path)?;
             let key = stem.trim_end_matches(".template").to_lowercase();
@@ -137,7 +129,7 @@ pub fn discover(
             &entry.path(),
             Some(options.clone()),
             inherited_envs,
-            run_path,
+            run_paths,
         )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
