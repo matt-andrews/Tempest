@@ -1,9 +1,9 @@
+use crate::environment;
 use colored::Colorize;
 use liquid_core::model::{ScalarCow, Value};
 use liquid_core::parser::{FilterArguments, ParameterReflection};
 use liquid_core::{Filter, FilterReflection, ParseFilter, Runtime, ValueView};
 use serde_json;
-use crate::environment;
 
 macro_rules! color_filter {
     ($parser:ident, $filter:ident, $name:literal, $method:ident) => {

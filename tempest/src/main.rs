@@ -1,11 +1,11 @@
 pub mod cel;
 pub mod content;
 pub mod discovery;
+pub mod environment;
 mod models;
 pub mod pipeline;
 pub mod templating;
 mod utils;
-pub mod environment;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
@@ -31,6 +31,7 @@ struct Cli {
 }
 #[derive(Subcommand)]
 enum Commands {
+    Version,
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
@@ -97,6 +98,10 @@ async fn run() -> anyhow::Result<ExitCode> {
             let exit = determine_exit_code(result, strict, warn_as_err);
             Ok(exit)
         }
+        Commands::Version => {
+            println!("{}", env!("CARGO_PKG_VERSION"));
+            Ok(ExitCode::Success)
+        }
     }
 }
 
@@ -107,11 +112,7 @@ fn load_project_dotenv(project_dir: &Path) -> anyhow::Result<()> {
         Ok(()) => Ok(()),
 
         // The file is optional.
-        Err(dotenvy::Error::Io(error))
-        if error.kind() == io::ErrorKind::NotFound =>
-            {
-                Ok(())
-            }
+        Err(dotenvy::Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(()),
 
         // Do not silently ignore malformed or unreadable files.
         Err(error) => Err(error.into()),
@@ -228,13 +229,17 @@ mod tests {
 
     fn parsed_runs(args: &[&str]) -> Result<Option<Vec<PathBuf>>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
-        let Commands::Test { run, .. } = cli.command;
+        let Commands::Test { run, .. } = cli.command else {
+            panic!("expected the test command");
+        };
         Ok(run)
     }
 
     fn parsed_workers(args: &[&str]) -> Result<Option<NonZeroUsize>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
-        let Commands::Test { workers, .. } = cli.command;
+        let Commands::Test { workers, .. } = cli.command else {
+            panic!("expected the test command");
+        };
         Ok(workers)
     }
 
