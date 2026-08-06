@@ -78,3 +78,30 @@ describe:
             - status == 200
             - body.json().name == "Hello-World"
             - body.json().owner.login == "octocat"
+
+  - name: "let tests"
+    description: "tests that validate the `let` feature"
+    options:
+      base_uri: "{{ env.JSON_PLACEHOLDER_BASE_URI }}"
+    describe:
+      - name: "Albums and Photos"
+        describe:
+          - name: "List albums"
+            test:
+              route: "/albums"
+              let:
+                json: body.json()
+                albumMap: let.json.filter(album, album.userId == 10).map(album, album.id)
+                status: status
+              assert:
+                - status == 200u && let.json.size() == 100
+                - let.json.all(album, album.title.size() > 0 && album.id >= 1 && album.id <= 100)
+                - let.albumMap == [91, 92, 93, 94, 95, 96, 97, 98, 99, 100]
+              vars:
+                test_var_with_let: let.status
+
+          - name: "var passed using let"
+            test:
+              route: "/status/{{ vars.test_var_with_let }}"
+              assert:
+                - status == 200
