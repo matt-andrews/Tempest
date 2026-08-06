@@ -41,8 +41,10 @@ jobs:
       - name: Extract version from tag
         id: version
         run: |
-          echo "image_version=${GITHUB_REF_NAME#app/}" >> "$GITHUB_OUTPUT"
-          echo "package_version=${GITHUB_REF_NAME#app/v}" >> "$GITHUB_OUTPUT"
+          version="${GITHUB_REF_NAME#app/v}"
+          echo "image_version=${version}" >> "$GITHUB_OUTPUT"
+          echo "major_version=${version%%.*}" >> "$GITHUB_OUTPUT"
+          echo "package_version=${version}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push
         uses: docker/build-push-action@v7
@@ -54,6 +56,7 @@ jobs:
             PACKAGE_VERSION=${{ steps.version.outputs.package_version }}
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/tempest:${{ steps.version.outputs.image_version }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/tempest:${{ steps.version.outputs.major_version }}
             ${{ secrets.DOCKERHUB_USERNAME }}/tempest:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
