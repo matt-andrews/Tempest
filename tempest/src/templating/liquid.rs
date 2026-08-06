@@ -1,6 +1,7 @@
 use crate::templating::TemplateEngine;
 use std::collections::HashMap;
 use std::sync::LazyLock;
+use indexmap::IndexMap;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::templating::liquid_filters::*;
@@ -67,6 +68,24 @@ impl TemplateEngine for LiquidEngine {
         source: &Option<HashMap<String, String>>,
         context: &liquid::Object,
     ) -> Option<HashMap<String, String>> {
+        source.as_ref().map(|values| {
+            values
+                .iter()
+                .map(|(key, value)| {
+                    (
+                        self.render(key, context).unwrap_or(key.to_owned()),
+                        self.render(value, context).unwrap_or(value.to_owned()),
+                    )
+                })
+                .collect()
+        })
+    }
+
+    fn render_indexmap_string_or_self(
+        &self,
+        source: &Option<IndexMap<String, String>>,
+        context: &liquid::Object,
+    ) -> Option<IndexMap<String, String>> {
         source.as_ref().map(|values| {
             values
                 .iter()

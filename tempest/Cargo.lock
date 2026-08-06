@@ -2147,6 +2147,7 @@ dependencies = [
  "enum_dispatch",
  "futures-util",
  "include_dir",
+ "indexmap",
  "liquid",
  "liquid-core",
  "mockito",

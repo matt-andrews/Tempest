@@ -24,6 +24,7 @@ cel-parser = "0.10.1"
 scraper = { version = "0.27.0", features = ["atomic"] }
 simdxml = "0.2.1"
 base64 = "0.23"
+indexmap = "2.14.0"
 
 [dev-dependencies]
 tempfile = "3.27.0"
