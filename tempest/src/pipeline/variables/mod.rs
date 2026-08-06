@@ -1,3 +1,4 @@
+use crate::cel::LetBindings;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
@@ -16,6 +17,7 @@ pub trait VariableAssignment {
         context: &mut RunContext,
         evaluation_context: &EvaluationContext,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     );
 }
 

@@ -1,3 +1,4 @@
+use crate::cel::{self, LetBindings};
 use crate::models::descriptor::Descriptor;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
@@ -192,14 +193,36 @@ impl<'a> FileRunner<'a> {
         };
 
         let response_content_cache = ResponseContentCache::default();
-        let assertions =
-            self.evaluate_assertions(&test, &test_result, descriptor, &response_content_cache);
+        let let_bindings = match self.evaluate_let_bindings(
+            &test,
+            &test_result,
+            descriptor,
+            &response_content_cache,
+        ) {
+            Ok(bindings) => bindings,
+            Err(assertion) => {
+                return TestRunOutcome {
+                    test_result: Some(test_result),
+                    assertions: vec![assertion],
+                    summary_result: Some(SummaryResult::Failed),
+                    debug_message,
+                };
+            }
+        };
+        let assertions = self.evaluate_assertions(
+            &test,
+            &test_result,
+            descriptor,
+            &response_content_cache,
+            &let_bindings,
+        );
         self.assign_variables(
             &test,
             &test_result,
             context,
             descriptor,
             &response_content_cache,
+            &let_bindings,
         );
 
         let summary_result = if assertions.iter().any(|a| !a.passed) {
@@ -214,6 +237,41 @@ impl<'a> FileRunner<'a> {
             summary_result: Some(summary_result),
             debug_message,
         }
+    }
+
+    fn evaluate_let_bindings(
+        &self,
+        test: &TestSpec,
+        test_result: &TestResult,
+        descriptor: &Descriptor,
+        response_content_cache: &ResponseContentCache,
+    ) -> Result<LetBindings, Assertion> {
+        let mut bindings = LetBindings::new();
+        let Some(declarations) = &test.lets else {
+            return Ok(bindings);
+        };
+        let evaluation_context = EvaluationContext {
+            suite_dir: self.suite_path.to_path_buf(),
+            spec_file: descriptor.file.clone(),
+        };
+
+        for (name, expression) in declarations {
+            let value = cel::evaluate(
+                expression,
+                test_result,
+                &evaluation_context,
+                response_content_cache,
+                &bindings,
+            )
+            .map_err(|error| Assertion {
+                expr: format!("let.{name} = {expression}"),
+                passed: false,
+                error: error.to_string(),
+            })?;
+            bindings.insert(name.clone(), value);
+        }
+
+        Ok(bindings)
     }
 
     fn format_debug_message(
@@ -253,6 +311,7 @@ impl<'a> FileRunner<'a> {
         test_result: &TestResult,
         descriptor: &Descriptor,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) -> Vec<Assertion> {
         let mut assert_result: Vec<Assertion> = Vec::new();
         for assert in test.assert.as_deref().unwrap_or_default() {
@@ -261,8 +320,12 @@ impl<'a> FileRunner<'a> {
                 spec_file: descriptor.file.clone(),
             };
             let assert_evaluator = assertion_evaluator_for(assert);
-            let result =
-                assert_evaluator.evaluate(test_result, &evaluation_context, response_content_cache);
+            let result = assert_evaluator.evaluate(
+                test_result,
+                &evaluation_context,
+                response_content_cache,
+                let_bindings,
+            );
             assert_result.push(result.clone());
         }
         assert_result
@@ -275,6 +338,7 @@ impl<'a> FileRunner<'a> {
         context: &mut RunContext,
         descriptor: &Descriptor,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) {
         let evaluation_context = EvaluationContext {
             suite_dir: self.suite_path.to_path_buf(),
@@ -287,6 +351,7 @@ impl<'a> FileRunner<'a> {
             &mut *context,
             &evaluation_context,
             response_content_cache,
+            let_bindings,
         );
     }
 

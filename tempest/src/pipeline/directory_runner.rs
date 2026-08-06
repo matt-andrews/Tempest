@@ -50,6 +50,7 @@ mod tests {
     use crate::models::test_spec::TestSpec;
     use crate::pipeline::report_coordinator::ReportCoordinator;
     use crate::templating::liquid::LiquidEngine;
+    use indexmap::IndexMap;
     use mockito::Server;
     use std::collections::HashMap;
     use std::path::PathBuf;
@@ -387,6 +388,111 @@ mod tests {
         assert_eq!(summary.len(), 2);
         assert!(matches!(summary[1], SummaryResult::Passed));
         mock_consumer.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn ordered_let_bindings_are_available_to_assertions_and_saved_variables() {
+        let mut server = Server::new_async().await;
+        server
+            .mock("GET", "/seed")
+            .with_status(200)
+            .with_body(r#"{"item":{"id":42}}"#)
+            .create_async()
+            .await;
+        let mock_consumer = server
+            .mock("GET", "/items/42")
+            .with_status(200)
+            .create_async()
+            .await;
+
+        let producer = Descriptor {
+            name: Some("producer".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/seed", server.url()),
+                verb: Some("GET".to_string()),
+                lets: Some(IndexMap::from([
+                    ("json".to_string(), "body.json()".to_string()),
+                    ("item".to_string(), "let.json.item".to_string()),
+                ])),
+                assert: Some(vec!["let.item.id == 42".to_string()]),
+                vars: Some(HashMap::from([(
+                    "item_id".to_string(),
+                    "let.item.id".to_string(),
+                )])),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+        let consumer = Descriptor {
+            name: Some("consumer".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/items/{{{{ vars.item_id }}}}", server.url()),
+                verb: Some("GET".to_string()),
+                assert: Some(vec!["status == 200".to_string()]),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![spec_file(vec![producer, consumer])]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Passed, SummaryResult::Passed]);
+        mock_consumer.assert_async().await;
+    }
+
+    #[tokio::test]
+    async fn invalid_let_binding_fails_the_test() {
+        let mut server = Server::new_async().await;
+        server
+            .mock("GET", "/invalid-json")
+            .with_status(200)
+            .with_body("not json")
+            .create_async()
+            .await;
+
+        let descriptor = Descriptor {
+            name: Some("invalid let".to_string()),
+            description: None,
+            tags: None,
+            test: Some(TestSpec {
+                route: format!("{}/invalid-json", server.url()),
+                lets: Some(IndexMap::from([(
+                    "json".to_string(),
+                    "body.json()".to_string(),
+                )])),
+                assert: Some(vec!["status == 200".to_string()]),
+                ..Default::default()
+            }),
+            describe: None,
+            options: None,
+            file: None,
+        };
+
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let dir = dir_node(vec![descriptor]);
+        let summary = execute_runner(
+            make_runner(&dir, &engine, RunOptions::default()),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(summary, vec![SummaryResult::Failed]);
     }
 
     #[tokio::test]

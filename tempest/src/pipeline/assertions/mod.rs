@@ -1,3 +1,4 @@
+use crate::cel::LetBindings;
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::test_result::{Assertion, TestResult};
@@ -13,6 +14,7 @@ pub trait AssertionEvaluator {
         data: &TestResult,
         context: &EvaluationContext,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) -> Assertion;
 }
 

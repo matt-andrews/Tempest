@@ -1,8 +1,8 @@
 use crate::templating::TemplateEngine;
 use crate::templating::liquid::LiquidEngine;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use indexmap::IndexMap;
 
 #[derive(Debug, Deserialize, Serialize, Default, Clone)]
 pub struct TestSpec {

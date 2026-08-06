@@ -1,4 +1,4 @@
-use crate::cel;
+use crate::cel::{self, LetBindings};
 use crate::models::evaluation_context::EvaluationContext;
 use crate::models::response_content_cache::ResponseContentCache;
 use crate::models::run_context::RunContext;
@@ -25,9 +25,16 @@ impl VariableAssignment for DefaultVariableAssignment {
         context: &mut RunContext,
         evaluation_context: &EvaluationContext,
         response_content_cache: &ResponseContentCache,
+        let_bindings: &LetBindings,
     ) {
         for (k, v) in &self.vars {
-            let val = match cel::evaluate(v, data, evaluation_context, response_content_cache) {
+            let val = match cel::evaluate(
+                v,
+                data,
+                evaluation_context,
+                response_content_cache,
+                let_bindings,
+            ) {
                 Ok(v) => v.json().unwrap_or_default(),
                 _ => JsonValue::Null,
             };

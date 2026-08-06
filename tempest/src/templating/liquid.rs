@@ -1,7 +1,7 @@
 use crate::templating::TemplateEngine;
+use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::sync::LazyLock;
-use indexmap::IndexMap;
 
 static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
     use crate::templating::liquid_filters::*;
