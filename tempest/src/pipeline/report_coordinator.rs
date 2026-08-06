@@ -299,7 +299,7 @@ mod tests {
             suite_dir.path(),
             None,
             &mut HashMap::new(),
-            suite_dir.path(),
+            &[suite_dir.path().to_path_buf()],
         )
         .unwrap();
         let mut json_template = discovered.templates.remove("json").unwrap();
@@ -361,7 +361,7 @@ mod tests {
             suite_dir.path(),
             None,
             &mut HashMap::new(),
-            suite_dir.path(),
+            &[suite_dir.path().to_path_buf()],
         )
         .unwrap();
         let mut json_template = discovered.templates.remove("json").unwrap();

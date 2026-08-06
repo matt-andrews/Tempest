@@ -6,7 +6,7 @@ use crate::models::run_options::RunOptions;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 mod parser;
 
@@ -77,10 +77,8 @@ pub fn discover(
     dir: &Path,
     inherited_configs: Option<Vec<RunOptions>>,
     inherited_envs: &mut HashMap<String, String>,
-    run_path: &Path,
+    run_paths: &[PathBuf],
 ) -> anyhow::Result<DiscoveryResult> {
-    let run_path_is_dir = run_path.is_dir();
-
     let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|entry| entry.path());
     let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.path().is_dir());
@@ -112,18 +110,10 @@ pub fn discover(
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
         } else if stem.ends_with(".spec") {
-            match run_path_is_dir {
-                true => {
-                    if path.starts_with(run_path) {
-                        tests.push(parser.parse_descriptor(path)?);
-                    }
-                }
-                false => {
-                    if path == run_path {
-                        tests.push(parser.parse_descriptor(path)?);
-                    }
-                }
-            };
+            let selected = run_paths.iter().any(|run_path| path.starts_with(run_path));
+            if selected {
+                tests.push(parser.parse_descriptor(path)?);
+            }
         } else if stem.ends_with(".template") {
             let template = parser.parse_report_template(path)?;
             let key = stem.trim_end_matches(".template").to_lowercase();
@@ -137,7 +127,7 @@ pub fn discover(
             &entry.path(),
             Some(options.clone()),
             inherited_envs,
-            run_path,
+            run_paths,
         )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
@@ -163,10 +153,26 @@ mod tests {
     use std::path::PathBuf;
     use tempfile::tempdir;
 
+    fn discover_all(dir: &Path) -> anyhow::Result<DiscoveryResult> {
+        discover(dir, None, &mut HashMap::new(), &[dir.to_path_buf()])
+    }
+
+    fn discovered_file_names(result: &DiscoveryResult) -> Vec<String> {
+        let mut names = result
+            .directory
+            .walk()
+            .flat_map(|directory| &directory.files)
+            .filter_map(|descriptor| descriptor.file.as_ref()?.file_name()?.to_str())
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    }
+
     #[test]
     fn discover_empty_directory_has_no_files_options_or_children() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
         assert!(result.directory.children.is_empty());
@@ -175,7 +181,7 @@ mod tests {
     #[test]
     fn discover_result_dir_matches_input_path() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(result.directory.dir, dir.path());
     }
 
@@ -188,7 +194,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(result.directory.files.len(), 1);
         assert_eq!(result.directory.files[0].name.as_deref(), Some("API Test"));
     }
@@ -199,7 +205,7 @@ mod tests {
         fs::write(dir.path().join("b.spec.yml"), "test:\n  route: /b\n").unwrap();
         fs::write(dir.path().join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(result.directory.files.len(), 2);
         assert_eq!(
             result
@@ -224,7 +230,7 @@ mod tests {
         fs::create_dir(dir.path().join("z-child")).unwrap();
         fs::create_dir(dir.path().join("a-child")).unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(
             result
                 .directory
@@ -245,7 +251,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(result.directory.options.len(), 1);
         assert_eq!(
             result.directory.options[0].base_uri.as_deref(),
@@ -262,7 +268,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(result.templates.contains_key("custom"));
         assert_eq!(
             result.templates["custom"].test_template.as_deref(),
@@ -279,7 +285,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(
             result.templates.contains_key("myreport"),
             "key should be lowercased"
@@ -293,7 +299,7 @@ mod tests {
         fs::write(dir.path().join("data.json"), "{}").unwrap();
         fs::write(dir.path().join("config.toml"), "[section]").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -305,7 +311,7 @@ mod tests {
         fs::write(dir.path().join("data.yml"), "key: value\n").unwrap();
         fs::write(dir.path().join("setup.yaml"), "key: value\n").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(result.directory.files.is_empty());
         assert!(result.directory.options.is_empty());
     }
@@ -321,7 +327,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert_eq!(result.directory.children.len(), 1);
         assert_eq!(result.directory.children[0].files.len(), 1);
         assert_eq!(
@@ -342,7 +348,13 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), &sub).unwrap();
+        let result = discover(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            std::slice::from_ref(&sub),
+        )
+        .unwrap();
         assert_eq!(result.directory.children.len(), 1);
         assert_eq!(result.directory.children[0].files.len(), 1);
         assert_eq!(
@@ -367,7 +379,7 @@ mod tests {
             dir.path(),
             None,
             &mut HashMap::new(),
-            &sub.join("test.spec.yml"),
+            &[sub.join("test.spec.yml")],
         )
         .unwrap();
         assert_eq!(result.directory.children.len(), 1);
@@ -379,13 +391,67 @@ mod tests {
     }
 
     #[test]
+    fn discover_combines_file_and_directory_run_paths() {
+        let dir = tempdir().unwrap();
+        let selected_dir = dir.path().join("selected");
+        let excluded_dir = dir.path().join("excluded");
+        fs::create_dir(&selected_dir).unwrap();
+        fs::create_dir(&excluded_dir).unwrap();
+
+        let selected_file = dir.path().join("root.spec.yml");
+        fs::write(&selected_file, "test:\n  route: /root\n").unwrap();
+        fs::write(
+            selected_dir.join("nested.spec.yml"),
+            "test:\n  route: /nested\n",
+        )
+        .unwrap();
+        fs::write(
+            excluded_dir.join("excluded.spec.yml"),
+            "test:\n  route: /excluded\n",
+        )
+        .unwrap();
+
+        let result = discover(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            &[selected_file, selected_dir],
+        )
+        .unwrap();
+
+        assert_eq!(
+            discovered_file_names(&result),
+            vec!["nested.spec.yml", "root.spec.yml"]
+        );
+    }
+
+    #[test]
+    fn overlapping_run_paths_do_not_duplicate_specs() {
+        let dir = tempdir().unwrap();
+        let selected_dir = dir.path().join("selected");
+        fs::create_dir(&selected_dir).unwrap();
+        let selected_file = selected_dir.join("test.spec.yml");
+        fs::write(&selected_file, "test:\n  route: /test\n").unwrap();
+
+        let result = discover(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            &[selected_dir, selected_file],
+        )
+        .unwrap();
+
+        assert_eq!(discovered_file_names(&result), vec!["test.spec.yml"]);
+    }
+
+    #[test]
     fn discover_recurses_into_deeply_nested_directories() {
         let dir = tempdir().unwrap();
         let deep = dir.path().join("a").join("b").join("c");
         fs::create_dir_all(&deep).unwrap();
         fs::write(deep.join("deep.spec.yml"), "test:\n  route: /deep\n").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         // result -> child "a" -> child "b" -> child "c" with spec
         let a = &result.directory.children[0];
         let b = &a.children[0];
@@ -406,7 +472,7 @@ mod tests {
         .unwrap();
         fs::write(sub.join("test.spec.yml"), "test:\n  route: /test\n").unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         let child = &result.directory.children[0];
         assert_eq!(child.options.len(), 1);
         assert_eq!(child.options[0].base_uri.as_deref(), Some("http://parent"));
@@ -429,7 +495,7 @@ mod tests {
             dir.path(),
             Some(vec![inherited]),
             &mut HashMap::new(),
-            dir.path(),
+            &[dir.path().to_path_buf()],
         )
         .unwrap();
         assert_eq!(result.directory.options.len(), 1);
@@ -450,7 +516,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(
             result.templates.contains_key("child"),
             "child templates should bubble up"
@@ -463,7 +529,7 @@ mod tests {
             &PathBuf::from("/no/such/directory/exists"),
             None,
             &mut HashMap::new(),
-            &PathBuf::new(),
+            &[PathBuf::new()],
         );
         assert!(result.is_err());
     }
@@ -471,7 +537,7 @@ mod tests {
     #[test]
     fn discover_always_includes_builtin_templates_even_in_empty_dir() {
         let dir = tempdir().unwrap();
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(
             result.templates.contains_key("console"),
             "built-in templates should always be present"
@@ -488,7 +554,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(dir.path(), None, &mut HashMap::new(), dir.path()).unwrap();
+        let result = discover_all(dir.path()).unwrap();
         assert!(result.templates.contains_key("console"));
         assert!(result.templates.contains_key("myreport"));
     }

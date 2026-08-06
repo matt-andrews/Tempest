@@ -33,8 +33,8 @@ enum Commands {
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
-        #[arg(long, default_value = "/")]
-        run: PathBuf,
+        #[arg(short, long)]
+        run: Option<Vec<PathBuf>>,
         #[arg(short, long, default_value = "false")]
         debug: bool,
         #[arg(long, default_value = "0")]
@@ -80,13 +80,13 @@ async fn run() -> anyhow::Result<ExitCode> {
             workers,
             env,
         } => {
+            let project_dir = dunce::canonicalize(&path)?;
             let options = RunOptions::default_from_args(debug, retries);
-            let run_path = &resolve_run_path(&path, &run)?;
+            let run_paths = &resolve_run_paths(&project_dir, run);
 
             let mut envs = parse_cli_envs(env)?;
 
-            let discovery =
-                &discovery::discover(&dunce::canonicalize(&path)?, None, &mut envs, run_path)?;
+            let discovery = &discovery::discover(&project_dir, None, &mut envs, run_paths)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -146,20 +146,25 @@ fn write_stderr(message: &str) {
     let _ = writeln!(std::io::stderr().lock(), "{message}");
 }
 
-fn resolve_run_path(project_dir: &PathBuf, run: &Path) -> anyhow::Result<PathBuf> {
-    let root = dunce::canonicalize(project_dir)?;
+fn resolve_run_paths(project_dir: &Path, runs: Option<Vec<PathBuf>>) -> Vec<PathBuf> {
+    runs.map(|runs| {
+        runs.iter()
+            .map(|run| {
+                let sanitized: PathBuf = run
+                    .components()
+                    .filter(|component| {
+                        matches!(
+                            component,
+                            std::path::Component::Normal(_) | std::path::Component::CurDir
+                        )
+                    })
+                    .collect();
 
-    let sanitized: PathBuf = run
-        .components()
-        .filter(|c| {
-            matches!(
-                c,
-                std::path::Component::Normal(_) | std::path::Component::CurDir
-            )
-        })
-        .collect();
-
-    Ok(root.join(sanitized))
+                project_dir.join(sanitized)
+            })
+            .collect()
+    })
+    .unwrap_or_else(|| vec![project_dir.to_path_buf()])
 }
 
 fn print_warnings() {
@@ -201,10 +206,69 @@ fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -
 mod tests {
     use super::*;
 
+    fn parsed_runs(args: &[&str]) -> Result<Option<Vec<PathBuf>>, clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Test { run, .. } = cli.command;
+        Ok(run)
+    }
+
     fn parsed_workers(args: &[&str]) -> Result<Option<NonZeroUsize>, clap::Error> {
         let cli = Cli::try_parse_from(args)?;
         let Commands::Test { workers, .. } = cli.command;
         Ok(workers)
+    }
+
+    #[test]
+    fn run_paths_are_optional() {
+        assert_eq!(parsed_runs(&["tempest", "test"]).unwrap(), None);
+    }
+
+    #[test]
+    fn run_accepts_multiple_occurrences() {
+        assert_eq!(
+            parsed_runs(&[
+                "tempest",
+                "test",
+                "--run",
+                "api",
+                "--run",
+                "smoke/test.spec.yml",
+            ])
+            .unwrap(),
+            Some(vec![
+                PathBuf::from("api"),
+                PathBuf::from("smoke/test.spec.yml"),
+            ])
+        );
+    }
+
+    #[test]
+    fn omitted_run_resolves_to_project_root() {
+        let project_dir = Path::new("project");
+
+        assert_eq!(
+            resolve_run_paths(project_dir, None),
+            vec![project_dir.to_path_buf()]
+        );
+    }
+
+    #[test]
+    fn run_paths_resolve_relative_to_project_root() {
+        let project_dir = Path::new("project");
+
+        assert_eq!(
+            resolve_run_paths(
+                project_dir,
+                Some(vec![
+                    PathBuf::from("api"),
+                    PathBuf::from("smoke/test.spec.yml"),
+                ]),
+            ),
+            vec![
+                project_dir.join("api"),
+                project_dir.join("smoke/test.spec.yml"),
+            ]
+        );
     }
 
     #[test]
