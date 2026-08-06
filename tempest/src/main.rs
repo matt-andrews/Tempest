@@ -19,7 +19,7 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
-use std::{io, process};
+use std::{env, process};
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -68,8 +68,6 @@ async fn main() -> process::ExitCode {
 }
 
 async fn run() -> anyhow::Result<ExitCode> {
-    dotenvy::dotenv().ok();
-
     let args = Cli::parse();
     match args.command {
         Commands::Test {
@@ -105,18 +103,20 @@ async fn run() -> anyhow::Result<ExitCode> {
     }
 }
 
+///This function is UNSAFE because we are setting environment variables
 fn load_project_dotenv(project_dir: &Path) -> anyhow::Result<()> {
     let path = project_dir.join(".env");
-
-    match dotenvy::from_path(&path) {
-        Ok(()) => Ok(()),
-
-        // The file is optional.
-        Err(dotenvy::Error::Io(error)) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-
-        // Do not silently ignore malformed or unreadable files.
-        Err(error) => Err(error.into()),
+    if path.exists() {
+        match discovery::parse_env(&path) {
+            Ok(envs) => unsafe {
+                for e in envs {
+                    env::set_var(e.0, e.1);
+                }
+            },
+            Err(err) => eprintln!("{}", err),
+        };
     }
+    Ok(())
 }
 
 fn parse_cli_envs(env: Option<Vec<String>>) -> anyhow::Result<HashMap<String, String>> {

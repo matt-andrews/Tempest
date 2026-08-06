@@ -40,3 +40,10 @@ describe:
       route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
       assert:
         - status == 0
+
+  #test that verifies the "broken" environment variable is loaded up as intended
+  - name: "issue#66 env regression  test"
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - "'{{ env.TEST_ENV_WITH_SPACES }}' == 'My Env Has Spaces'"
