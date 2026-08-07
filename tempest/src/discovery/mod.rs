@@ -7,6 +7,9 @@ use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use anyhow::Context;
+use crate::templating::liquid::LiquidEngine;
+use crate::templating::TemplateEngine;
 
 mod parser;
 
@@ -53,23 +56,58 @@ fn collect_embedded_templates(
     Ok(())
 }
 
-pub fn parse_env(path: &Path) -> anyhow::Result<HashMap<String, String>> {
+pub fn parse_env(
+    path: &Path,
+    inherited_env: &HashMap<String, String>,
+    engine: &LiquidEngine,
+) -> anyhow::Result<HashMap<String, String>> {
     let contents = fs::read_to_string(path)?;
-    let config: HashMap<String, String> = contents
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.starts_with('#'))
-        .map(|line| {
-            line.split_once('#')
-                .map_or(line, |(before, _)| before)
-                .trim()
-        })
-        .filter(|line| !line.is_empty())
-        .filter_map(|line| {
-            line.split_once('=')
-                .map(|(key, value)| (key.trim().to_owned(), value.trim().to_owned()))
-        })
-        .collect();
+    let mut effective = inherited_env.clone();
+    let mut config = HashMap::new();
+
+    for (line_index, raw_line) in contents.lines().enumerate() {
+        let line = raw_line.trim();
+
+        if line.starts_with('#') {
+            continue;
+        }
+
+        let line = line
+            .split_once('#')
+            .map_or(line, |(before, _)| before)
+            .trim();
+
+        if line.is_empty() {
+            continue;
+        }
+
+        let Some((key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+
+        let key = key.trim().to_owned();
+
+        let value = {
+            // Rebuild the context after every assignment so this line can
+            // access values resolved earlier in the same file.
+            let liquid_context = liquid::object!({
+                "env": &effective,
+            });
+
+            engine.render(raw_value.trim(), &liquid_context)
+        }
+            .with_context(|| {
+                format!(
+                    "failed to render environment variable `{key}` in {} at line {}",
+                    path.display(),
+                    line_index + 1
+                )
+            })?;
+
+        effective.insert(key.clone(), value.clone());
+        config.insert(key, value);
+    }
+
     Ok(config)
 }
 
@@ -78,6 +116,7 @@ pub fn discover(
     inherited_configs: Option<Vec<RunOptions>>,
     inherited_envs: &mut HashMap<String, String>,
     run_paths: &[PathBuf],
+    liquid_engine: &LiquidEngine,
 ) -> anyhow::Result<DiscoveryResult> {
     let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|entry| entry.path());
@@ -100,7 +139,7 @@ pub fn discover(
             continue;
         };
         if file_name.ends_with(".env") {
-            inherited_envs.extend(parse_env(path)?);
+            inherited_envs.extend(parse_env(path, inherited_envs, liquid_engine)?);
             continue;
         }
         let Some(parser) = parser::parser_for(path) else {
@@ -126,8 +165,9 @@ pub fn discover(
         let sub = discover(
             &entry.path(),
             Some(options.clone()),
-            inherited_envs,
+            &mut inherited_envs.clone(),
             run_paths,
+            liquid_engine
         )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
