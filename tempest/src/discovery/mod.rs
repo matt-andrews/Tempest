@@ -3,13 +3,13 @@ use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
+use anyhow::Context;
 use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use anyhow::Context;
-use crate::templating::liquid::LiquidEngine;
-use crate::templating::TemplateEngine;
 
 mod parser;
 
@@ -96,13 +96,13 @@ pub fn parse_env(
 
             engine.render(raw_value.trim(), &liquid_context)
         }
-            .with_context(|| {
-                format!(
-                    "failed to render environment variable `{key}` in {} at line {}",
-                    path.display(),
-                    line_index + 1
-                )
-            })?;
+        .with_context(|| {
+            format!(
+                "failed to render environment variable `{key}` in {} at line {}",
+                path.display(),
+                line_index + 1
+            )
+        })?;
 
         effective.insert(key.clone(), value.clone());
         config.insert(key, value);
@@ -139,7 +139,8 @@ pub fn discover(
             continue;
         };
         if file_name.ends_with(".env") {
-            inherited_envs.extend(parse_env(path, inherited_envs, liquid_engine)?);
+            let local_envs = parse_env(path, inherited_envs, liquid_engine)?;
+            inherited_envs.extend(local_envs);
             continue;
         }
         let Some(parser) = parser::parser_for(path) else {
@@ -162,12 +163,13 @@ pub fn discover(
 
     let mut children = Vec::new();
     for entry in dirs {
+        let mut child_envs = inherited_envs.clone();
         let sub = discover(
             &entry.path(),
             Some(options.clone()),
-            &mut inherited_envs.clone(),
+            &mut child_envs,
             run_paths,
-            liquid_engine
+            liquid_engine,
         )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
@@ -194,7 +196,22 @@ mod tests {
     use tempfile::tempdir;
 
     fn discover_all(dir: &Path) -> anyhow::Result<DiscoveryResult> {
-        discover(dir, None, &mut HashMap::new(), &[dir.to_path_buf()])
+        discover_for_test(dir, None, &mut HashMap::new(), &[dir.to_path_buf()])
+    }
+
+    fn discover_for_test(
+        dir: &Path,
+        inherited_configs: Option<Vec<RunOptions>>,
+        inherited_envs: &mut HashMap<String, String>,
+        run_paths: &[PathBuf],
+    ) -> anyhow::Result<DiscoveryResult> {
+        discover(
+            dir,
+            inherited_configs,
+            inherited_envs,
+            run_paths,
+            &LiquidEngine,
+        )
     }
 
     fn discovered_file_names(result: &DiscoveryResult) -> Vec<String> {
@@ -210,10 +227,17 @@ mod tests {
     }
 
     fn parse_env_contents(contents: &str) -> HashMap<String, String> {
+        parse_env_contents_with_inherited(contents, &HashMap::new()).unwrap()
+    }
+
+    fn parse_env_contents_with_inherited(
+        contents: &str,
+        inherited_env: &HashMap<String, String>,
+    ) -> anyhow::Result<HashMap<String, String>> {
         let dir = tempdir().unwrap();
         let path = dir.path().join("test.env");
         fs::write(&path, contents).unwrap();
-        parse_env(&path).unwrap()
+        parse_env(&path, inherited_env, &LiquidEngine)
     }
 
     #[test]
@@ -289,10 +313,105 @@ mod tests {
     }
 
     #[test]
+    fn parse_env_renders_values_from_the_inherited_environment() {
+        let inherited = HashMap::from([
+            ("HOST".to_owned(), "api.example.com".to_owned()),
+            ("VERSION".to_owned(), "v1".to_owned()),
+        ]);
+
+        let env = parse_env_contents_with_inherited(
+            "URL=https://{{ env.HOST }}/{{ env.VERSION }}\n",
+            &inherited,
+        )
+        .unwrap();
+
+        assert_eq!(
+            env.get("URL").map(String::as_str),
+            Some("https://api.example.com/v1")
+        );
+        assert!(!env.contains_key("HOST"));
+        assert!(!env.contains_key("VERSION"));
+    }
+
+    #[test]
+    fn parse_env_renders_later_assignments_against_earlier_assignments() {
+        let inherited = HashMap::from([("MY_VAR".to_owned(), "Hello".to_owned())]);
+
+        let env = parse_env_contents_with_inherited(
+            "MY_VAR={{ env.MY_VAR }}, World!\nRESULT_VAR=Greetings! {{ env.MY_VAR }}\n",
+            &inherited,
+        )
+        .unwrap();
+
+        assert_eq!(env.get("MY_VAR").map(String::as_str), Some("Hello, World!"));
+        assert_eq!(
+            env.get("RESULT_VAR").map(String::as_str),
+            Some("Greetings! Hello, World!")
+        );
+    }
+
+    #[test]
+    fn parse_env_allows_later_lines_to_use_new_values_from_the_same_file() {
+        let env = parse_env_contents(
+            "HOST=api.example.com\nBASE_URL=https://{{ env.HOST }}\nHEALTH_URL={{ env.BASE_URL }}/health\n",
+        );
+
+        assert_eq!(
+            env.get("HEALTH_URL").map(String::as_str),
+            Some("https://api.example.com/health")
+        );
+    }
+
+    #[test]
+    fn parse_env_duplicate_key_templates_use_the_previous_assignment() {
+        let env = parse_env_contents(
+            "MODE=development\nMODE={{ env.MODE }}-local\nLABEL=Mode: {{ env.MODE }}\n",
+        );
+
+        assert_eq!(
+            env.get("MODE").map(String::as_str),
+            Some("development-local")
+        );
+        assert_eq!(
+            env.get("LABEL").map(String::as_str),
+            Some("Mode: development-local")
+        );
+    }
+
+    #[test]
+    fn parse_env_supports_liquid_filters() {
+        let inherited = HashMap::from([("NAME".to_owned(), "tempest".to_owned())]);
+
+        let env =
+            parse_env_contents_with_inherited("DISPLAY_NAME={{ env.NAME | upcase }}\n", &inherited)
+                .unwrap();
+
+        assert_eq!(env.get("DISPLAY_NAME").map(String::as_str), Some("TEMPEST"));
+    }
+
+    #[test]
+    fn parse_env_template_errors_include_key_file_and_line() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("broken.env");
+        fs::write(&path, "VALID=value\nBROKEN={{ env.VALID\n").unwrap();
+
+        let error = parse_env(&path, &HashMap::new(), &LiquidEngine).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(message.contains("BROKEN"));
+        assert!(message.contains("broken.env"));
+        assert!(message.contains("line 2"));
+    }
+
+    #[test]
     fn parse_env_returns_an_error_when_the_file_does_not_exist() {
         let dir = tempdir().unwrap();
 
-        let result = parse_env(&dir.path().join("missing.env"));
+        let result = parse_env(
+            &dir.path().join("missing.env"),
+            &HashMap::new(),
+            &LiquidEngine,
+        );
 
         assert!(result.is_err());
     }
@@ -303,7 +422,7 @@ mod tests {
         let path = dir.path().join("invalid.env");
         fs::write(&path, [0xff, 0xfe, 0xfd]).unwrap();
 
-        let result = parse_env(&path);
+        let result = parse_env(&path, &HashMap::new(), &LiquidEngine);
 
         assert!(result.is_err());
     }
@@ -487,7 +606,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(
+        let result = discover_for_test(
             dir.path(),
             None,
             &mut HashMap::new(),
@@ -514,7 +633,7 @@ mod tests {
         .unwrap();
         fs::write(sub.join("a.spec.yml"), "test:\n  route: /a\n").unwrap();
 
-        let result = discover(
+        let result = discover_for_test(
             dir.path(),
             None,
             &mut HashMap::new(),
@@ -550,7 +669,7 @@ mod tests {
         )
         .unwrap();
 
-        let result = discover(
+        let result = discover_for_test(
             dir.path(),
             None,
             &mut HashMap::new(),
@@ -572,7 +691,7 @@ mod tests {
         let selected_file = selected_dir.join("test.spec.yml");
         fs::write(&selected_file, "test:\n  route: /test\n").unwrap();
 
-        let result = discover(
+        let result = discover_for_test(
             dir.path(),
             None,
             &mut HashMap::new(),
@@ -618,6 +737,110 @@ mod tests {
     }
 
     #[test]
+    fn discover_uses_inherited_environment_as_the_first_template_layer() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join(".env"),
+            "NAME={{ env.NAME }}-project\nURL=https://{{ env.HOST }}\n",
+        )
+        .unwrap();
+        let mut inherited = HashMap::from([
+            ("NAME".to_owned(), "cli".to_owned()),
+            ("HOST".to_owned(), "api.example.com".to_owned()),
+        ]);
+
+        let result = discover_for_test(
+            dir.path(),
+            None,
+            &mut inherited,
+            &[dir.path().to_path_buf()],
+        )
+        .unwrap();
+
+        assert_eq!(result.directory.envs["NAME"], "cli-project");
+        assert_eq!(result.directory.envs["URL"], "https://api.example.com");
+        assert_eq!(result.directory.envs["HOST"], "api.example.com");
+    }
+
+    #[test]
+    fn discover_resolves_environment_files_in_sorted_file_order() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("a.env"), "GREETING=Hello\n").unwrap();
+        fs::write(
+            dir.path().join("b.env"),
+            "GREETING={{ env.GREETING }}, World!\nRESULT={{ env.GREETING }}\n",
+        )
+        .unwrap();
+
+        let result = discover_all(dir.path()).unwrap();
+
+        assert_eq!(result.directory.envs["GREETING"], "Hello, World!");
+        assert_eq!(result.directory.envs["RESULT"], "Hello, World!");
+    }
+
+    #[test]
+    fn discover_resolves_parent_and_child_environment_cascades() {
+        let dir = tempdir().unwrap();
+        let project = dir.path().join("project");
+        fs::create_dir(&project).unwrap();
+        fs::write(dir.path().join(".env"), "MY_VAR=Hello\n").unwrap();
+        fs::write(
+            project.join(".env"),
+            "MY_VAR={{ env.MY_VAR }}, World!\nRESULT_VAR=Greetings! {{ env.MY_VAR }}\n",
+        )
+        .unwrap();
+
+        let result = discover_all(dir.path()).unwrap();
+        let child = &result.directory.children[0];
+
+        assert_eq!(result.directory.envs["MY_VAR"], "Hello");
+        assert!(!result.directory.envs.contains_key("RESULT_VAR"));
+        assert_eq!(child.envs["MY_VAR"], "Hello, World!");
+        assert_eq!(child.envs["RESULT_VAR"], "Greetings! Hello, World!");
+    }
+
+    #[test]
+    fn discover_keeps_child_environment_changes_out_of_siblings() {
+        let dir = tempdir().unwrap();
+        let first = dir.path().join("a-first");
+        let second = dir.path().join("b-second");
+        fs::create_dir(&first).unwrap();
+        fs::create_dir(&second).unwrap();
+        fs::write(dir.path().join(".env"), "SHARED=parent\n").unwrap();
+        fs::write(
+            first.join(".env"),
+            "SHARED=first\nFIRST_ONLY=visible-in-first\n",
+        )
+        .unwrap();
+        fs::write(second.join(".env"), "RESULT={{ env.SHARED }}\n").unwrap();
+
+        let result = discover_all(dir.path()).unwrap();
+        let first = &result.directory.children[0];
+        let second = &result.directory.children[1];
+
+        assert_eq!(result.directory.envs["SHARED"], "parent");
+        assert!(!result.directory.envs.contains_key("FIRST_ONLY"));
+        assert_eq!(first.envs["SHARED"], "first");
+        assert_eq!(first.envs["FIRST_ONLY"], "visible-in-first");
+        assert_eq!(second.envs["SHARED"], "parent");
+        assert_eq!(second.envs["RESULT"], "parent");
+        assert!(!second.envs.contains_key("FIRST_ONLY"));
+    }
+
+    #[test]
+    fn discover_propagates_environment_template_errors() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("broken.env"), "BROKEN={{ env.MISSING\n").unwrap();
+
+        let error = discover_all(dir.path()).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(message.contains("BROKEN"));
+        assert!(message.contains("broken.env"));
+        assert!(message.contains("line 1"));
+    }
+
+    #[test]
     fn discover_uses_provided_inherited_configs_as_starting_options() {
         let dir = tempdir().unwrap();
         let inherited = RunOptions {
@@ -631,7 +854,7 @@ mod tests {
             loop_count: None,
         };
 
-        let result = discover(
+        let result = discover_for_test(
             dir.path(),
             Some(vec![inherited]),
             &mut HashMap::new(),
@@ -665,7 +888,7 @@ mod tests {
 
     #[test]
     fn discover_returns_error_for_nonexistent_directory() {
-        let result = discover(
+        let result = discover_for_test(
             &PathBuf::from("/no/such/directory/exists"),
             None,
             &mut HashMap::new(),
