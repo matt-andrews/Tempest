@@ -47,3 +47,10 @@ describe:
       route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
       assert:
         - "'{{ env.TEST_ENV_WITH_SPACES }}' == 'My Env Has Spaces'"
+
+  - name: "test top level vars being overridden by env in this dir"
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - "'{{ env.TEST_ENV_1 }}' == ''"
+        - "'{{ env.TEST_ENV_2 }}' == 'Greetings: Hello, World!'"
