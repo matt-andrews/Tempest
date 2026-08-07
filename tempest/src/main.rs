@@ -10,6 +10,7 @@ mod utils;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
+use crate::templating::liquid::LiquidEngine;
 use anyhow::ensure;
 use clap::{Parser, Subcommand};
 use colored::Colorize;
@@ -80,14 +81,15 @@ async fn run() -> anyhow::Result<ExitCode> {
             workers,
             env,
         } => {
+            let liquid_engine = LiquidEngine;
             let project_dir = dunce::canonicalize(&path)?;
-            load_project_dotenv(&project_dir)?;
+            let mut envs = parse_cli_envs(env)?;
+            load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
             let options = RunOptions::default_from_args(debug, retries);
             let run_paths = &resolve_run_paths(&project_dir, run);
 
-            let mut envs = parse_cli_envs(env)?;
-
-            let discovery = &discovery::discover(&project_dir, None, &mut envs, run_paths)?;
+            let discovery =
+                &discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)?;
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -104,10 +106,14 @@ async fn run() -> anyhow::Result<ExitCode> {
 }
 
 ///This function is UNSAFE because we are setting environment variables
-fn load_project_dotenv(project_dir: &Path) -> anyhow::Result<()> {
+fn load_project_dotenv(
+    project_dir: &Path,
+    inherited_envs: &HashMap<String, String>,
+    liquid_engine: &LiquidEngine,
+) -> anyhow::Result<()> {
     let path = project_dir.join(".env");
     if path.exists() {
-        match discovery::parse_env(&path) {
+        match discovery::parse_env(&path, inherited_envs, liquid_engine) {
             Ok(envs) => unsafe {
                 for e in envs {
                     env::set_var(e.0, e.1);

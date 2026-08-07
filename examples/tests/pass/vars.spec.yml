@@ -103,3 +103,10 @@ describe:
           route: "{{ env.HTTPBIN_BASE_URI }}/status/{{ vars.test_var_with_let }}"
           assert:
             - status == 200
+
+  - name: "test top level vars"
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - "'{{ env.TEST_ENV_1 }}' == 'Hello'"
+        - "'{{ env.TEST_ENV_2 }}' == 'Hello, World!'"

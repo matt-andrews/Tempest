@@ -101,6 +101,7 @@ mod tests {
     use crate::models::test_result::TestResult;
     use crate::models::test_spec::TestSpec;
     use crate::pipeline::file_runner::{AttemptOutcome, DescriptorOutcome};
+    use crate::templating::liquid::LiquidEngine;
     use std::path::{Path, PathBuf};
 
     fn template(dir: &Path) -> ReportTemplate {
@@ -303,6 +304,7 @@ mod tests {
             None,
             &mut HashMap::new(),
             &[suite_dir.path().to_path_buf()],
+            &LiquidEngine,
         )
         .unwrap();
         let mut json_template = discovered.templates.remove("json").unwrap();
@@ -365,6 +367,7 @@ mod tests {
             None,
             &mut HashMap::new(),
             &[suite_dir.path().to_path_buf()],
+            &LiquidEngine,
         )
         .unwrap();
         let mut json_template = discovered.templates.remove("json").unwrap();
