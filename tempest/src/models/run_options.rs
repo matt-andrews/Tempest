@@ -16,6 +16,10 @@ pub struct RunOptions {
     #[serde(rename = "loop")]
     pub loop_count: Option<NonZeroUsize>,
 
+    pub quiet_retry: Option<bool>,
+    pub quiet_run: Option<bool>,
+    pub quiet_fail: Option<bool>,
+
     #[serde(skip)]
     pub start_time: Option<DateTime>,
 }
@@ -23,14 +27,11 @@ pub struct RunOptions {
 impl RunOptions {
     pub fn default_from_args(debug: bool, retries: u8) -> Self {
         Self {
-            base_uri: None,
             debug: Some(debug),
             reports: Some(vec!["console".to_string()]),
             start_time: Some(DateTime::now()),
             retries: Some(retries),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -46,6 +47,10 @@ impl RunOptions {
             // more-local value prevents a parent's loop from being applied again
             // by every descendant.
             loop_count: other.loop_count,
+
+            quiet_fail: other.quiet_fail.or(self.quiet_fail),
+            quiet_retry: other.quiet_retry.or(self.quiet_retry),
+            quiet_run: other.quiet_run.or(self.quiet_run),
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
@@ -82,23 +87,16 @@ mod tests {
     fn merge_other_wins_when_both_set() {
         let base = RunOptions {
             base_uri: Some("http://base".to_string()),
-            debug: Some(false),
             reports: Some(vec!["base.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
             debug: Some(true),
             reports: Some(vec!["other.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -113,22 +111,10 @@ mod tests {
             base_uri: Some("http://base".to_string()),
             debug: Some(true),
             reports: Some(vec!["r.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
-        let other = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
-        };
+        let other = RunOptions::default();
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
         assert_eq!(merged.debug, Some(true));
@@ -139,24 +125,12 @@ mod tests {
     #[test]
     fn merge_both_none_yields_none() {
         let base = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let other = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);

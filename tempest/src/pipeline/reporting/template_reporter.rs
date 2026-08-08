@@ -178,14 +178,8 @@ mod tests {
 
     fn options_reports(reports: &[&str]) -> RunOptions {
         RunOptions {
-            base_uri: None,
-            debug: None,
             reports: Some(reports.iter().map(|r| r.to_string()).collect()),
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         }
     }
 
@@ -213,16 +207,7 @@ mod tests {
         let mut templates = HashMap::new();
         templates.insert("console".to_string(), report_template("console"));
 
-        let options = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
-        };
+        let options = RunOptions::default();
 
         assert!(active_templates(&templates, &options).is_empty());
     }
@@ -249,14 +234,8 @@ mod tests {
         templates.insert("file".to_string(), template);
 
         let options = RunOptions {
-            base_uri: None,
-            debug: None,
             reports: Some(vec!["file".to_string()]),
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
 
         TemplateReporter::new()
