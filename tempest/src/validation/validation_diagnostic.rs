@@ -1,5 +1,5 @@
 use std::fmt;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ValidationDiagnostic {
@@ -30,7 +30,7 @@ impl ValidationDiagnostic {
         if let Some(context) = &self.context {
             format!(
                 "{} {}[{}]: {} ({})",
-                self.path.as_deref().unwrap().display(),
+                self.path.as_deref().unwrap_or(Path::new("")).display(),
                 self.severity,
                 self.code,
                 self.message,
@@ -39,7 +39,7 @@ impl ValidationDiagnostic {
         } else {
             format!(
                 "{} {}[{}]: {}",
-                self.path.as_deref().unwrap().display(),
+                self.path.as_deref().unwrap_or(Path::new("")).display(),
                 self.severity,
                 self.code,
                 self.message
