@@ -66,12 +66,8 @@ impl<'a> ReportCoordinator<'a> {
             let test_count = self.results.len();
             let last_attempt = descriptor.attempts.len().saturating_sub(1);
 
-            for (attempt_index, attempt) in descriptor.attempts.iter().enumerate() {
-                let intermediate = attempt_index < last_attempt;
-
-                let suppressed = if intermediate {
-                    attempt.options.quiet_retry == Some(true)
-                } else {
+            let final_suppressed =
+                descriptor.attempts.last().is_some_and(|attempt| {
                     match descriptor.final_result.as_ref() {
                         Some(SummaryResult::Failed) => attempt.options.quiet_fail == Some(true),
                         Some(
@@ -79,6 +75,15 @@ impl<'a> ReportCoordinator<'a> {
                         ) => attempt.options.quiet_run == Some(true),
                         None => false,
                     }
+                });
+
+            for (attempt_index, attempt) in descriptor.attempts.iter().enumerate() {
+                let intermediate = attempt_index < last_attempt;
+
+                let suppressed = if intermediate {
+                    attempt.options.quiet_retry == Some(true)
+                } else {
+                    final_suppressed
                 };
 
                 if !suppressed {
@@ -101,7 +106,9 @@ impl<'a> ReportCoordinator<'a> {
                 }
             }
 
-            if let Some(result) = descriptor.final_result {
+            if let Some(result) = descriptor.final_result
+                && !final_suppressed
+            {
                 self.results.push(result);
             }
         }
