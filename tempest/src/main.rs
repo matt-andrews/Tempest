@@ -6,6 +6,7 @@ mod models;
 pub mod pipeline;
 pub mod templating;
 mod utils;
+pub mod validation;
 
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
