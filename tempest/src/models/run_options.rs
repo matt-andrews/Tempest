@@ -4,6 +4,7 @@ use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
@@ -11,6 +12,7 @@ pub struct RunOptions {
     pub debug: Option<bool>,
     pub reports: Option<Vec<String>>,
     pub retries: Option<u8>,
+    pub retry_delay_ms: Option<u64>,
     pub concurrent: Option<bool>,
     pub skip: Option<Templated<bool>>,
     #[serde(rename = "loop")]
@@ -41,6 +43,7 @@ impl RunOptions {
             reports: other.reports.or(self.reports),
             start_time: other.start_time.or(self.start_time),
             retries: other.retries.or(self.retries),
+            retry_delay_ms: other.retry_delay_ms.or(self.retry_delay_ms),
             concurrent: other.concurrent.or(self.concurrent),
             skip: other.skip.or(self.skip),
             // Looping is a descriptor-local execution directive. Taking only the
@@ -55,6 +58,13 @@ impl RunOptions {
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
         self.base_uri = engine.render_option_string_or_self(&self.base_uri, obj);
+    }
+
+    const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
+    pub fn retry_delay(&self) -> Duration {
+        Duration::from_millis(
+            self.retry_delay_ms.unwrap_or(Self::DEFAULT_RETRY_DELAY_MS),
+        )
     }
 }
 
