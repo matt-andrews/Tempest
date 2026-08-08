@@ -1,0 +1,24 @@
+name: "Test various malformed test structure warnings"
+
+describe:
+  - name: "Blank route"
+    test:
+      route: ""
+      assert:
+        - status == 200
+      vars:
+        var_status: status
+        var_body: body
+
+  - name: "Empty descriptor"
+
+  - name: "Malformed liquid and CEL"
+    description: "{{ env. }"
+    test:
+      route: "/not-real-route"
+      assert:
+        - "bad cel"
+
+options:
+  reports:
+    - "fake-reporter"

@@ -62,6 +62,13 @@ impl Descriptor {
             stack: VecDeque::from([(self, RunOptions::default(), Vec::new())]),
         }
     }
+    pub fn has_tests(&self) -> bool {
+        self.test.is_some()
+            || self
+                .describe
+                .as_deref()
+                .is_some_and(|children| children.iter().any(Descriptor::has_tests))
+    }
     pub fn test_count(&self) -> usize {
         let own = if self.test.is_some() { 1 } else { 0 };
         let nested: usize = self.describe.iter().flatten().map(|d| d.test_count()).sum();
@@ -326,6 +333,26 @@ mod tests {
             .unwrap();
 
         assert_eq!(child_options.loop_count, None);
+    }
+
+    #[test]
+    fn has_tests_finds_a_deeply_nested_test() {
+        let mut test = leaf("test", None);
+        test.test = Some(TestSpec::default());
+        let root = group("root", None, vec![group("section", None, vec![test])]);
+
+        assert!(root.has_tests());
+    }
+
+    #[test]
+    fn has_tests_is_false_when_descriptor_tree_has_no_test() {
+        let root = group(
+            "root",
+            None,
+            vec![group("section", None, vec![leaf("leaf", None)])],
+        );
+
+        assert!(!root.has_tests());
     }
 
     #[test]

@@ -6,10 +6,13 @@ mod models;
 pub mod pipeline;
 pub mod templating;
 mod utils;
+pub mod validation;
 
+use crate::discovery::DiscoveryResult;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
+use crate::pipeline::warnings::append_warning;
 use crate::templating::liquid::LiquidEngine;
 use anyhow::ensure;
 use clap::{Parser, Subcommand};
@@ -33,24 +36,47 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     Version,
+    Check {
+        #[arg(long, default_value = "/etc/tests")]
+        path: PathBuf,
+
+        #[arg(short, long)]
+        run: Option<Vec<PathBuf>>,
+
+        #[arg(short, long)]
+        env: Option<Vec<String>>,
+
+        #[arg(short, long, default_value = "false")]
+        warn_as_err: bool,
+    },
     Test {
         #[arg(long, default_value = "/etc/tests")]
         path: PathBuf,
+
         #[arg(short, long)]
         run: Option<Vec<PathBuf>>,
+
         #[arg(short, long, default_value = "false")]
         debug: bool,
+
         #[arg(long, default_value = "0")]
         retries: u8,
+
         #[arg(short, long, default_value = "false")]
         strict: bool,
+
         #[arg(short, long, default_value = "false")]
         warn_as_err: bool,
+
         /// Maximum number of spec files to execute at once.
         #[arg(long)]
         workers: Option<NonZeroUsize>,
+
         #[arg(short, long)]
         env: Option<Vec<String>>,
+
+        #[arg(long, default_value = "false")]
+        check: bool,
     },
 }
 
@@ -80,16 +106,14 @@ async fn run() -> anyhow::Result<ExitCode> {
             warn_as_err,
             workers,
             env,
+            check,
         } => {
-            let liquid_engine = LiquidEngine;
-            let project_dir = dunce::canonicalize(&path)?;
-            let mut envs = parse_cli_envs(env)?;
-            load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
             let options = RunOptions::default_from_args(debug, retries);
-            let run_paths = &resolve_run_paths(&project_dir, run);
+            let discovery = &init_discovery(&path, run, env)?;
 
-            let discovery =
-                &discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)?;
+            if check {
+                run_check(discovery)?;
+            }
 
             let result = pipeline::execute(discovery, &options, workers).await?;
 
@@ -98,11 +122,57 @@ async fn run() -> anyhow::Result<ExitCode> {
             let exit = determine_exit_code(result, strict, warn_as_err);
             Ok(exit)
         }
+        Commands::Check {
+            path,
+            run,
+            env,
+            warn_as_err,
+        } => {
+            let discovery = &init_discovery(&path, run, env)?;
+            run_check(discovery)?;
+
+            let exit = match print_warnings() {
+                true => {
+                    if warn_as_err {
+                        ExitCode::TestsFailed
+                    } else {
+                        ExitCode::Success
+                    }
+                }
+                false => ExitCode::Success,
+            };
+
+            Ok(exit)
+        }
         Commands::Version => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             Ok(ExitCode::Success)
         }
     }
+}
+
+fn run_check(discovery: &DiscoveryResult) -> anyhow::Result<()> {
+    let result = validation::validate_project(discovery);
+
+    for diag in result.diagnostics {
+        append_warning(diag.to_display());
+    }
+
+    Ok(())
+}
+
+fn init_discovery(
+    path: &PathBuf,
+    run: Option<Vec<PathBuf>>,
+    env: Option<Vec<String>>,
+) -> anyhow::Result<DiscoveryResult> {
+    let liquid_engine = LiquidEngine;
+    let project_dir = dunce::canonicalize(path)?;
+    let mut envs = parse_cli_envs(env)?;
+    load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
+    let run_paths = &resolve_run_paths(&project_dir, run);
+
+    discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
 }
 
 ///This function is UNSAFE because we are setting environment variables
@@ -194,7 +264,7 @@ fn resolve_run_paths(project_dir: &Path, runs: Option<Vec<PathBuf>>) -> Vec<Path
     .unwrap_or_else(|| vec![project_dir.to_path_buf()])
 }
 
-fn print_warnings() {
+fn print_warnings() -> bool {
     let warning_count = warnings::get_warning_count();
     if warning_count > 0 {
         println!(
@@ -206,7 +276,9 @@ fn print_warnings() {
         for warning in warnings {
             println!("{}: {}", "WARN".yellow(), warning.yellow());
         }
+        return true;
     }
+    false
 }
 
 #[repr(i32)]

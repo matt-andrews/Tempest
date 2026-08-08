@@ -30,6 +30,13 @@ static PARSER: LazyLock<liquid::Parser> = LazyLock::new(|| {
 
 pub struct LiquidEngine;
 
+impl LiquidEngine {
+    pub fn validate_syntax(&self, source: &str) -> anyhow::Result<()> {
+        PARSER.parse(source)?;
+        Ok(())
+    }
+}
+
 impl TemplateEngine for LiquidEngine {
     fn render(&self, source: &str, context: &liquid::Object) -> anyhow::Result<String> {
         let parsed = PARSER.parse(source)?;

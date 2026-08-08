@@ -33,6 +33,10 @@ impl DirectoryNode {
             queue: VecDeque::from([self]),
         }
     }
+    pub fn has_tests(&self) -> bool {
+        self.files.iter().any(Descriptor::has_tests)
+            || self.children.iter().any(DirectoryNode::has_tests)
+    }
     pub fn test_count(&self) -> usize {
         let from_files: usize = self.files.iter().map(|f| f.test_count()).sum();
         let from_children: usize = self.children.iter().map(|c| c.test_count()).sum();
@@ -113,6 +117,49 @@ mod tests {
     #[test]
     fn test_count_empty_dir_is_zero() {
         assert_eq!(empty_dir("root").test_count(), 0);
+    }
+
+    #[test]
+    fn has_tests_finds_a_test_in_a_nested_descriptor_and_directory() {
+        let descriptor = Descriptor {
+            name: None,
+            description: None,
+            tags: None,
+            test: None,
+            describe: Some(vec![descriptor_with_test()]),
+            profiles: None,
+            options: None,
+            file: None,
+        };
+        let child = DirectoryNode {
+            files: vec![descriptor],
+            options: vec![],
+            children: vec![],
+            dir: PathBuf::from("child"),
+            envs: HashMap::new(),
+        };
+        let root = DirectoryNode {
+            files: vec![],
+            options: vec![],
+            children: vec![child],
+            dir: PathBuf::from("root"),
+            envs: HashMap::new(),
+        };
+
+        assert!(root.has_tests());
+    }
+
+    #[test]
+    fn has_tests_is_false_when_directory_tree_has_no_test() {
+        let root = DirectoryNode {
+            files: vec![],
+            options: vec![],
+            children: vec![empty_dir("child")],
+            dir: PathBuf::from("root"),
+            envs: HashMap::new(),
+        };
+
+        assert!(!root.has_tests());
     }
 
     #[test]
