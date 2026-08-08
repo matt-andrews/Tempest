@@ -4,6 +4,7 @@ use crate::templating::liquid::LiquidEngine;
 use liquid_core::model::DateTime;
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
+use std::time::Duration;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct RunOptions {
@@ -11,10 +12,15 @@ pub struct RunOptions {
     pub debug: Option<bool>,
     pub reports: Option<Vec<String>>,
     pub retries: Option<u8>,
+    pub retry_delay_ms: Option<u64>,
     pub concurrent: Option<bool>,
     pub skip: Option<Templated<bool>>,
     #[serde(rename = "loop")]
     pub loop_count: Option<NonZeroUsize>,
+
+    pub quiet_retry: Option<bool>,
+    pub quiet_run: Option<bool>,
+    pub quiet_fail: Option<bool>,
 
     #[serde(skip)]
     pub start_time: Option<DateTime>,
@@ -23,14 +29,11 @@ pub struct RunOptions {
 impl RunOptions {
     pub fn default_from_args(debug: bool, retries: u8) -> Self {
         Self {
-            base_uri: None,
             debug: Some(debug),
             reports: Some(vec!["console".to_string()]),
             start_time: Some(DateTime::now()),
             retries: Some(retries),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         }
     }
     pub fn merge(self, other: RunOptions) -> RunOptions {
@@ -40,16 +43,26 @@ impl RunOptions {
             reports: other.reports.or(self.reports),
             start_time: other.start_time.or(self.start_time),
             retries: other.retries.or(self.retries),
+            retry_delay_ms: other.retry_delay_ms.or(self.retry_delay_ms),
             concurrent: other.concurrent.or(self.concurrent),
             skip: other.skip.or(self.skip),
             // Looping is a descriptor-local execution directive. Taking only the
             // more-local value prevents a parent's loop from being applied again
             // by every descendant.
             loop_count: other.loop_count,
+
+            quiet_fail: other.quiet_fail.or(self.quiet_fail),
+            quiet_retry: other.quiet_retry.or(self.quiet_retry),
+            quiet_run: other.quiet_run.or(self.quiet_run),
         }
     }
     pub fn render_template(&mut self, engine: &LiquidEngine, obj: &liquid_core::Object) {
         self.base_uri = engine.render_option_string_or_self(&self.base_uri, obj);
+    }
+
+    const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
+    pub fn retry_delay(&self) -> Duration {
+        Duration::from_millis(self.retry_delay_ms.unwrap_or(Self::DEFAULT_RETRY_DELAY_MS))
     }
 }
 
@@ -82,23 +95,16 @@ mod tests {
     fn merge_other_wins_when_both_set() {
         let base = RunOptions {
             base_uri: Some("http://base".to_string()),
-            debug: Some(false),
             reports: Some(vec!["base.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let other = RunOptions {
             base_uri: Some("http://other".to_string()),
             debug: Some(true),
             reports: Some(vec!["other.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://other".to_string()));
@@ -113,22 +119,10 @@ mod tests {
             base_uri: Some("http://base".to_string()),
             debug: Some(true),
             reports: Some(vec!["r.html".to_string()]),
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
-        let other = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
-        };
+        let other = RunOptions::default();
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, Some("http://base".to_string()));
         assert_eq!(merged.debug, Some(true));
@@ -139,24 +133,12 @@ mod tests {
     #[test]
     fn merge_both_none_yields_none() {
         let base = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let other = RunOptions {
-            base_uri: None,
-            debug: None,
-            reports: None,
-            start_time: None,
             retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
         let merged = base.merge(other);
         assert_eq!(merged.base_uri, None);
@@ -195,6 +177,54 @@ mod tests {
         let merged = base.merge(other);
 
         assert_eq!(merged.retries, Some(2));
+    }
+
+    #[test]
+    fn retry_delay_defaults_to_one_second() {
+        assert_eq!(
+            RunOptions::default().retry_delay(),
+            Duration::from_millis(1_000)
+        );
+    }
+
+    #[test]
+    fn retry_delay_uses_configured_milliseconds_and_allows_zero() {
+        let configured = RunOptions {
+            retry_delay_ms: Some(250),
+            ..Default::default()
+        };
+        let disabled = RunOptions {
+            retry_delay_ms: Some(0),
+            ..Default::default()
+        };
+
+        assert_eq!(configured.retry_delay(), Duration::from_millis(250));
+        assert_eq!(disabled.retry_delay(), Duration::ZERO);
+    }
+
+    #[test]
+    fn quiet_options_and_retry_delay_follow_option_cascade() {
+        let inherited = RunOptions {
+            quiet_retry: Some(true),
+            quiet_run: Some(true),
+            quiet_fail: Some(true),
+            retry_delay_ms: Some(1_000),
+            ..Default::default()
+        };
+        let local = RunOptions {
+            quiet_retry: Some(false),
+            quiet_fail: Some(false),
+            retry_delay_ms: Some(25),
+            ..Default::default()
+        };
+
+        let merged = inherited.merge(local);
+
+        assert_eq!(merged.quiet_retry, Some(false));
+        assert_eq!(merged.quiet_run, Some(true));
+        assert_eq!(merged.quiet_fail, Some(false));
+        assert_eq!(merged.retry_delay_ms, Some(25));
+        assert_eq!(merged.retry_delay(), Duration::from_millis(25));
     }
 
     #[test]

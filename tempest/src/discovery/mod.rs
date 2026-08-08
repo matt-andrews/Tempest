@@ -845,13 +845,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let inherited = RunOptions {
             base_uri: Some("http://inherited".to_string()),
-            debug: None,
-            reports: None,
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         };
 
         let result = discover_for_test(

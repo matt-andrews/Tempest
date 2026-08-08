@@ -215,15 +215,20 @@ test:
     - status == 200
 ```
 
-| Option | Description |
-|---|---|
-| `base_uri` | Prefix for routes that do not start with `http://` or `https://`. Joining normalizes the slash between the two values. |
-| `debug` | Enables detailed request and response output through reporters that define a debug template. |
-| `retries` | Number of additional attempts allowed after assertion failure. |
-| `reports` | Names of report templates to use. Defaults to `console`. A configured list replaces, rather than extends, the inherited list. |
-| `concurrent` | Enables concurrent spec-file execution. Treat this as a root project setting. |
-| `skip` | When `true`, matching tests are reported as skipped without sending a request or evaluating assertions/variables. |
-| `loop` | Positive number of times to execute this descriptor and its subtree. Valid only under descriptor `options` and not inherited as a run option. |
+| Option        | Description                                                                                                                                   |
+|---------------|-----------------------------------------------------------------------------------------------------------------------------------------------|
+| `base_uri`    | Prefix for routes that do not start with `http://` or `https://`. Joining normalizes the slash between the two values.                        |
+| `debug`       | Enables detailed request and response output through reporters that define a debug template.                                                  |
+| `retries`     | Number of additional attempts allowed after assertion failure.                                                                                |
+| `retry_delay_ms` | Unsigned integer denoting the number of milliseconds of delay in between retries. Default: 1000                                               |
+| `reports`     | Names of report templates to use. Defaults to `console`. A configured list replaces, rather than extends, the inherited list.                 |
+| `concurrent`  | Enables concurrent spec-file execution. Treat this as a root project setting.                                                                 |
+| `skip`        | When `true`, matching tests are reported as skipped without sending a request or evaluating assertions/variables.                             |
+| `loop`        | Positive number of times to execute this descriptor and its subtree. Valid only under descriptor `options` and not inherited as a run option. |
+| `quiet_retry` | When true, do not report on the given test(s) when they retry. This includes summary values                                                   |
+| `quiet_run`   | When true, do not report on the given test(s) when they run. This includes summary values                                                     |
+| `quiet_fail`  | When true, do not report on the given test(s) when they fail. This includes summary values                                                    |
+ 
 
 > [!NOTE]
 > Sections without tests are not counted as skipped

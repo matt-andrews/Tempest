@@ -93,13 +93,7 @@ mod tests {
     fn options(base_uri: &str) -> RunOptions {
         RunOptions {
             base_uri: Some(base_uri.to_string()),
-            debug: None,
-            reports: None,
-            start_time: None,
-            retries: Some(0),
-            concurrent: None,
-            skip: None,
-            loop_count: None,
+            ..RunOptions::default()
         }
     }
 
@@ -222,14 +216,8 @@ mod tests {
         let root = group(
             "root",
             Some(RunOptions {
-                base_uri: None,
                 debug: Some(true),
-                reports: None,
-                start_time: None,
-                retries: Some(0),
-                concurrent: None,
-                skip: None,
-                loop_count: None,
+                ..RunOptions::default()
             }),
             vec![group(
                 "a",

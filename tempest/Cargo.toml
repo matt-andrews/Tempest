@@ -5,12 +5,12 @@ edition = "2024"
 
 [dependencies]
 clap = { version = "4.6.2", features = ["derive"] }
-tokio = { version = "1.53.0", features = ["rt", "rt-multi-thread", "macros"] }
+tokio = { version = "1.53.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
 anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }
 colored = "3.1.1"
 enum_dispatch = "0.3.13"
-noyalib = { version = "0.0.17", features = ["compat-serde-yaml"] }
+noyalib = { version = "0.0.18", features = ["compat-serde-yaml"] }
 reqwest = { version = "0.13.4", features = ["json"] }
 serde_json = "1.0.151"
 cel-interpreter = { version = "0.10.0", features = ["json"] }
@@ -29,6 +29,7 @@ indexmap = { version = "2.14.0", features = ["serde"] }
 [dev-dependencies]
 tempfile = "3.27.0"
 mockito = "1.7.2"
+tokio = { version = "1.53.0", features = ["test-util"] }
 
 [profile.release]
 opt-level     = "z"     # optimize for binary size

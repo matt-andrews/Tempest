@@ -182,6 +182,7 @@ Option behavior:
 - `base_uri` is prepended to a route that does not start with `http://` or `https://`. Slashes at the join are normalized.
 - `debug` enables detailed request/response data.
 - `retries` is the number of additional attempts allowed after assertion failure. A value of `1` permits at most two total attempts.
+- `retry_delay_ms` Unsigned integer denoting the number of milliseconds of delay in between retries. Default: 1000
 - `reports` selects report templates by name.
 - `concurrent` enables concurrent spec-file execution when set in the root project config. Tests within each file, including retries and variable assignment, remain sequential.
 - `skip` option will cause the test to be skipped and any inherited tests to be skipped. A skipped test does not run, assert or set variables.
@@ -189,6 +190,9 @@ Option behavior:
 - The CLI starts with `reports: ["console"]`, `debug: false`, `retries: 0`, and serial spec-file execution.
 - When a config or descriptor specifies `reports`, it replaces the inherited list. Include `console` explicitly if console output should remain enabled.
 - Options cascade from CLI defaults through parent-directory configs and ancestor descriptors. The more local configured value wins.
+- `quiet_retry` | When true, do not report on the given test(s) when they retry. This includes summary values
+- `quiet_run`   | When true, do not report on the given test(s) when they run. This includes summary values
+- `quiet_fail`  | When true, do not report on the given test(s) when they fail. This includes summary values
 
 `concurrent` is a suite scheduler setting rather than a descriptor behavior, so set it only in the root project config. With `concurrent: true` and no `--workers` argument, Tempest uses `std::thread::available_parallelism()` as the worker limit. An explicit `--workers N` takes precedence and also enables concurrency even when `concurrent` is absent or false.
 

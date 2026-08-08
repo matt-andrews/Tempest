@@ -195,6 +195,7 @@ impl<'a> FileRunner<'a> {
 
             let attempt_result = attempt.result.clone();
             let max_retries = usize::from(attempt.options.retries.unwrap_or(0));
+            let retry_delay = attempt.options.retry_delay();
 
             attempts.push(attempt);
 
@@ -203,6 +204,10 @@ impl<'a> FileRunner<'a> {
                     retry_number += 1;
                     saw_failure = true;
                     *context = original_context.clone();
+                    if !retry_delay.is_zero() {
+                        tokio::time::sleep(retry_delay).await;
+                    }
+
                     continue;
                 }
 

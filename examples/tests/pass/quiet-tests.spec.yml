@@ -1,0 +1,28 @@
+name: "Quiet tests"
+description: "a set of tests to validate that the quiet_* options are not reporting"
+
+describe:
+  - name: "test quiet retry doesn't report anything"
+    options:
+      quiet_retry: true
+      quiet_fail: true
+      retries: 5
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - status == 0
+  - name: "test quiet run doesn't report anything"
+    options:
+      quiet_run: true
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - status == 200
+  - name: "test quiet fail doesn't report anything"
+    options:
+      quiet_fail: true
+      retries: 0
+    test:
+      route: "https://github.githubassets.com/images/icons/emoji/unicode/1f4a4.png?v8"
+      assert:
+        - status == 0

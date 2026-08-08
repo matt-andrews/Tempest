@@ -52,6 +52,9 @@ impl<'a> ReportCoordinator<'a> {
             self.pending.is_empty(),
             "cannot summarize while file outcomes are missing"
         );
+        if self.results.is_empty() {
+            return Ok(SummaryResult::Passed);
+        }
         self.reporter
             .summary(options, self.templates, &self.results)
     }
@@ -64,27 +67,51 @@ impl<'a> ReportCoordinator<'a> {
     fn emit_file(&mut self, outcome: FileOutcome) -> anyhow::Result<()> {
         for descriptor in outcome.descriptors {
             let test_count = self.results.len();
+            let last_attempt = descriptor.attempts.len().saturating_sub(1);
 
-            for (retry_count, attempt) in descriptor.attempts.iter().enumerate() {
-                if let Some(message) = attempt.debug_message.as_deref() {
-                    self.reporter
-                        .debug(message, &attempt.options, self.templates)?;
+            let final_suppressed =
+                descriptor.attempts.last().is_some_and(|attempt| {
+                    match descriptor.final_result.as_ref() {
+                        Some(SummaryResult::Failed) => attempt.options.quiet_fail == Some(true),
+                        Some(
+                            SummaryResult::Passed | SummaryResult::Flaky | SummaryResult::Skipped,
+                        ) => attempt.options.quiet_run == Some(true),
+                        None => false,
+                    }
+                });
+
+            for (attempt_index, attempt) in descriptor.attempts.iter().enumerate() {
+                let intermediate = attempt_index < last_attempt;
+
+                let suppressed = if intermediate {
+                    attempt.options.quiet_retry == Some(true)
+                } else {
+                    final_suppressed
+                };
+
+                if !suppressed {
+                    if let Some(message) = attempt.debug_message.as_deref() {
+                        self.reporter
+                            .debug(message, &attempt.options, self.templates)?;
+                    }
+
+                    self.reporter.report(
+                        &attempt.descriptor,
+                        &attempt.title_path,
+                        &attempt.expansion_prefix,
+                        attempt.test_result.as_ref(),
+                        &attempt.assertions,
+                        &attempt.options,
+                        self.templates,
+                        test_count,
+                        attempt_index,
+                    )?;
                 }
-
-                self.reporter.report(
-                    &attempt.descriptor,
-                    &attempt.title_path,
-                    &attempt.expansion_prefix,
-                    attempt.test_result.as_ref(),
-                    &attempt.assertions,
-                    &attempt.options,
-                    self.templates,
-                    test_count,
-                    retry_count,
-                )?;
             }
 
-            if let Some(result) = descriptor.final_result {
+            if let Some(result) = descriptor.final_result
+                && !final_suppressed
+            {
                 self.results.push(result);
             }
         }
@@ -111,7 +138,7 @@ mod tests {
             test_template: Some(
                 "attempt:{{ name }}:{{ test_count }}:{{ retry_count }}\n".to_string(),
             ),
-            summary_template: None,
+            summary_template: Some("summary\n".to_string()),
             error_template: None,
             debug_template: Some("debug:{{ debug_message }}\n".to_string()),
             file: Some(ReportFile {
@@ -265,6 +292,120 @@ mod tests {
             coordinator.results(),
             &[SummaryResult::Flaky, SummaryResult::Passed]
         );
+    }
+
+    #[test]
+    fn quiet_retry_suppresses_intermediate_attempt_but_keeps_final_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
+        let mut coordinator = ReportCoordinator::new(&templates);
+        let mut first = attempt(
+            "maintenance",
+            true,
+            Some(SummaryResult::Failed),
+            Some("first"),
+        );
+        first.options.quiet_retry = Some(true);
+        let mut final_attempt = attempt(
+            "maintenance",
+            true,
+            Some(SummaryResult::Passed),
+            Some("final"),
+        );
+        final_attempt.options.quiet_retry = Some(true);
+
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(
+                    vec![first, final_attempt],
+                    Some(SummaryResult::Flaky),
+                )],
+            ))
+            .unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(path)
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            vec!["debug:final", "attempt:maintenance:0:1"]
+        );
+        assert_eq!(coordinator.results(), &[SummaryResult::Flaky]);
+    }
+
+    #[test]
+    fn quiet_run_suppresses_passing_attempt_and_summary_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
+        let mut coordinator = ReportCoordinator::new(&templates);
+        let mut passed = attempt(
+            "maintenance",
+            true,
+            Some(SummaryResult::Passed),
+            Some("passed"),
+        );
+        passed.options.quiet_run = Some(true);
+
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(vec![passed], Some(SummaryResult::Passed))],
+            ))
+            .unwrap();
+
+        assert!(!path.exists());
+        assert!(coordinator.results().is_empty());
+    }
+
+    #[test]
+    fn quiet_fail_suppresses_failed_attempt_and_summary_result() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
+        let mut coordinator = ReportCoordinator::new(&templates);
+        let mut failed = attempt(
+            "maintenance",
+            true,
+            Some(SummaryResult::Failed),
+            Some("failed"),
+        );
+        failed.options.quiet_fail = Some(true);
+
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(vec![failed], Some(SummaryResult::Failed))],
+            ))
+            .unwrap();
+
+        assert!(!path.exists());
+        assert!(coordinator.results().is_empty());
+    }
+
+    #[test]
+    fn all_quiet_results_skip_summary_output_and_return_passed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("report.txt");
+        let templates = HashMap::from([("test".to_string(), template(dir.path()))]);
+        let mut coordinator = ReportCoordinator::new(&templates);
+        let mut failed = attempt("maintenance", true, Some(SummaryResult::Failed), None);
+        failed.options.quiet_fail = Some(true);
+
+        coordinator
+            .consume(file(
+                0,
+                vec![descriptor(vec![failed], Some(SummaryResult::Failed))],
+            ))
+            .unwrap();
+
+        assert_eq!(
+            coordinator.summary(&options(false)).unwrap(),
+            SummaryResult::Passed
+        );
+        assert!(!path.exists());
     }
 
     #[test]
