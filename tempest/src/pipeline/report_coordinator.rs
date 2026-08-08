@@ -64,24 +64,41 @@ impl<'a> ReportCoordinator<'a> {
     fn emit_file(&mut self, outcome: FileOutcome) -> anyhow::Result<()> {
         for descriptor in outcome.descriptors {
             let test_count = self.results.len();
+            let last_attempt = descriptor.attempts.len().saturating_sub(1);
 
-            for (retry_count, attempt) in descriptor.attempts.iter().enumerate() {
-                if let Some(message) = attempt.debug_message.as_deref() {
-                    self.reporter
-                        .debug(message, &attempt.options, self.templates)?;
+            for (attempt_index, attempt) in descriptor.attempts.iter().enumerate() {
+                let intermediate = attempt_index < last_attempt;
+
+                let suppressed = if intermediate {
+                    attempt.options.quiet_retry == Some(true)
+                } else {
+                    match descriptor.final_result.as_ref() {
+                        Some(SummaryResult::Failed) => attempt.options.quiet_fail == Some(true),
+                        Some(
+                            SummaryResult::Passed | SummaryResult::Flaky | SummaryResult::Skipped,
+                        ) => attempt.options.quiet_run == Some(true),
+                        None => false,
+                    }
+                };
+
+                if !suppressed {
+                    if let Some(message) = attempt.debug_message.as_deref() {
+                        self.reporter
+                            .debug(message, &attempt.options, self.templates)?;
+                    }
+
+                    self.reporter.report(
+                        &attempt.descriptor,
+                        &attempt.title_path,
+                        &attempt.expansion_prefix,
+                        attempt.test_result.as_ref(),
+                        &attempt.assertions,
+                        &attempt.options,
+                        self.templates,
+                        test_count,
+                        attempt_index,
+                    )?;
                 }
-
-                self.reporter.report(
-                    &attempt.descriptor,
-                    &attempt.title_path,
-                    &attempt.expansion_prefix,
-                    attempt.test_result.as_ref(),
-                    &attempt.assertions,
-                    &attempt.options,
-                    self.templates,
-                    test_count,
-                    retry_count,
-                )?;
             }
 
             if let Some(result) = descriptor.final_result {
