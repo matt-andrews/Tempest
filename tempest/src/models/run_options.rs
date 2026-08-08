@@ -62,9 +62,7 @@ impl RunOptions {
 
     const DEFAULT_RETRY_DELAY_MS: u64 = 1_000;
     pub fn retry_delay(&self) -> Duration {
-        Duration::from_millis(
-            self.retry_delay_ms.unwrap_or(Self::DEFAULT_RETRY_DELAY_MS),
-        )
+        Duration::from_millis(self.retry_delay_ms.unwrap_or(Self::DEFAULT_RETRY_DELAY_MS))
     }
 }
 
@@ -179,6 +177,54 @@ mod tests {
         let merged = base.merge(other);
 
         assert_eq!(merged.retries, Some(2));
+    }
+
+    #[test]
+    fn retry_delay_defaults_to_one_second() {
+        assert_eq!(
+            RunOptions::default().retry_delay(),
+            Duration::from_millis(1_000)
+        );
+    }
+
+    #[test]
+    fn retry_delay_uses_configured_milliseconds_and_allows_zero() {
+        let configured = RunOptions {
+            retry_delay_ms: Some(250),
+            ..Default::default()
+        };
+        let disabled = RunOptions {
+            retry_delay_ms: Some(0),
+            ..Default::default()
+        };
+
+        assert_eq!(configured.retry_delay(), Duration::from_millis(250));
+        assert_eq!(disabled.retry_delay(), Duration::ZERO);
+    }
+
+    #[test]
+    fn quiet_options_and_retry_delay_follow_option_cascade() {
+        let inherited = RunOptions {
+            quiet_retry: Some(true),
+            quiet_run: Some(true),
+            quiet_fail: Some(true),
+            retry_delay_ms: Some(1_000),
+            ..Default::default()
+        };
+        let local = RunOptions {
+            quiet_retry: Some(false),
+            quiet_fail: Some(false),
+            retry_delay_ms: Some(25),
+            ..Default::default()
+        };
+
+        let merged = inherited.merge(local);
+
+        assert_eq!(merged.quiet_retry, Some(false));
+        assert_eq!(merged.quiet_run, Some(true));
+        assert_eq!(merged.quiet_fail, Some(false));
+        assert_eq!(merged.retry_delay_ms, Some(25));
+        assert_eq!(merged.retry_delay(), Duration::from_millis(25));
     }
 
     #[test]

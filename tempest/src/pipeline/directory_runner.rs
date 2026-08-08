@@ -56,6 +56,7 @@ mod tests {
     use std::collections::HashMap;
     use std::num::NonZeroUsize;
     use std::path::PathBuf;
+    use std::time::Duration;
 
     fn dir_node(files: Vec<Descriptor>) -> DirectoryNode {
         DirectoryNode {
@@ -562,6 +563,7 @@ mod tests {
             Some(HashMap::from([("tokens".to_string(), "body".to_string())]));
         unstable.options = Some(RunOptions {
             retries: Some(1),
+            retry_delay_ms: Some(0),
             loop_count: NonZeroUsize::new(1),
             ..Default::default()
         });
@@ -899,6 +901,7 @@ mod tests {
                 &engine,
                 RunOptions {
                     retries: Some(1),
+                    retry_delay_ms: Some(0),
                     ..Default::default()
                 },
             ),
@@ -935,6 +938,7 @@ mod tests {
                 &engine,
                 RunOptions {
                     retries: Some(2),
+                    retry_delay_ms: Some(0),
                     ..Default::default()
                 },
             ),
@@ -995,6 +999,7 @@ mod tests {
                 RunOptions {
                     reports: Some(vec!["file".to_string()]),
                     retries: Some(1),
+                    retry_delay_ms: Some(0),
                     ..Default::default()
                 },
             ),
@@ -1007,6 +1012,33 @@ mod tests {
         assert_eq!(summary.len(), 1);
         assert!(matches!(summary[0], SummaryResult::Flaky));
         assert_eq!(report.lines().collect::<Vec<_>>(), vec!["500", "200"]);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn configured_retry_delay_is_waited_before_next_attempt() {
+        let engine = LiquidEngine;
+        let templates = HashMap::new();
+        let mut test = get_descriptor("http://127.0.0.1:1", Some(vec!["status == 200"]));
+        test.test.as_mut().unwrap().verb = Some("UNKNOWN".to_string());
+        let dir = dir_node(vec![test]);
+        let started = tokio::time::Instant::now();
+
+        let summary = execute_runner(
+            make_runner(
+                &dir,
+                &engine,
+                RunOptions {
+                    retries: Some(1),
+                    retry_delay_ms: Some(2_500),
+                    ..Default::default()
+                },
+            ),
+            &templates,
+        )
+        .await;
+
+        assert_eq!(started.elapsed(), Duration::from_millis(2_500));
+        assert_eq!(summary, vec![SummaryResult::Failed]);
     }
 
     #[tokio::test]
@@ -1097,6 +1129,7 @@ mod tests {
                 &engine,
                 RunOptions {
                     retries: Some(1),
+                    retry_delay_ms: Some(0),
                     ..Default::default()
                 },
             ),

@@ -204,10 +204,10 @@ impl<'a> FileRunner<'a> {
                     retry_number += 1;
                     saw_failure = true;
                     *context = original_context.clone();
-                    if !retry_delay.is_zero(){
+                    if !retry_delay.is_zero() {
                         tokio::time::sleep(retry_delay).await;
                     }
-                    
+
                     continue;
                 }
 

@@ -29,6 +29,7 @@ indexmap = { version = "2.14.0", features = ["serde"] }
 [dev-dependencies]
 tempfile = "3.27.0"
 mockito = "1.7.2"
+tokio = { version = "1.53.0", features = ["test-util"] }
 
 [profile.release]
 opt-level     = "z"     # optimize for binary size
