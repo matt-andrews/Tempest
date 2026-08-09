@@ -45,6 +45,7 @@ pub trait Reporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
+        start_time_ms: usize,
     ) -> anyhow::Result<()>;
 }
 

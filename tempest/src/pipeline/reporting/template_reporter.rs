@@ -10,7 +10,7 @@ use crate::pipeline::reporting::sinks::OutputSink;
 use crate::pipeline::reporting::sinks::output_sink_for;
 use liquid_core::model::DateTime;
 use std::collections::HashMap;
-use std::time::Duration;
+use std::time::{Duration};
 
 pub struct TemplateReporter {
     renderer: LiquidRenderer,
@@ -141,8 +141,16 @@ impl Reporter for TemplateReporter {
         options: &RunOptions,
         templates: &HashMap<String, ReportTemplate>,
         test_count: usize,
+        start_time_ms: usize,
     ) -> anyhow::Result<()> {
-        self.emit(ReportEvent::Title { test_count }, options, templates)
+        self.emit(
+            ReportEvent::Title {
+                test_count,
+                start_time_ms,
+            },
+            options,
+            templates,
+        )
     }
 }
 
@@ -239,7 +247,7 @@ mod tests {
         };
 
         TemplateReporter::new()
-            .title(&options, &templates, 1)
+            .title(&options, &templates, 1, 120)
             .unwrap();
 
         let output = std::fs::read_to_string(path).unwrap();

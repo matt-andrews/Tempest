@@ -24,8 +24,14 @@ impl<'a> ReportCoordinator<'a> {
         }
     }
 
-    pub fn title(&self, options: &RunOptions, test_count: usize) -> anyhow::Result<()> {
-        self.reporter.title(options, self.templates, test_count)
+    pub fn title(
+        &self,
+        options: &RunOptions,
+        test_count: usize,
+        start_time_ms: u128,
+    ) -> anyhow::Result<()> {
+        self.reporter
+            .title(options, self.templates, test_count, start_time_ms as usize)
     }
 
     pub fn consume(&mut self, outcome: FileOutcome) -> anyhow::Result<()> {
@@ -460,7 +466,7 @@ mod tests {
         };
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.title(&options, 2).unwrap();
+        coordinator.title(&options, 2, 120).unwrap();
         coordinator
             .consume(file(
                 1,
@@ -523,7 +529,7 @@ mod tests {
         };
         let mut coordinator = ReportCoordinator::new(&templates);
 
-        coordinator.title(&options, 2).unwrap();
+        coordinator.title(&options, 2, 120).unwrap();
         let mut skipped = attempt("skipped", true, Some(SummaryResult::Skipped), None);
         skipped.options = options.clone();
         skipped.test_result = None;
