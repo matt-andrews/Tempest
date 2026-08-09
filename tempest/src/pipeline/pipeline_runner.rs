@@ -35,9 +35,12 @@ impl<'a> PipelineRunner<'a> {
             report_coordinator: ReportCoordinator::new(&discovery_result.templates),
         }
     }
-    pub fn title(&self) -> anyhow::Result<()> {
-        self.report_coordinator
-            .title(&self.options, self.discovered.directory.test_count())
+    pub fn title(&self, start_time_ms: u128) -> anyhow::Result<()> {
+        self.report_coordinator.title(
+            &self.options,
+            self.discovered.directory.test_count(),
+            start_time_ms,
+        )
     }
 
     pub fn summary(&self) -> anyhow::Result<SummaryResult> {

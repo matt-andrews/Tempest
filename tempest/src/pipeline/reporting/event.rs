@@ -5,6 +5,7 @@ use crate::models::test_result::{Assertion, TestResult};
 pub enum ReportEvent<'a> {
     Title {
         test_count: usize,
+        start_time_ms: usize,
     },
     Descriptor {
         descriptor: &'a Descriptor,
@@ -79,7 +80,10 @@ mod tests {
 
     #[test]
     fn title_event_selects_title_template() {
-        let event = ReportEvent::Title { test_count: 3 };
+        let event = ReportEvent::Title {
+            test_count: 3,
+            start_time_ms: 120,
+        };
         assert_eq!(event.template(&template()), Some("title"));
     }
 

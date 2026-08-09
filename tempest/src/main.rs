@@ -23,6 +23,7 @@ use std::io::Write;
 use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 use std::{env, process};
 
 const ERROR_EXIT_CODE: u8 = 1;
@@ -108,6 +109,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
             check,
         } => {
+            let start_instant = Instant::now();
             let options = RunOptions::default_from_args(debug, retries);
             let discovery = &init_discovery(&path, run, env)?;
 
@@ -115,7 +117,7 @@ async fn run() -> anyhow::Result<ExitCode> {
                 run_check(discovery)?;
             }
 
-            let result = pipeline::execute(discovery, &options, workers).await?;
+            let result = pipeline::execute(discovery, &options, workers, &start_instant).await?;
 
             print_warnings();
 

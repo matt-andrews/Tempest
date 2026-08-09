@@ -28,9 +28,14 @@ impl LiquidRenderer {
 
     fn build_globals(&self, event: &ReportEvent<'_>) -> liquid::Object {
         match event {
-            ReportEvent::Title { test_count } => {
+            ReportEvent::Title {
+                test_count,
+                start_time_ms,
+            } => {
                 liquid::object!({
                     "test_count": *test_count,
+                    "start_time_ms": *start_time_ms,
+                    "version": env!("CARGO_PKG_VERSION")
                 })
             }
 
@@ -212,7 +217,10 @@ mod tests {
     #[test]
     fn renders_title_globals() {
         let renderer = LiquidRenderer::new();
-        let event = ReportEvent::Title { test_count: 12 };
+        let event = ReportEvent::Title {
+            test_count: 12,
+            start_time_ms: 120,
+        };
 
         let output = renderer
             .render(&template("{{ test_count }}"), &event)
@@ -250,7 +258,10 @@ mod tests {
                 &template(include_str!(
                     "../../builtin_reporters/console_reporter/console.title.liquid"
                 )),
-                &ReportEvent::Title { test_count: 12 },
+                &ReportEvent::Title {
+                    test_count: 12,
+                    start_time_ms: 120,
+                },
             )
             .unwrap();
         let summary = renderer
@@ -511,7 +522,10 @@ mod tests {
     #[test]
     fn returns_error_for_invalid_liquid_template() {
         let renderer = LiquidRenderer::new();
-        let event = ReportEvent::Title { test_count: 1 };
+        let event = ReportEvent::Title {
+            test_count: 1,
+            start_time_ms: 120,
+        };
 
         let result = renderer.render(&template("{{ broken"), &event);
 
