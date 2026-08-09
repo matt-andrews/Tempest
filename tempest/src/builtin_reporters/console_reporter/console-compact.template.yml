@@ -3,6 +3,6 @@ section_template: console.section.liquid
 error_template: console.error.liquid
 debug_template: console.debug.liquid
 title_template: |
-  {{ "Tempest" | bright_purple }} · {{ "Running " | green }}{{ test_count | bright_purple }}{{ " tests" | green }}
+  {{ "Tempest" | bright_purple }} v{{ version | bright_purple }} · {{ "Running " | green }}{{ test_count | bright_purple }}{{ " tests" | green }} · Discovery {{ start_time_ms | color_duration }}ms
 summary_template: |
   {% if failed > 0 %}{{ "✗" | bright_red }}{% elsif flaky > 0 %}{{ "!" | yellow }}{% else %}{{ "✓" | bright_green }}{% endif %} {{ "Summary" | bright_purple }} · {{ passed | green }} passed · {{ flaky | yellow }} flaky · {{ failed | red }} failed · {{ skipped }} skipped · {{ duration }}ms duration
