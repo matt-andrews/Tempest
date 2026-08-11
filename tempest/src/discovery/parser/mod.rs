@@ -2,6 +2,7 @@ pub mod yaml_parser;
 
 use crate::discovery::parser::yaml_parser::YamlFileParser;
 use crate::models::descriptor::Descriptor;
+use crate::models::project::Project;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
 use enum_dispatch::enum_dispatch;
@@ -18,6 +19,7 @@ pub trait FileParser {
         file: &File,
         dir: &Dir,
     ) -> anyhow::Result<ReportTemplate>;
+    fn parse_project(&self, path: &Path) -> anyhow::Result<Project>;
 }
 
 #[enum_dispatch(FileParser)]

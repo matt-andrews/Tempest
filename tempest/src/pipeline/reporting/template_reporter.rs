@@ -10,7 +10,7 @@ use crate::pipeline::reporting::sinks::OutputSink;
 use crate::pipeline::reporting::sinks::output_sink_for;
 use liquid_core::model::DateTime;
 use std::collections::HashMap;
-use std::time::{Duration};
+use std::time::Duration;
 
 pub struct TemplateReporter {
     renderer: LiquidRenderer,

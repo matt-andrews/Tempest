@@ -8,7 +8,8 @@ pub mod templating;
 mod utils;
 pub mod validation;
 
-use crate::discovery::DiscoveryResult;
+use crate::discovery::{DiscoveryResult, discover_project};
+use crate::models::project::Project;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
@@ -49,6 +50,16 @@ enum Commands {
 
         #[arg(short, long, default_value = "false")]
         warn_as_err: bool,
+    },
+    Run {
+        #[arg(long, default_value = "/etc/tests")]
+        path: PathBuf,
+
+        #[arg(short, long)]
+        project: Option<PathBuf>,
+
+        #[arg(short, long)]
+        env: Option<Vec<String>>,
     },
     Test {
         #[arg(long, default_value = "/etc/tests")]
@@ -111,7 +122,7 @@ async fn run() -> anyhow::Result<ExitCode> {
         } => {
             let start_instant = Instant::now();
             let options = RunOptions::default_from_args(debug, retries);
-            let discovery = &init_discovery(&path, run, env)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?, true)?;
 
             if check {
                 run_check(discovery)?;
@@ -130,7 +141,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
             warn_as_err,
         } => {
-            let discovery = &init_discovery(&path, run, env)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?, true)?;
             run_check(discovery)?;
 
             let exit = match print_warnings() {
@@ -144,6 +155,32 @@ async fn run() -> anyhow::Result<ExitCode> {
                 false => ExitCode::Success,
             };
 
+            Ok(exit)
+        }
+        Commands::Run { path, project, env } => {
+            let start_instant = Instant::now();
+            let envs = parse_cli_envs(env)?;
+
+            let mut discovered_project = discover_project(path.as_path(), project)?;
+            discovered_project.merge_env(envs);
+
+            let include = discovered_project.include.clone();
+            let env = discovered_project.env.clone().unwrap_or_default();
+
+            let discovery = &init_discovery(&path, include, env, false)?;
+            run_check(discovery)?;
+
+            let default_options = Default::default();
+            let options = discovered_project
+                .options
+                .as_ref()
+                .unwrap_or(&default_options);
+
+            let result = pipeline::execute(discovery, options, None, &start_instant).await?;
+
+            print_warnings();
+
+            let exit = determine_exit_code_for_project(&discovered_project, result);
             Ok(exit)
         }
         Commands::Version => {
@@ -166,15 +203,20 @@ fn run_check(discovery: &DiscoveryResult) -> anyhow::Result<()> {
 fn init_discovery(
     path: &PathBuf,
     run: Option<Vec<PathBuf>>,
-    env: Option<Vec<String>>,
+    envs: HashMap<String, String>,
+    nested: bool,
 ) -> anyhow::Result<DiscoveryResult> {
     let liquid_engine = LiquidEngine;
     let project_dir = dunce::canonicalize(path)?;
-    let mut envs = parse_cli_envs(env)?;
+    let mut envs = envs;
     load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
     let run_paths = &resolve_run_paths(&project_dir, run);
 
-    discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    if nested {
+        discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    } else {
+        discovery::discover_not_nested(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    }
 }
 
 ///This function is UNSAFE because we are setting environment variables
@@ -303,6 +345,22 @@ fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -
     }
 }
 
+fn determine_exit_code_for_project(project: &Project, result: SummaryResult) -> ExitCode {
+    if project.warn_as_err.unwrap_or_default() && warnings::get_warning_count() > 0 {
+        return ExitCode::TestsFailed;
+    }
+    let code = match result {
+        SummaryResult::Failed => project.failed_exit.unwrap_or(1),
+        SummaryResult::Flaky => project.flaky_exit.unwrap_or(0),
+        SummaryResult::Passed | SummaryResult::Skipped => project.success_exit.unwrap_or(0),
+    };
+    match code {
+        0 => ExitCode::Success,
+        1 => ExitCode::TestsFailed,
+        _ => ExitCode::FlakyTests,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,6 +379,18 @@ mod tests {
             panic!("expected the test command");
         };
         Ok(workers)
+    }
+
+    //need to fix this at some point
+    #[allow(clippy::type_complexity)]
+    fn parsed_project_run(
+        args: &[&str],
+    ) -> Result<(PathBuf, Option<PathBuf>, Option<Vec<String>>), clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Run { path, project, env } = cli.command else {
+            panic!("expected the run command");
+        };
+        Ok((path, project, env))
     }
 
     #[test]
@@ -394,6 +464,82 @@ mod tests {
     #[test]
     fn workers_rejects_zero() {
         assert!(parsed_workers(&["tempest", "test", "--workers", "0"]).is_err());
+    }
+
+    #[test]
+    fn project_run_accepts_path_project_file_and_environment_values() {
+        let parsed = parsed_project_run(&[
+            "tempest",
+            "run",
+            "--path",
+            "suite",
+            "--project",
+            "custom.project.yml",
+            "--env",
+            "HOST=api.example.com",
+            "--env",
+            "TOKEN=secret",
+        ])
+        .unwrap();
+
+        assert_eq!(parsed.0, PathBuf::from("suite"));
+        assert_eq!(parsed.1, Some(PathBuf::from("custom.project.yml")));
+        assert_eq!(
+            parsed.2,
+            Some(vec![
+                "HOST=api.example.com".to_owned(),
+                "TOKEN=secret".to_owned(),
+            ])
+        );
+    }
+
+    #[test]
+    fn project_exit_codes_follow_the_result_specific_configuration() {
+        let project = Project {
+            warn_as_err: Some(false),
+            success_exit: Some(0),
+            flaky_exit: Some(2),
+            failed_exit: Some(1),
+            ..Project::default()
+        };
+
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Passed),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Skipped),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Flaky),
+            ExitCode::FlakyTests
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Failed),
+            ExitCode::TestsFailed
+        ));
+    }
+
+    #[test]
+    fn project_exit_codes_fall_back_to_success_for_flaky_and_failure_for_failed() {
+        let project = Project {
+            warn_as_err: Some(false),
+            ..Project::default()
+        };
+
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Passed),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Flaky),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Failed),
+            ExitCode::TestsFailed
+        ));
     }
 
     #[test]
