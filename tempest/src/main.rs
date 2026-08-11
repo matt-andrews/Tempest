@@ -20,7 +20,7 @@ use colored::Colorize;
 use futures_util::FutureExt;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::num::{NonZero, NonZeroUsize};
+use std::num::NonZeroUsize;
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -361,8 +361,8 @@ fn determine_exit_code_for_project(project: &Project, result: SummaryResult) -> 
     }
     let code = match result {
         SummaryResult::Failed => project.failed_exit.unwrap_or(1),
-        SummaryResult::Flaky => project.failed_exit.unwrap_or(0),
-        _ => { project.failed_exit.unwrap_or(0) }
+        SummaryResult::Flaky => project.flaky_exit.unwrap_or(0),
+        SummaryResult::Passed | SummaryResult::Skipped => project.success_exit.unwrap_or(0),
     };
     match code {
         0 => ExitCode::Success,
@@ -389,6 +389,16 @@ mod tests {
             panic!("expected the test command");
         };
         Ok(workers)
+    }
+
+    fn parsed_project_run(
+        args: &[&str],
+    ) -> Result<(PathBuf, Option<PathBuf>, Option<Vec<String>>), clap::Error> {
+        let cli = Cli::try_parse_from(args)?;
+        let Commands::Run { path, project, env } = cli.command else {
+            panic!("expected the run command");
+        };
+        Ok((path, project, env))
     }
 
     #[test]
@@ -462,6 +472,82 @@ mod tests {
     #[test]
     fn workers_rejects_zero() {
         assert!(parsed_workers(&["tempest", "test", "--workers", "0"]).is_err());
+    }
+
+    #[test]
+    fn project_run_accepts_path_project_file_and_environment_values() {
+        let parsed = parsed_project_run(&[
+            "tempest",
+            "run",
+            "--path",
+            "suite",
+            "--project",
+            "custom.project.yml",
+            "--env",
+            "HOST=api.example.com",
+            "--env",
+            "TOKEN=secret",
+        ])
+        .unwrap();
+
+        assert_eq!(parsed.0, PathBuf::from("suite"));
+        assert_eq!(parsed.1, Some(PathBuf::from("custom.project.yml")));
+        assert_eq!(
+            parsed.2,
+            Some(vec![
+                "HOST=api.example.com".to_owned(),
+                "TOKEN=secret".to_owned(),
+            ])
+        );
+    }
+
+    #[test]
+    fn project_exit_codes_follow_the_result_specific_configuration() {
+        let project = Project {
+            warn_as_err: Some(false),
+            success_exit: Some(0),
+            flaky_exit: Some(2),
+            failed_exit: Some(1),
+            ..Project::default()
+        };
+
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Passed),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Skipped),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Flaky),
+            ExitCode::FlakyTests
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Failed),
+            ExitCode::TestsFailed
+        ));
+    }
+
+    #[test]
+    fn project_exit_codes_fall_back_to_success_for_flaky_and_failure_for_failed() {
+        let project = Project {
+            warn_as_err: Some(false),
+            ..Project::default()
+        };
+
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Passed),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Flaky),
+            ExitCode::Success
+        ));
+        assert!(matches!(
+            determine_exit_code_for_project(&project, SummaryResult::Failed),
+            ExitCode::TestsFailed
+        ));
     }
 
     #[test]

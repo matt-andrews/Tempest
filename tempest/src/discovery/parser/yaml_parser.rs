@@ -371,6 +371,77 @@ mod tests {
     }
 
     #[test]
+    fn parse_project_parses_fields_options_and_assigns_start_time() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("example.project.yml");
+        fs::write(
+            &path,
+            r#"name: Example Project
+version: '2'
+env:
+  HOST: api.example.com
+include:
+  - smoke.spec.yml
+  - api
+warn_as_err: true
+success_exit: 0
+flaky_exit: 2
+failed_exit: 1
+options:
+  base_uri: https://api.example.com
+  retries: 3
+"#,
+        )
+        .unwrap();
+
+        let project = YamlFileParser.parse_project(&path).unwrap();
+
+        assert_eq!(project.name, "Example Project");
+        assert_eq!(project.version.as_deref(), Some("2"));
+        assert_eq!(project.env.as_ref().unwrap()["HOST"], "api.example.com");
+        assert_eq!(
+            project.include.as_deref(),
+            Some(
+                [PathBuf::from("smoke.spec.yml"), PathBuf::from("api")]
+                    .as_slice()
+            )
+        );
+        assert_eq!(project.warn_as_err, Some(true));
+        assert_eq!(project.success_exit, Some(0));
+        assert_eq!(project.flaky_exit, Some(2));
+        assert_eq!(project.failed_exit, Some(1));
+
+        let options = project.options.unwrap();
+        assert_eq!(options.base_uri.as_deref(), Some("https://api.example.com"));
+        assert_eq!(options.retries, Some(3));
+        assert!(options.start_time.is_some());
+    }
+
+    #[test]
+    fn parse_project_returns_error_for_invalid_yaml() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("invalid.project.yml");
+        fs::write(&path, "name:\n  - not\n  - a string\n").unwrap();
+
+        let error = YamlFileParser.parse_project(&path).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(message.contains("invalid YAML"));
+        assert!(message.contains("invalid.project.yml"));
+    }
+
+    #[test]
+    fn parse_project_returns_error_for_missing_file() {
+        let path = PathBuf::from("/no/such/project.yml");
+
+        let error = YamlFileParser.parse_project(&path).unwrap_err();
+        let message = format!("{error:#}");
+
+        assert!(message.contains("could not read YAML file"));
+        assert!(message.contains("project.yml"));
+    }
+
+    #[test]
     fn parse_report_template_inline_strings_unchanged() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("my.template.yml");

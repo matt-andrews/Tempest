@@ -348,6 +348,63 @@ mod tests {
     }
 
     #[test]
+    fn discover_project_finds_project_file_in_root_directory() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("tempest.project.yml"),
+            "name: Root Project\nversion: '1'\n",
+        )
+        .unwrap();
+
+        let project = discover_project(dir.path(), None).unwrap();
+
+        assert_eq!(project.name, "Root Project");
+        assert_eq!(project.version.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn discover_project_prefers_explicit_project_file() {
+        let dir = tempdir().unwrap();
+        fs::write(
+            dir.path().join("automatic.project.yml"),
+            "name: Automatic Project\n",
+        )
+        .unwrap();
+        let explicit = dir.path().join("chosen.yml");
+        fs::write(&explicit, "name: Explicit Project\n").unwrap();
+
+        let project = discover_project(dir.path(), Some(explicit)).unwrap();
+
+        assert_eq!(project.name, "Explicit Project");
+    }
+
+    #[test]
+    fn discover_project_does_not_search_nested_directories() {
+        let dir = tempdir().unwrap();
+        let nested = dir.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(
+            nested.join("nested.project.yml"),
+            "name: Nested Project\n",
+        )
+        .unwrap();
+
+        let error = discover_project(dir.path(), None).unwrap_err();
+
+        assert!(format!("{error:#}").contains("no project found"));
+    }
+
+    #[test]
+    fn discover_project_returns_error_when_root_has_no_project_file() {
+        let dir = tempdir().unwrap();
+        fs::write(dir.path().join("readme.yml"), "name: Not a project\n").unwrap();
+
+        let error = discover_project(dir.path(), None).unwrap_err();
+
+        assert!(format!("{error:#}").contains("no project found"));
+    }
+
+    #[test]
     fn parse_env_parses_key_value_pairs() {
         let env = parse_env_contents("HOST=localhost\nPORT=8080\n");
 
