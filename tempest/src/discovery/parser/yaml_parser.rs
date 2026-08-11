@@ -7,6 +7,8 @@ use anyhow::Context;
 use include_dir::{Dir, File};
 use std::fs;
 use std::path::{Path, PathBuf};
+use liquid_core::model::DateTime;
+use crate::models::project::Project;
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
@@ -70,6 +72,21 @@ impl FileParser for YamlFileParser {
         template.summary_template = Self::resolve_embedded_liquid(template.summary_template, dir);
 
         Ok(template)
+    }
+
+    fn parse_project(&self, path: &Path) -> anyhow::Result<Project> {
+        let contents = fs::read_to_string(path)
+            .with_context(|| format!("could not read YAML file {}", path.display()))?;
+        let mut result: Project = noyalib::from_str(&contents)
+            .with_context(|| format!("invalid YAML in {}", path.display()))?;
+
+        //always get start time
+        result.options = Some(RunOptions{
+            start_time: Some(DateTime::now()),
+            ..RunOptions::default()
+        }.merge(result.options.unwrap_or_default()));
+
+        Ok(result)
     }
 }
 

@@ -1,0 +1,12 @@
+
+name: "Example Project"
+version: "1"
+
+warn_as_err: true
+
+options:
+  retries: 1
+
+include:
+  - /pass/vars.spec.yml
+  - /pass/loops-profiles.spec.yml

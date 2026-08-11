@@ -7,6 +7,7 @@ use crate::models::run_options::RunOptions;
 use enum_dispatch::enum_dispatch;
 use include_dir::{Dir, File};
 use std::path::Path;
+use crate::models::project::Project;
 
 #[enum_dispatch]
 pub trait FileParser {
@@ -18,6 +19,7 @@ pub trait FileParser {
         file: &File,
         dir: &Dir,
     ) -> anyhow::Result<ReportTemplate>;
+    fn parse_project(&self, path: &Path) -> anyhow::Result<Project>;
 }
 
 #[enum_dispatch(FileParser)]

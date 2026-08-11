@@ -9,3 +9,4 @@ pub mod summary_result;
 pub mod templated;
 pub mod test_result;
 pub mod test_spec;
+pub mod project;
