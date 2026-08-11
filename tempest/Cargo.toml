@@ -4,8 +4,8 @@ version = "0.0.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.6.2", features = ["derive"] }
-tokio = { version = "1.53.0", features = ["rt", "rt-multi-thread", "macros", "time"] }
+clap = { version = "4.6.6", features = ["derive"] }
+tokio = { version = "1.53.1", features = ["rt", "rt-multi-thread", "macros", "time"] }
 anyhow = "1.0.104"
 serde = { version = "1.0.229", features = ["derive"] }
 colored = "3.1.1"
@@ -17,19 +17,19 @@ cel-interpreter = { version = "0.10.0", features = ["json"] }
 liquid = "0.26.11"
 liquid-core = "0.26.11"
 include_dir = "0.7"
-async-trait = "0.1.91"
-futures-util = { version = "0.3.32", default-features = false, features = ["std"] }
+async-trait = "0.1.92"
+futures-util = { version = "0.3.33", default-features = false, features = ["std"] }
 dunce = "1"
 cel-parser = "0.10.1"
 scraper = { version = "0.27.0", features = ["atomic"] }
 simdxml = "0.2.1"
-base64 = "0.23"
+base64 = "0.23.1"
 indexmap = { version = "2.14.0", features = ["serde"] }
 
 [dev-dependencies]
 tempfile = "3.27.0"
 mockito = "1.7.2"
-tokio = { version = "1.53.0", features = ["test-util"] }
+tokio = { version = "1.53.1", features = ["test-util"] }
 
 [profile.release]
 opt-level     = "z"     # optimize for binary size

@@ -1,6 +1,7 @@
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
 use crate::models::directory_node::DirectoryNode;
+use crate::models::project::Project;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
 use crate::templating::TemplateEngine;
@@ -10,7 +11,6 @@ use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
-use crate::models::project::Project;
 
 mod parser;
 
@@ -112,13 +112,10 @@ pub fn parse_env(
     Ok(config)
 }
 
-pub fn discover_project(
-    dir: &Path,
-    project: Option<PathBuf>,
-) -> anyhow::Result<Project>{
-
+pub fn discover_project(dir: &Path, project: Option<PathBuf>) -> anyhow::Result<Project> {
     if let Some(project) = project
-        && let Some(parser) = parser::parser_for(project.as_path()){
+        && let Some(parser) = parser::parser_for(project.as_path())
+    {
         return parser.parse_project(project.as_path());
     }
 
@@ -128,7 +125,7 @@ pub fn discover_project(
         .map(|e| e.path())
         .collect();
 
-    for path in files{
+    for path in files {
         let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
             continue;
         };
@@ -383,11 +380,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let nested = dir.path().join("nested");
         fs::create_dir(&nested).unwrap();
-        fs::write(
-            nested.join("nested.project.yml"),
-            "name: Nested Project\n",
-        )
-        .unwrap();
+        fs::write(nested.join("nested.project.yml"), "name: Nested Project\n").unwrap();
 
         let error = discover_project(dir.path(), None).unwrap_err();
 

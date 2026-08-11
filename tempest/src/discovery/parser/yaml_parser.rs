@@ -1,14 +1,14 @@
 use crate::discovery::BUILTIN_REPORTERS;
 use crate::discovery::parser::FileParser;
 use crate::models::descriptor::Descriptor;
+use crate::models::project::Project;
 use crate::models::report_template::ReportTemplate;
 use crate::models::run_options::RunOptions;
 use anyhow::Context;
 use include_dir::{Dir, File};
+use liquid_core::model::DateTime;
 use std::fs;
 use std::path::{Path, PathBuf};
-use liquid_core::model::DateTime;
-use crate::models::project::Project;
 
 pub struct YamlFileParser;
 impl FileParser for YamlFileParser {
@@ -81,10 +81,13 @@ impl FileParser for YamlFileParser {
             .with_context(|| format!("invalid YAML in {}", path.display()))?;
 
         //always get start time
-        result.options = Some(RunOptions{
-            start_time: Some(DateTime::now()),
-            ..RunOptions::default()
-        }.merge(result.options.unwrap_or_default()));
+        result.options = Some(
+            RunOptions {
+                start_time: Some(DateTime::now()),
+                ..RunOptions::default()
+            }
+            .merge(result.options.unwrap_or_default()),
+        );
 
         Ok(result)
     }
@@ -401,10 +404,7 @@ options:
         assert_eq!(project.env.as_ref().unwrap()["HOST"], "api.example.com");
         assert_eq!(
             project.include.as_deref(),
-            Some(
-                [PathBuf::from("smoke.spec.yml"), PathBuf::from("api")]
-                    .as_slice()
-            )
+            Some([PathBuf::from("smoke.spec.yml"), PathBuf::from("api")].as_slice())
         );
         assert_eq!(project.warn_as_err, Some(true));
         assert_eq!(project.success_exit, Some(0));

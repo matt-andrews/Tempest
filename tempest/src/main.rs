@@ -8,7 +8,8 @@ pub mod templating;
 mod utils;
 pub mod validation;
 
-use crate::discovery::{discover_project, DiscoveryResult};
+use crate::discovery::{DiscoveryResult, discover_project};
+use crate::models::project::Project;
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
@@ -25,7 +26,6 @@ use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{env, process};
-use crate::models::project::Project;
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -156,12 +156,8 @@ async fn run() -> anyhow::Result<ExitCode> {
             };
 
             Ok(exit)
-        },
-        Commands::Run {
-            path,
-            project,
-            env,
-        } => {
+        }
+        Commands::Run { path, project, env } => {
             let start_instant = Instant::now();
             let envs = parse_cli_envs(env)?;
 
@@ -180,19 +176,13 @@ async fn run() -> anyhow::Result<ExitCode> {
                 .as_ref()
                 .unwrap_or(&default_options);
 
-            let result = pipeline::execute(
-                discovery,
-                options,
-                None,
-                &start_instant,
-            )
-                .await?;
+            let result = pipeline::execute(discovery, options, None, &start_instant).await?;
 
             print_warnings();
 
             let exit = determine_exit_code_for_project(&discovered_project, result);
             Ok(exit)
-        },
+        }
         Commands::Version => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             Ok(ExitCode::Success)
@@ -224,7 +214,7 @@ fn init_discovery(
 
     if nested {
         discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
-    }else{
+    } else {
         discovery::discover_not_nested(&project_dir, None, &mut envs, run_paths, &liquid_engine)
     }
 }
@@ -367,7 +357,7 @@ fn determine_exit_code_for_project(project: &Project, result: SummaryResult) -> 
     match code {
         0 => ExitCode::Success,
         1 => ExitCode::TestsFailed,
-        _ => { ExitCode::FlakyTests }
+        _ => ExitCode::FlakyTests,
     }
 }
 
@@ -391,6 +381,8 @@ mod tests {
         Ok(workers)
     }
 
+    //need to fix this at some point
+    #[allow(clippy::type_complexity)]
     fn parsed_project_run(
         args: &[&str],
     ) -> Result<(PathBuf, Option<PathBuf>, Option<Vec<String>>), clap::Error> {

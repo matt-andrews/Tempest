@@ -1,9 +1,9 @@
+use crate::models::run_options::RunOptions;
+use crate::templating::TemplateEngine;
+use crate::templating::liquid::LiquidEngine;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
-use serde::{Deserialize, Serialize};
-use crate::models::run_options::RunOptions;
-use crate::templating::liquid::LiquidEngine;
-use crate::templating::TemplateEngine;
 
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct Project {
@@ -28,16 +28,16 @@ impl Project {
             ..Project::default()
         }
     }
-    pub fn merge_env(&mut self, parent_env: HashMap<String, String>){
+    pub fn merge_env(&mut self, parent_env: HashMap<String, String>) {
         let mut parent_env = parent_env;
         if let Some(env) = &self.env {
-            for (k, v) in env{
+            for (k, v) in env {
                 parent_env.insert(k.clone(), v.clone());
             }
         }
         self.env = Some(parent_env);
     }
-    pub fn render_template(&mut self, engine: &LiquidEngine){
+    pub fn render_template(&mut self, engine: &LiquidEngine) {
         if let Some(env) = &self.env {
             let obj = &liquid::object!({
                 "env": &env,
