@@ -8,7 +8,7 @@ pub mod templating;
 mod utils;
 pub mod validation;
 
-use crate::discovery::DiscoveryResult;
+use crate::discovery::{discover_project, DiscoveryResult};
 use crate::models::run_options::RunOptions;
 use crate::models::summary_result::SummaryResult;
 use crate::pipeline::warnings;
@@ -20,11 +20,12 @@ use colored::Colorize;
 use futures_util::FutureExt;
 use std::collections::{HashMap, HashSet};
 use std::io::Write;
-use std::num::NonZeroUsize;
+use std::num::{NonZero, NonZeroUsize};
 use std::panic::AssertUnwindSafe;
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 use std::{env, process};
+use crate::models::project::Project;
 
 const ERROR_EXIT_CODE: u8 = 1;
 const INTERNAL_ERROR_EXIT_CODE: u8 = 70;
@@ -49,6 +50,16 @@ enum Commands {
 
         #[arg(short, long, default_value = "false")]
         warn_as_err: bool,
+    },
+    Run {
+        #[arg(long, default_value = "/etc/tests")]
+        path: PathBuf,
+
+        #[arg(short, long)]
+        project: Option<PathBuf>,
+
+        #[arg(short, long)]
+        env: Option<Vec<String>>,
     },
     Test {
         #[arg(long, default_value = "/etc/tests")]
@@ -111,7 +122,7 @@ async fn run() -> anyhow::Result<ExitCode> {
         } => {
             let start_instant = Instant::now();
             let options = RunOptions::default_from_args(debug, retries);
-            let discovery = &init_discovery(&path, run, env)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?)?;
 
             if check {
                 run_check(discovery)?;
@@ -130,7 +141,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
             warn_as_err,
         } => {
-            let discovery = &init_discovery(&path, run, env)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?)?;
             run_check(discovery)?;
 
             let exit = match print_warnings() {
@@ -145,7 +156,43 @@ async fn run() -> anyhow::Result<ExitCode> {
             };
 
             Ok(exit)
-        }
+        },
+        Commands::Run {
+            path,
+            project,
+            env,
+        } => {
+            let start_instant = Instant::now();
+            let envs = parse_cli_envs(env)?;
+
+            let mut discovered_project = discover_project(path.as_path(), project)?;
+            discovered_project.merge_env(envs);
+
+            let include = discovered_project.include.clone();
+            let env = discovered_project.env.clone().unwrap_or_default();
+
+            let discovery = &init_discovery(&path, include, env)?;
+            run_check(discovery)?;
+
+            let default_options = Default::default();
+            let options = discovered_project
+                .options
+                .as_ref()
+                .unwrap_or(&default_options);
+
+            let result = pipeline::execute(
+                discovery,
+                options,
+                None,
+                &start_instant,
+            )
+                .await?;
+
+            print_warnings();
+
+            let exit = determine_exit_code_for_project(&discovered_project, result);
+            Ok(exit)
+        },
         Commands::Version => {
             println!("{}", env!("CARGO_PKG_VERSION"));
             Ok(ExitCode::Success)
@@ -166,11 +213,11 @@ fn run_check(discovery: &DiscoveryResult) -> anyhow::Result<()> {
 fn init_discovery(
     path: &PathBuf,
     run: Option<Vec<PathBuf>>,
-    env: Option<Vec<String>>,
+    envs: HashMap<String, String>,
 ) -> anyhow::Result<DiscoveryResult> {
     let liquid_engine = LiquidEngine;
     let project_dir = dunce::canonicalize(path)?;
-    let mut envs = parse_cli_envs(env)?;
+    let mut envs = envs;
     load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
     let run_paths = &resolve_run_paths(&project_dir, run);
 
@@ -300,6 +347,22 @@ fn determine_exit_code(result: SummaryResult, strict: bool, warn_as_err: bool) -
         ExitCode::FlakyTests
     } else {
         ExitCode::Success
+    }
+}
+
+fn determine_exit_code_for_project(project: &Project, result: SummaryResult) -> ExitCode {
+    if project.warn_as_err.unwrap_or_default() && warnings::get_warning_count() > 0 {
+        return ExitCode::TestsFailed;
+    }
+    let code = match result {
+        SummaryResult::Failed => project.failed_exit.unwrap_or(1),
+        SummaryResult::Flaky => project.failed_exit.unwrap_or(0),
+        _ => { project.failed_exit.unwrap_or(0) }
+    };
+    match code {
+        0 => ExitCode::Success,
+        1 => ExitCode::TestsFailed,
+        _ => { ExitCode::FlakyTests }
     }
 }
 

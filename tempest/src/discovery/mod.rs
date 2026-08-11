@@ -10,6 +10,7 @@ use include_dir::{Dir, include_dir};
 use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
+use crate::models::project::Project;
 
 mod parser;
 
@@ -109,6 +110,36 @@ pub fn parse_env(
     }
 
     Ok(config)
+}
+
+pub fn discover_project(
+    dir: &Path,
+    project: Option<PathBuf>,
+) -> anyhow::Result<Project>{
+
+    if let Some(project) = project
+        && let Some(parser) = parser::parser_for(project.as_path()){
+        return parser.parse_project(project.as_path());
+    }
+
+    let files: Vec<_> = fs::read_dir(dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| !e.path().is_dir())
+        .map(|e| e.path())
+        .collect();
+
+    for path in files{
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        let Some(parser) = parser::parser_for(path.as_path()) else {
+            continue;
+        };
+        if stem.ends_with(".project") {
+            return parser.parse_project(path.as_path());
+        }
+    }
+    Err(anyhow::anyhow!("no project found"))
 }
 
 pub fn discover(
