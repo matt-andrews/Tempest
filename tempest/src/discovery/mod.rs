@@ -142,6 +142,23 @@ pub fn discover_project(
     Err(anyhow::anyhow!("no project found"))
 }
 
+pub fn discover_not_nested(
+    dir: &Path,
+    inherited_configs: Option<Vec<RunOptions>>,
+    inherited_envs: &mut HashMap<String, String>,
+    run_paths: &[PathBuf],
+    liquid_engine: &LiquidEngine,
+) -> anyhow::Result<DiscoveryResult> {
+    discover_with_traversal(
+        dir,
+        inherited_configs,
+        inherited_envs,
+        run_paths,
+        liquid_engine,
+        Traversal::SelectedPaths,
+    )
+}
+
 pub fn discover(
     dir: &Path,
     inherited_configs: Option<Vec<RunOptions>>,
@@ -149,9 +166,36 @@ pub fn discover(
     run_paths: &[PathBuf],
     liquid_engine: &LiquidEngine,
 ) -> anyhow::Result<DiscoveryResult> {
+    discover_with_traversal(
+        dir,
+        inherited_configs,
+        inherited_envs,
+        run_paths,
+        liquid_engine,
+        Traversal::Recursive,
+    )
+}
+
+#[derive(Clone, Copy)]
+enum Traversal {
+    Recursive,
+    SelectedPaths,
+}
+
+fn discover_with_traversal(
+    dir: &Path,
+    inherited_configs: Option<Vec<RunOptions>>,
+    inherited_envs: &mut HashMap<String, String>,
+    run_paths: &[PathBuf],
+    liquid_engine: &LiquidEngine,
+    traversal: Traversal,
+) -> anyhow::Result<DiscoveryResult> {
     let mut entries: Vec<_> = fs::read_dir(dir)?.filter_map(|e| e.ok()).collect();
     entries.sort_by_key(|entry| entry.path());
     let (dirs, files): (Vec<_>, Vec<_>) = entries.into_iter().partition(|e| e.path().is_dir());
+
+    let selected_directory = matches!(traversal, Traversal::SelectedPaths)
+        && run_paths.iter().any(|run_path| run_path == dir);
 
     let mut options: Vec<RunOptions> = inherited_configs.unwrap_or_default();
     let mut tests: Vec<Descriptor> = Vec::new();
@@ -181,7 +225,12 @@ pub fn discover(
         if stem.ends_with(".config") {
             options.push(parser.parse_config(path)?);
         } else if stem.ends_with(".spec") {
-            let selected = run_paths.iter().any(|run_path| path.starts_with(run_path));
+            let selected = match traversal {
+                Traversal::Recursive => run_paths.iter().any(|run_path| path.starts_with(run_path)),
+                Traversal::SelectedPaths => {
+                    selected_directory || run_paths.iter().any(|run_path| run_path == path)
+                }
+            };
             if selected {
                 tests.push(parser.parse_descriptor(path)?);
             }
@@ -194,13 +243,25 @@ pub fn discover(
 
     let mut children = Vec::new();
     for entry in dirs {
+        let child_path = entry.path();
+        let should_visit = match traversal {
+            Traversal::Recursive => true,
+            Traversal::SelectedPaths => run_paths
+                .iter()
+                .any(|run_path| run_path.starts_with(&child_path)),
+        };
+        if !should_visit {
+            continue;
+        }
+
         let mut child_envs = inherited_envs.clone();
-        let sub = discover(
-            &entry.path(),
+        let sub = discover_with_traversal(
+            &child_path,
             Some(options.clone()),
             &mut child_envs,
             run_paths,
             liquid_engine,
+            traversal,
         )?;
         children.push(sub.directory);
         templates.extend(sub.templates);
@@ -237,6 +298,21 @@ mod tests {
         run_paths: &[PathBuf],
     ) -> anyhow::Result<DiscoveryResult> {
         discover(
+            dir,
+            inherited_configs,
+            inherited_envs,
+            run_paths,
+            &LiquidEngine,
+        )
+    }
+
+    fn discover_not_nested_for_test(
+        dir: &Path,
+        inherited_configs: Option<Vec<RunOptions>>,
+        inherited_envs: &mut HashMap<String, String>,
+        run_paths: &[PathBuf],
+    ) -> anyhow::Result<DiscoveryResult> {
+        discover_not_nested(
             dir,
             inherited_configs,
             inherited_envs,
@@ -676,6 +752,123 @@ mod tests {
         assert_eq!(
             result.directory.children[0].files[0].name.as_deref(),
             Some("SubTest")
+        );
+    }
+
+    #[test]
+    fn discover_not_nested_treats_selected_directory_as_a_leaf() {
+        let dir = tempdir().unwrap();
+        let selected = dir.path().join("selected");
+        let nested = selected.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(
+            selected.join("selected.spec.yml"),
+            "test:\n  route: /selected\n",
+        )
+        .unwrap();
+        fs::write(nested.join("nested.spec.yml"), "test:\n  route: /nested\n").unwrap();
+
+        let result = discover_not_nested_for_test(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            std::slice::from_ref(&selected),
+        )
+        .unwrap();
+
+        assert_eq!(discovered_file_names(&result), vec!["selected.spec.yml"]);
+        assert_eq!(result.directory.children.len(), 1);
+        assert!(result.directory.children[0].children.is_empty());
+    }
+
+    #[test]
+    fn discover_not_nested_only_visits_branches_containing_selected_paths() {
+        let dir = tempdir().unwrap();
+        let selected = dir.path().join("selected");
+        let excluded = dir.path().join("excluded");
+        fs::create_dir(&selected).unwrap();
+        fs::create_dir(&excluded).unwrap();
+        fs::write(
+            selected.join("selected.spec.yml"),
+            "test:\n  route: /selected\n",
+        )
+        .unwrap();
+        fs::write(
+            excluded.join("excluded.spec.yml"),
+            "test:\n  route: /excluded\n",
+        )
+        .unwrap();
+
+        let result = discover_not_nested_for_test(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            std::slice::from_ref(&selected),
+        )
+        .unwrap();
+
+        assert_eq!(discovered_file_names(&result), vec!["selected.spec.yml"]);
+        assert_eq!(
+            result
+                .directory
+                .children
+                .iter()
+                .filter_map(|child| child.dir.file_name().and_then(|name| name.to_str()))
+                .collect::<Vec<_>>(),
+            vec!["selected"]
+        );
+    }
+
+    #[test]
+    fn discover_not_nested_selects_an_exact_file_without_its_siblings() {
+        let dir = tempdir().unwrap();
+        let selected_dir = dir.path().join("selected");
+        fs::create_dir(&selected_dir).unwrap();
+        let selected_file = selected_dir.join("selected.spec.yml");
+        fs::write(&selected_file, "test:\n  route: /selected\n").unwrap();
+        fs::write(
+            selected_dir.join("sibling.spec.yml"),
+            "test:\n  route: /sibling\n",
+        )
+        .unwrap();
+
+        let result =
+            discover_not_nested_for_test(dir.path(), None, &mut HashMap::new(), &[selected_file])
+                .unwrap();
+
+        assert_eq!(discovered_file_names(&result), vec!["selected.spec.yml"]);
+    }
+
+    #[test]
+    fn discover_not_nested_visits_an_explicit_path_below_a_selected_directory() {
+        let dir = tempdir().unwrap();
+        let selected = dir.path().join("selected");
+        let nested = selected.join("nested");
+        fs::create_dir_all(&nested).unwrap();
+        fs::write(
+            selected.join("selected.spec.yml"),
+            "test:\n  route: /selected\n",
+        )
+        .unwrap();
+        let nested_file = nested.join("nested.spec.yml");
+        fs::write(&nested_file, "test:\n  route: /nested\n").unwrap();
+        fs::write(
+            nested.join("sibling.spec.yml"),
+            "test:\n  route: /sibling\n",
+        )
+        .unwrap();
+
+        let result = discover_not_nested_for_test(
+            dir.path(),
+            None,
+            &mut HashMap::new(),
+            &[selected, nested_file],
+        )
+        .unwrap();
+
+        assert_eq!(
+            discovered_file_names(&result),
+            vec!["nested.spec.yml", "selected.spec.yml"]
         );
     }
 

@@ -122,7 +122,7 @@ async fn run() -> anyhow::Result<ExitCode> {
         } => {
             let start_instant = Instant::now();
             let options = RunOptions::default_from_args(debug, retries);
-            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?, true)?;
 
             if check {
                 run_check(discovery)?;
@@ -141,7 +141,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             env,
             warn_as_err,
         } => {
-            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?)?;
+            let discovery = &init_discovery(&path, run, parse_cli_envs(env)?, true)?;
             run_check(discovery)?;
 
             let exit = match print_warnings() {
@@ -171,7 +171,7 @@ async fn run() -> anyhow::Result<ExitCode> {
             let include = discovered_project.include.clone();
             let env = discovered_project.env.clone().unwrap_or_default();
 
-            let discovery = &init_discovery(&path, include, env)?;
+            let discovery = &init_discovery(&path, include, env, false)?;
             run_check(discovery)?;
 
             let default_options = Default::default();
@@ -214,6 +214,7 @@ fn init_discovery(
     path: &PathBuf,
     run: Option<Vec<PathBuf>>,
     envs: HashMap<String, String>,
+    nested: bool,
 ) -> anyhow::Result<DiscoveryResult> {
     let liquid_engine = LiquidEngine;
     let project_dir = dunce::canonicalize(path)?;
@@ -221,7 +222,11 @@ fn init_discovery(
     load_project_dotenv(&project_dir, &envs, &liquid_engine)?;
     let run_paths = &resolve_run_paths(&project_dir, run);
 
-    discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    if nested {
+        discovery::discover(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    }else{
+        discovery::discover_not_nested(&project_dir, None, &mut envs, run_paths, &liquid_engine)
+    }
 }
 
 ///This function is UNSAFE because we are setting environment variables
