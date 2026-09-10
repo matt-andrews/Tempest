@@ -247,15 +247,14 @@ mod tests {
     }
 
     #[test]
-    fn parse_descriptor_returns_empty_for_invalid_yaml() {
+    fn parse_descriptor_returns_error_for_invalid_yaml() {
         let dir = tempdir().unwrap();
         let path = dir.path().join("bad.spec.yml");
         fs::write(&path, ":: not valid yaml ::").unwrap();
 
-        let result = YamlFileParser.parse_descriptor(&path).unwrap();
-        assert!(result.name.is_none());
-        assert!(result.test.is_none());
-        assert!(result.describe.is_none());
+        let error = YamlFileParser.parse_descriptor(&path).unwrap_err();
+
+        assert!(format!("{error:#}").contains("invalid YAML in"));
     }
 
     #[test]
