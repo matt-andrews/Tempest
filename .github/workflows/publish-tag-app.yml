@@ -70,13 +70,20 @@ jobs:
           readme-filepath: ./README.md
 
   create-release:
-    needs: [publish-app]
+    runs-on: ubuntu-latest
+    needs: [ publish-app ]
     permissions:
       contents: write
       pull-requests: read
-    uses: ./.github/workflows/reusable-create-release.yml
-    with:
-      tag: ${{ github.ref_name }}
-      area_labels: "area: core"
-      make_latest: true
-      prerelease: false
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Publish release notes
+        uses: matt-andrews/auto-release@v1
+        with:
+          tag: ${{ github.ref_name }}
+          area_labels: "area: core"
+          make_latest: true
